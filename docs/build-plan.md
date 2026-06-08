@@ -12,6 +12,23 @@ The original "PR-1 spike" bundled five distinct deliverables (SDK feasibility, L
 
 A **PR-0 scaffold step** lands first to give the spike PRs a buildable Java project to work in.
 
+## Progress tracker
+
+Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; leave a one-line note (branch / PR link / blocker) after the dash. Keep it honest — `[~]` means in-progress, `[ ]` not started.
+
+- [ ] **PR-0** — Java/Maven scaffold —
+- [ ] **PR-1a** — Java MCP SDK feasibility (go/no-go gate) —
+- [ ] **PR-1b** — LXCommand inventory + tool mapping —
+- [ ] **PR-1c** — Automated QA strategy —
+- [ ] *Spike-phase gate*: all three deliverables exist + all Review agents PASS + embed test runs —
+- [ ] **PR-2** — Embed HTTP MCP server + status file —
+- [ ] **PR-3** — First read-only tool (`get_project_info`) —
+- [ ] **PR-4** — First mutation (`add_macro_knob`) via LXCommand —
+- [ ] **PR-5** — Tool-surface fan-out (channels / patterns / modulators / routing / MIDI / set_parameter) —
+- [ ] **PR-6** — Install docs + multi-agent usage examples + README rewrite —
+
+Legend: `[ ]` not started · `[~]` in progress · `[x]` merged. When you pick up a PR, set it to `[~]` and put your branch name after the dash so parallel sessions don't collide.
+
 ## PR-0 — Java/Maven scaffold (pre-step)
 
 Mirrors the Apotheneum convention (`/Users/danoved/Source/Apotheneum`) so contributors familiar with one project recognize the other.
