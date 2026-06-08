@@ -73,6 +73,8 @@ Open questions:
 
 Output: `docs/spike/qa-strategy.md` — concrete patterns + a verification template that PR-2 onwards fills in per-tool.
 
+**Testability assumption + escalation rule**: the default expectation is that LX is testable from JUnit (it's a normal Java library); PR-1c's job is to confirm this and document the patterns. If PR-1c finds a real blocker — LX requires a display/GL context with no headless mode, the Java MCP SDK can't be tested in-process, etc. — that is an **architecture-level escalation**, not something the QA-strategy agent should quietly work around. The Writing Agent surfaces the blocker in `docs/spike/qa-strategy.md`'s TL;DR, and the Review Agent flags it as FAIL with the blocker description. We then re-plan before PR-2.
+
 ## Per-PR execution: 4-agent pipeline
 
 Each spike PR runs the same pipeline. Sequential. Each agent writes one file under `docs/spike/<pr-id>/`; the next agent reads it. No other handoff state.
