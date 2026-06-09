@@ -18,8 +18,8 @@ Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; le
 
 - [x] **PR-0** — Java/Maven scaffold — merged via [#1](https://github.com/oveddan/lx-mcp/pull/1); scaffold builds, headless load gate passes
 - [x] **PR-1a** — Java MCP SDK feasibility (go/no-go gate) — merged via [#3](https://github.com/oveddan/lx-mcp/pull/3); **GO**. `io.modelcontextprotocol.sdk:mcp:2.0.0-RC1` on embedded Tomcat; in-process `initialize` embed test + headless load gate both green. See `docs/spike/sdk-feasibility.md`.
-- [~] **PR-1b** — LXCommand inventory + tool mapping — branch `claude/intelligent-mcclintock-a87ed5`; deliverable `docs/spike/lxcommand-mapping.md` written (every v1 tool maps 1:1 to an LXCommand; no `compose_scene`; engine-thread concurrency flagged as top risk). Pending Review agent + merge.
-- [ ] **PR-1c** — Automated QA strategy —
+- [x] **PR-1b** — LXCommand inventory + tool mapping — merged via [#5](https://github.com/oveddan/lx-mcp/pull/5); deliverable `docs/spike/lxcommand-mapping.md` (every v1 tool maps 1:1 to an LXCommand; no `compose_scene`; engine-thread concurrency flagged as top risk).
+- [~] **PR-1c** — Automated QA strategy — branch `claude/sleepy-banach-35407d`; deliverable `docs/spike/qa-strategy.md` (LX confirmed headless-testable; do→undo→assert as built-in correctness check; engine-thread concurrency test shape). Adds `HeadlessLxHarnessTest` (executable gate) + `.github/workflows/build.yml` (CI).
 - [ ] *Spike-phase gate*: all three deliverables exist + all Review agents PASS + embed test runs —
 - [ ] **PR-2** — Embed HTTP MCP server + status file —
 - [ ] **PR-3** — First read-only tool (`get_project_info`) —
