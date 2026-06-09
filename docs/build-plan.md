@@ -16,8 +16,8 @@ A **PR-0 scaffold step** lands first to give the spike PRs a buildable Java proj
 
 Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; leave a one-line note (branch / PR link / blocker) after the dash. Keep it honest — `[~]` means in-progress, `[ ]` not started.
 
-- [~] **PR-0** — Java/Maven scaffold — branch `claude/naughty-hamilton-d8e0f0`; scaffold builds, headless load gate passes
-- [ ] **PR-1a** — Java MCP SDK feasibility (go/no-go gate) —
+- [x] **PR-0** — Java/Maven scaffold — merged via [#1](https://github.com/oveddan/lx-mcp/pull/1); scaffold builds, headless load gate passes
+- [~] **PR-1a** — Java MCP SDK feasibility (go/no-go gate) — branch `claude/adoring-benz-2aa117` ([#3](https://github.com/oveddan/lx-mcp/pull/3)); **GO**. `io.modelcontextprotocol.sdk:mcp:2.0.0-RC1` on embedded Tomcat; in-process `initialize` embed test + headless load gate both green. See `docs/spike/sdk-feasibility.md`.
 - [ ] **PR-1b** — LXCommand inventory + tool mapping —
 - [ ] **PR-1c** — Automated QA strategy —
 - [ ] *Spike-phase gate*: all three deliverables exist + all Review agents PASS + embed test runs —

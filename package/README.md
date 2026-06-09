@@ -4,7 +4,10 @@ The drop-in LX/Chromatik jar.
 
 See [../docs/build-plan.md](../docs/build-plan.md) for the roadmap and [../CLAUDE.md](../CLAUDE.md) for contributor conventions.
 
-**Status**: PR-0 (Maven scaffold) landed. Stub `LxMcpPlugin` only — contributes nothing yet.
+**Status**: PR-1a (SDK feasibility) — **GO**. `LxMcpPlugin` starts an embedded streamable-HTTP
+MCP server (official Java MCP SDK on embedded Tomcat) from `initialize()` and writes
+`~/.lx-mcp/status.json` for client discovery. No domain tools yet. See
+[../docs/spike/sdk-feasibility.md](../docs/spike/sdk-feasibility.md).
 
 ## Build & verify
 
