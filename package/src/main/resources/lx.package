@@ -1,0 +1,15 @@
+{
+  name: "LX-MCP",
+  mediaDir: "LX-MCP",
+  author: "lx-mcp contributors",
+  url: "https://github.com/oveddan/lx-mcp",
+
+  build: {
+    name: "@project.name@",
+    version: "@project.version@",
+    groupId: "@project.groupId@",
+    artifactId: "@project.artifactId@",
+    lxVersion: "@lx.version@",
+    buildTimestamp: "@maven.build.timestamp@"
+  }
+}
