@@ -83,18 +83,19 @@ public final class EmbeddedMcpServer {
     return this.port;
   }
 
-  /** Stop the MCP server and tear down the Tomcat listener. Safe to call once. */
+  /**
+   * Stop the MCP server and tear down the Tomcat listener.
+   *
+   * <p>Shutdown failures propagate (wrapped unchecked) so the plugin's {@code dispose()}
+   * — itself wrapped by LX's error handling — reports them rather than hiding them.
+   */
   public void stop() {
-    try {
-      this.server.closeGracefully();
-    } catch (RuntimeException ignored) {
-      // best-effort shutdown
-    }
+    this.server.closeGracefully();
     try {
       this.tomcat.stop();
       this.tomcat.destroy();
-    } catch (LifecycleException ignored) {
-      // best-effort shutdown
+    } catch (LifecycleException e) {
+      throw new IllegalStateException("Failed to stop embedded MCP server", e);
     }
   }
 }

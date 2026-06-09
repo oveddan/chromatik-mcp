@@ -1,6 +1,7 @@
 package lxmcp.mcp;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -23,11 +24,13 @@ public final class StatusFile {
   /**
    * Write the discovery handshake. {@code projectPath} may be null (no project open).
    *
+   * <p>Throws {@link UncheckedIOException} on I/O failure so it propagates out of the
+   * plugin's {@code initialize()} into LX's error handling rather than forcing a catch.
+   *
    * @return the path written.
    */
-  public static Path write(int port, String projectPath, String lxVersion) throws IOException {
+  public static Path write(int port, String projectPath, String lxVersion) {
     Path file = path();
-    Files.createDirectories(file.getParent());
     long pid = ProcessHandle.current().pid();
     String json = "{\n"
         + "  \"pid\": " + pid + ",\n"
@@ -35,7 +38,12 @@ public final class StatusFile {
         + "  \"projectPath\": " + jsonStringOrNull(projectPath) + ",\n"
         + "  \"lxVersion\": " + jsonStringOrNull(lxVersion) + "\n"
         + "}\n";
-    Files.writeString(file, json);
+    try {
+      Files.createDirectories(file.getParent());
+      Files.writeString(file, json);
+    } catch (IOException iox) {
+      throw new UncheckedIOException("Failed to write " + file, iox);
+    }
     return file;
   }
 
