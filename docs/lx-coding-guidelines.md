@@ -113,15 +113,158 @@ check if it already exists — or should exist — in LX itself.
 
 ---
 
+## Conventions from the LX source
+
+The idioms above come from review feedback. The conventions below come from
+reading the framework itself (`/Users/danoved/Source/LX/`) — they're how LX
+handles errors, threading, and lifecycle internally, so plugin code should
+match them. File references are to the LX source tree.
+
+### 9. Logging: use `LX.log` / `LX.warning` / `LX.error`
+
+Don't use `System.out` / `printStackTrace` or a third-party logger. LX has a
+static logging API that prefixes every line with `[LX yyyy/MM/dd HH:mm:ss]` and
+can be redirected to a log file (`LX.java:1544-1583`):
+
+```java
+LX.log(String message)                  // stdout
+LX.warning(String message)              // stdout, guarded by LX.LOG_WARNINGS
+LX.debug(String message)                // stdout, guarded by LX.LOG_DEBUG
+LX.error(String message)                // stderr
+LX.error(Throwable x)                   // stderr + stack trace
+LX.error(Throwable x, String message)   // stderr + context + stack trace
+```
+
+Use `LX.error(throwable, context)` — pass the throwable so the stack trace is
+preserved; don't flatten it to a string.
+
+### 10. Catch-and-log at boundaries; don't let one failure kill the engine
+
+LX's house style is to catch at the seam of an operation, log it for
+developers, surface a user-facing message, and keep running rather than
+propagate. `LXCommandEngine.perform` is the canonical example
+(`command/LXCommandEngine.java:58-89`):
+
+```java
+public LXCommandEngine perform(LXCommand command) {
+  try {
+    command.perform(this.lx);
+    // ... push onto undo stack
+  } catch (InvalidCommandException icx) {
+    this.lx.pushError(icx, "Unexpected error performing action " + command.getName() + ...);
+    LX.error(icx, "Unexpected error performing action " + command + " - bad internal state?");
+    clear();
+  } catch (Exception x) {
+    this.lx.pushError(x, "...");
+    LX.error(x, "...");
+    clear();
+  }
+  return this;
+}
+```
+
+Two distinct channels: `LX.error(...)` for developer diagnostics,
+`lx.pushError(throwable, message)` for the user-facing surface
+(`LX.java:547-559`). This maps cleanly onto our `Result<T>` boundary: catch at
+the tool/primitive seam, `LX.error(...)` for the log, and return
+`Result.error(...)` to the MCP client instead of `pushError` (no UI to push
+to). Never throw across the MCP handler boundary.
+
+### 11. Mutate engine state on the engine thread via `engine.addTask`
+
+The engine runs on its own thread. Code on any other thread must not mutate LX
+state directly — instead enqueue a `Runnable` that LX drains at the top of the
+next engine loop (`LXEngine.java:846`, processed at `:1087-1097`):
+
+```java
+lx.engine.addTask(() -> {
+  // runs on the engine thread; safe to mutate LX state here
+});
+```
+
+`addTask` is the thread-safe enqueue (it appends to a synchronized queue and
+sets an `AtomicBoolean`); the engine swaps the queue under lock and runs the
+tasks itself. **This is the answer to the threading question for `lx-mcp`**: MCP
+handlers run on the HTTP server's thread, so every domain primitive that mutates
+LX state must marshal its work onto the engine thread with `engine.addTask`,
+then hand the result back to the handler thread (e.g. via a `CompletableFuture`
+completed inside the task). Don't add `synchronized` to the primitives (§4) and
+don't touch `lx.engine.*` directly from a handler thread.
+
+### 12. Parameters: `public final` fields, register in the constructor
+
+Declare parameters as `public final` fields with fluent configuration, and
+register them via `addParameter(path, parameter)` in the constructor
+(`LXComponent.java:1212-1237`). Registration auto-wires listeners and OSC; you
+don't manage that plumbing yourself:
+
+```java
+public final BoundedParameter speed =
+  new BoundedParameter("Speed", 1, 0, 10)
+    .setDescription("Playback speed");
+// in constructor:
+addParameter("speed", this.speed);
+```
+
+Bounded parameters **clamp** out-of-range values silently rather than throwing;
+they throw `IllegalArgumentException` only for construction-time config errors
+(e.g. inverted bounds) — `parameter/BoundedParameter.java:241-256`.
+
+### 13. Serialization: `LXSerializable`, `KEY_*` constants, `Utils` helpers
+
+Persisted state implements `LXSerializable` (`save(LX, JsonObject)` /
+`load(LX, JsonObject)`), names every JSON key with a `KEY_*` constant, uses the
+`LXSerializable.Utils` helpers for parameter (de)serialization, and **guards
+every read with `obj.has(key)`** (`LXComponent.java:1466-1510`,
+`LXSerializable.java`):
+
+```java
+public final static String KEY_PARAMETERS = "parameters";
+// save:
+obj.add(KEY_PARAMETERS, LXSerializable.Utils.saveParameters(this.parameters));
+// load:
+if (obj.has(KEY_PARAMETERS)) { LXSerializable.Utils.loadParameters(lx, obj, this.parameters); }
+```
+
+### 14. Lifecycle: symmetric register/unregister, `dispose()` calls `super`
+
+Register listeners and resources in the constructor / `onActive()`; tear them
+down in the matching `onInactive()` / `dispose()`. `dispose()` unregisters
+everything it added and **must call `super.dispose()`** — LX asserts this with
+`LXComponent.assertDisposed` (`LXComponent.java:1082-1132`, `LX.java:728-731`).
+Disposing twice throws. This is the framework-level statement of the CLAUDE.md
+rule "register/unregister listeners symmetrically."
+
+### 15. Validate at boundaries with `Objects.requireNonNull`
+
+Public entry points null-check their arguments with a message rather than
+letting a later NPE surface far from the cause (`LX.java:691`); network/OSC
+handlers bounds-check indices and log via `LXOscEngine.error(...)` rather than
+throwing (`LXComponent.java:732-770`). Do the same at the MCP boundary: validate
+args up front and return `Result.error(...)` with a clear message.
+
+### Custom exception types
+
+When LX does throw, it uses small typed exceptions, not bare `RuntimeException`:
+`LX.InstantiationException` (with a `Type` enum: `EXCEPTION` / `LICENSE` /
+`PLUGIN`, `LX.java:75-97`) and `LXCommand.InvalidCommandException`
+(`command/LXCommand.java:99-111`). Follow suit if we need a checked failure
+mode that callers should distinguish.
+
+---
+
 ### How this maps to `lx-mcp`
 
 This repo is an in-process MCP server, not a pattern, so the render-loop rule
 (§1) and the single-threaded assumption (§4) apply differently: MCP handlers run
 on the HTTP server's thread, not the engine thread, so thread-safety of
-mutations is a real concern here rather than something to strip out — the right
-way to apply a mutation off the engine thread is an open design question for the
-domain primitives (§ "Composability" in CLAUDE.md), not settled. The rest carry
-over directly: model variants with enums (§2), share interfaces (§3), use LX's
+mutations is a real concern here rather than something to strip out. The
+framework already dictates the answer (§11): marshal every state mutation onto
+the engine thread with `lx.engine.addTask(...)` from inside the domain
+primitives — don't add `synchronized` (§4) and don't touch `lx.engine.*` from a
+handler thread. Errors at the MCP seam follow §10/§15: catch, `LX.error(...)`,
+and return `Result.error(...)` instead of throwing. The rest carry over
+directly: model variants with enums (§2), share interfaces (§3), use LX's
 helpers instead of reinventing (§5), prefer upstream when it fits (§6), and keep
 diffs and history clean (§7, §8). See [CLAUDE.md](../CLAUDE.md) for the
 composability rules specific to this project.
