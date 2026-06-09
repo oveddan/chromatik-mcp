@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import heronarts.lx.LX;
@@ -24,10 +25,26 @@ import heronarts.lx.model.LXModel;
  */
 class HeadlessLxHarnessTest {
 
+  private LX lx;
+
   /** Build LX exactly as {@code heronarts.lx.headless.LXHeadless} does, but never start the engine. */
-  private static LX newHeadlessLx() {
+  private LX newHeadlessLx() {
     LXModel model = new GridModel(8, 8);
-    return new LX(model);
+    this.lx = new LX(model);
+    return this.lx;
+  }
+
+  /**
+   * Dispose so LX's non-daemon audio/MIDI device-scan threads don't outlive the test. Left
+   * running they contend on a JDK-global {@code javax.sound} monitor and can deadlock later
+   * constructions in the same JVM.
+   */
+  @AfterEach
+  void tearDown() {
+    if (this.lx != null) {
+      this.lx.dispose();
+      this.lx = null;
+    }
   }
 
   @Test

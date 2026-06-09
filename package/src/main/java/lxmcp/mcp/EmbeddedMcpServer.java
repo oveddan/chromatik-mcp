@@ -1,13 +1,17 @@
 package lxmcp.mcp;
 
+import java.util.List;
+
 import org.apache.catalina.Context;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Wrapper;
 import org.apache.catalina.startup.Tomcat;
 
 import io.modelcontextprotocol.server.McpServer;
+import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
+import io.modelcontextprotocol.spec.McpSchema;
 
 /**
  * Embedded streamable-HTTP MCP server, hosted on an embedded Tomcat listener.
@@ -36,12 +40,26 @@ public final class EmbeddedMcpServer {
     this.port = port;
   }
 
+  /** Start with no tools registered — {@code tools/list} works and returns an empty list. */
+  public static EmbeddedMcpServer start(String serverName, String version, int requestedPort) {
+    return start(serverName, version, requestedPort, List.of());
+  }
+
   /**
-   * Start the server on {@code requestedPort} (use {@code 0} for an ephemeral port).
+   * Start the server on {@code requestedPort} (use {@code 0} for an ephemeral port),
+   * registering {@code tools}.
+   *
+   * <p>The tools capability is advertised explicitly (even for an empty list) so a
+   * connected client's {@code tools/list} succeeds rather than failing as an unsupported
+   * method. {@code listChanged} is {@code false}: the tool set is fixed at startup.
    *
    * @return a handle exposing the actual bound {@link #port()} and {@link #stop()}.
    */
-  public static EmbeddedMcpServer start(String serverName, String version, int requestedPort) {
+  public static EmbeddedMcpServer start(
+      String serverName,
+      String version,
+      int requestedPort,
+      List<McpServerFeatures.SyncToolSpecification> tools) {
     HttpServletStreamableServerTransportProvider transport =
         HttpServletStreamableServerTransportProvider.builder()
             .mcpEndpoint(ENDPOINT)
@@ -49,6 +67,8 @@ public final class EmbeddedMcpServer {
 
     McpSyncServer server = McpServer.sync(transport)
         .serverInfo(serverName, version)
+        .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
+        .tools(tools)
         .build();
 
     Tomcat tomcat = new Tomcat();

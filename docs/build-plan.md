@@ -19,13 +19,14 @@ Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; le
 - [x] **PR-0** — Java/Maven scaffold — merged via [#1](https://github.com/oveddan/lx-mcp/pull/1); scaffold builds, headless load gate passes
 - [x] **PR-1a** — Java MCP SDK feasibility (go/no-go gate) — merged via [#3](https://github.com/oveddan/lx-mcp/pull/3); **GO**. `io.modelcontextprotocol.sdk:mcp:2.0.0-RC1` on embedded Tomcat; in-process `initialize` embed test + headless load gate both green. See `docs/spike/sdk-feasibility.md`.
 - [x] **PR-1b** — LXCommand inventory + tool mapping — merged via [#5](https://github.com/oveddan/lx-mcp/pull/5); deliverable `docs/spike/lxcommand-mapping.md` (every v1 tool maps 1:1 to an LXCommand; no `compose_scene`; engine-thread concurrency flagged as top risk).
-- [~] **PR-1c** — Automated QA strategy — branch `claude/sleepy-banach-35407d`; deliverable `docs/spike/qa-strategy.md` (LX confirmed headless-testable; do→undo→assert as built-in correctness check; engine-thread concurrency test shape). Adds `HeadlessLxHarnessTest` (executable gate) + `.github/workflows/build.yml` (CI).
-- [ ] *Spike-phase gate*: all three deliverables exist + all Review agents PASS + embed test runs —
-- [ ] **PR-2** — Embed HTTP MCP server + status file —
+- [x] **PR-1c** — Automated QA strategy — merged via [#6](https://github.com/oveddan/lx-mcp/pull/6); deliverable `docs/spike/qa-strategy.md` (LX confirmed headless-testable; do→undo→assert as built-in correctness check; engine-thread concurrency test shape). Adds `HeadlessLxHarnessTest` (executable gate) + `.github/workflows/build.yml` (CI).
+- [x] *Spike-phase gate*: all three deliverables exist + all Review agents PASS + embed test runs
+- [~] **PR-2** — Embed HTTP MCP server + status file — branch `claude/jolly-swanson-c3b04c`. Embed + status file already landed in PR-1a; this PR makes `tools/list` work (server advertises the tools capability via the `EmbeddedMcpServer.start(..., tools)` overload) and lands the engine-thread serialization executor (`lxmcp.engine.EngineExecutor`, the #1-risk mechanism the spike docs assign here) + its concurrency regression test. No tools yet (PR-3). Jar slimming deferred — see follow-up below.
 - [ ] **PR-3** — First read-only tool (`get_project_info`) —
 - [ ] **PR-4** — First mutation (`add_macro_knob`) via LXCommand —
 - [ ] **PR-5** — Tool-surface fan-out (channels / patterns / modulators / routing / MIDI / set_parameter) —
 - [ ] **PR-6** — Install docs + multi-agent usage examples + README rewrite —
+- [ ] *Follow-up (deferred from PR-2)* — slim the shaded jar: exclude unused Tomcat submodules / optional deps to drop the non-fatal `ClassNotFoundException: jakarta.mail.Authenticator` at load and shrink the ~9 MB artifact —
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` merged. When you pick up a PR, set it to `[~]` and put your branch name after the dash so parallel sessions don't collide.
 
