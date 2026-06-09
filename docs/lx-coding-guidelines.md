@@ -111,6 +111,46 @@ check if it already exists — or should exist — in LX itself.
 
 - Squash-and-merge to keep `main` history clean.
 
+## 9. Plugin lifecycle: let `initialize()` throw, free in `dispose()`
+
+(Verified against LX source rather than a review note — `LXRegistry.Plugin`
+calls `initialize()`/`dispose()` and the `Apotheneum` launcher plugin is the
+reference implementation.)
+
+LX already wraps `LXPlugin.initialize(lx)` and `dispose()`:
+
+```java
+// LXRegistry.Plugin
+try {
+  this.instance.initialize(lx);
+} catch (Throwable x) {
+  LX.error(x, "Unhandled error in plugin initialize: " + clazz.getName());
+  lx.pushError(x, "Error on initialization of plugin " + ...); // user-facing dialog
+  setException(x);                                             // marks plugin hasError
+}
+```
+
+So:
+
+- **Don't swallow exceptions in `initialize()`.** Let them propagate — LX logs
+  them, surfaces a user-facing error via `pushError`, and flags the plugin as
+  errored in the UI. A local `try/catch` that only calls `LX.error` *downgrades*
+  the failure: the plugin still shows as healthy while it's actually broken. If a
+  checked exception is in the way (the interface declares no `throws`), wrap it
+  unchecked (`UncheckedIOException`, `IllegalStateException`) so it still
+  propagates — don't catch-and-log it away.
+- **Implement `dispose()` symmetrically.** Whatever `initialize()` acquires —
+  listeners, threads, servers, sockets — release it in `dispose()`. Apotheneum's
+  launcher does `addListener` in `initialize()` and `removeListener` in
+  `dispose()`. A plugin that starts a server and never stops it leaks the bound
+  port and its threads when the plugin is disabled.
+- **Catch only where LX won't.** Async callbacks, background threads, and OSC
+  handlers run outside LX's wrapper, so *those* should `try/catch` and report via
+  `LX.error` / `pushError` (again, see the Apotheneum launcher). The rule is:
+  propagate where the framework already catches; catch where it doesn't.
+- **House style:** a `PREFIX` constant plus `log()`/`error()` helpers wrapping
+  `LX.log`/`LX.error`, not inline `"[Name] "` literals at every call site.
+
 ---
 
 ### How this maps to `lx-mcp`
@@ -123,5 +163,7 @@ way to apply a mutation off the engine thread is an open design question for the
 domain primitives (§ "Composability" in CLAUDE.md), not settled. The rest carry
 over directly: model variants with enums (§2), share interfaces (§3), use LX's
 helpers instead of reinventing (§5), prefer upstream when it fits (§6), and keep
-diffs and history clean (§7, §8). See [CLAUDE.md](../CLAUDE.md) for the
-composability rules specific to this project.
+diffs and history clean (§7, §8). The plugin lifecycle rule (§9) applies most
+directly of all — `LxMcpPlugin` *is* an `LXPlugin`, so its `initialize()` must
+propagate and its `dispose()` must stop the embedded server. See
+[CLAUDE.md](../CLAUDE.md) for the composability rules specific to this project.
