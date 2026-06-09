@@ -36,7 +36,7 @@ Bad (inline, not swappable):
 ```java
 // tool handler
 public Result<ModulatorInfo> handle(AddMacroKnobArgs args) {
-  lx.command.perform(new LXCommand.Modulation.AddModulator(MacroKnobs.class));
+  lx.command.perform(new LXCommand.Modulation.AddModulator(lx.engine.modulation, MacroKnobs.class));
   var mods = lx.engine.modulation.modulators;
   return Result.ok(ModulatorInfo.from(mods.get(mods.size() - 1)));
 }
@@ -46,7 +46,7 @@ Good (composed primitive, single point of swap):
 ```java
 // domain/Modulators.java
 public static LXModulator addGlobalModulator(LX lx, Class<? extends LXModulator> kind) {
-  lx.command.perform(new LXCommand.Modulation.AddModulator(kind));
+  lx.command.perform(new LXCommand.Modulation.AddModulator(lx.engine.modulation, kind));
   var mods = lx.engine.modulation.modulators;
   return mods.get(mods.size() - 1);
 }

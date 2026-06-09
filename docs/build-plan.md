@@ -17,8 +17,8 @@ A **PR-0 scaffold step** lands first to give the spike PRs a buildable Java proj
 Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; leave a one-line note (branch / PR link / blocker) after the dash. Keep it honest — `[~]` means in-progress, `[ ]` not started.
 
 - [x] **PR-0** — Java/Maven scaffold — merged via [#1](https://github.com/oveddan/lx-mcp/pull/1); scaffold builds, headless load gate passes
-- [~] **PR-1a** — Java MCP SDK feasibility (go/no-go gate) — branch `claude/adoring-benz-2aa117` ([#3](https://github.com/oveddan/lx-mcp/pull/3)); **GO**. `io.modelcontextprotocol.sdk:mcp:2.0.0-RC1` on embedded Tomcat; in-process `initialize` embed test + headless load gate both green. See `docs/spike/sdk-feasibility.md`.
-- [ ] **PR-1b** — LXCommand inventory + tool mapping —
+- [x] **PR-1a** — Java MCP SDK feasibility (go/no-go gate) — merged via [#3](https://github.com/oveddan/lx-mcp/pull/3); **GO**. `io.modelcontextprotocol.sdk:mcp:2.0.0-RC1` on embedded Tomcat; in-process `initialize` embed test + headless load gate both green. See `docs/spike/sdk-feasibility.md`.
+- [~] **PR-1b** — LXCommand inventory + tool mapping — branch `claude/intelligent-mcclintock-a87ed5`; deliverable `docs/spike/lxcommand-mapping.md` written (every v1 tool maps 1:1 to an LXCommand; no `compose_scene`; engine-thread concurrency flagged as top risk). Pending Review agent + merge.
 - [ ] **PR-1c** — Automated QA strategy —
 - [ ] *Spike-phase gate*: all three deliverables exist + all Review agents PASS + embed test runs —
 - [ ] **PR-2** — Embed HTTP MCP server + status file —
