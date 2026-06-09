@@ -1,0 +1,20 @@
+# Build output
+target/
+*.class
+*.jar
+
+# IDE
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+
+# OS
+.DS_Store
+
+# JVM crashes
+hs_err_pid*
+
+# Logs
+*.log

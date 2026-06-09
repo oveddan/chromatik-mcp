@@ -16,7 +16,7 @@ A **PR-0 scaffold step** lands first to give the spike PRs a buildable Java proj
 
 Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; leave a one-line note (branch / PR link / blocker) after the dash. Keep it honest — `[~]` means in-progress, `[ ]` not started.
 
-- [ ] **PR-0** — Java/Maven scaffold —
+- [~] **PR-0** — Java/Maven scaffold — branch `claude/naughty-hamilton-d8e0f0`; scaffold builds, headless load gate passes
 - [ ] **PR-1a** — Java MCP SDK feasibility (go/no-go gate) —
 - [ ] **PR-1b** — LXCommand inventory + tool mapping —
 - [ ] **PR-1c** — Automated QA strategy —
