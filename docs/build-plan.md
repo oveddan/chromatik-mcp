@@ -1,4 +1,4 @@
-# lx-mcp — spike phase plan (three small PRs, each an agent pipeline)
+# lx-mcp — build plan (spike phase complete; tool-surface rollout in progress)
 
 ## Context
 
@@ -22,11 +22,18 @@ Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; le
 - [x] **PR-1c** — Automated QA strategy — merged via [#6](https://github.com/oveddan/lx-mcp/pull/6); deliverable `docs/spike/qa-strategy.md` (LX confirmed headless-testable; do→undo→assert as built-in correctness check; engine-thread concurrency test shape). Adds `HeadlessLxHarnessTest` (executable gate) + `.github/workflows/build.yml` (CI).
 - [x] *Spike-phase gate*: all three deliverables exist + all Review agents PASS + embed test runs
 - [~] **PR-2** — Embed HTTP MCP server + status file — branch `claude/jolly-swanson-c3b04c`. Embed + status file already landed in PR-1a; this PR makes `tools/list` work (server advertises the tools capability via the `EmbeddedMcpServer.start(..., tools)` overload) and lands the engine-thread serialization executor (`lxmcp.engine.EngineExecutor`, the #1-risk mechanism the spike docs assign here) + its concurrency regression test. No tools yet (PR-3). Jar slimming deferred — see follow-up below.
-- [ ] **PR-3** — First read-only tool (`get_project_info`) —
+- [ ] **PR-3** — Read-only discovery tools (`get_project_info`, `list_channels`, `list_available_patterns`/`effects`/`modulators`, `get_parameter`) + wire-shape decisions —
+- [ ] **PR-3b** — Path/entity resolver (`resolve(lx, path)` domain primitive; prerequisite for every path-taking mutation) —
 - [ ] **PR-4** — First mutation (`add_macro_knob`) via LXCommand —
-- [ ] **PR-5** — Tool-surface fan-out (channels / patterns / modulators / routing / MIDI / set_parameter) —
-- [ ] **PR-6** — Install docs + multi-agent usage examples + README rewrite —
+- [ ] **PR-5a** — `set_parameter` (first fan-out slice; reuses the resolver) —
+- [ ] **PR-5b** — Channels / patterns / effects tools —
+- [ ] **PR-5c** — Modulators + modulation-routing tools —
+- [ ] **PR-5d** — MIDI mapping tool —
+- [ ] **PR-6** — Install docs + multi-agent usage examples + README rewrite + license decision —
 - [ ] *Follow-up (deferred from PR-2)* — slim the shaded jar: exclude unused Tomcat submodules / optional deps to drop the non-fatal `ClassNotFoundException: jakarta.mail.Authenticator` at load and shrink the ~9 MB artifact —
+- [ ] *Follow-up* — status.json lifecycle: delete on `dispose()`, rewrite when the open project changes (LX listener), document the pid-liveness check as the client contract (file is currently written once at startup and never cleaned up; two Chromatik instances overwrite each other) —
+- [ ] *Follow-up* — bump MCP SDK `2.0.0-RC1` → GA when released —
+- [ ] *Open question* — `save_project` persistence tool: v1 or Phase 2? All mutations are in-memory; an agent that composes a show has no way to persist it without the user manually saving —
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` merged. When you pick up a PR, set it to `[~]` and put your branch name after the dash so parallel sessions don't collide.
 
@@ -141,15 +148,31 @@ PR-0 lands first — it's the minimum buildable Java project. PR-1a depends on P
 - All three Review agents returned PASS.
 - The runnable embed test from PR-1a starts and accepts an MCP `initialize` request.
 
-## Downstream PRs (high-level — to be planned after the spike phase)
+## Downstream PRs (post-spike roadmap)
 
-For orientation only. Each will get its own focused plan once the spike findings constrain the specifics.
+Planned in detail now that the spike findings are in. Each PR stays independently demoable; anything bigger than these slices is too big (see the scope guard in `CLAUDE.md`).
 
-- **PR-2** — Embed HTTP MCP server in the plugin; write status file; `tools/list` works.
-- **PR-3** — First read-only tool (`get_project_info`). Proves the tool-registration pattern end-to-end.
-- **PR-4** — First mutation (`add_macro_knob`) via `LXCommand`. Live demo: knob appears in Chromatik, Cmd-Z undoes.
-- **PR-5** — Fan-out: parallel sub-PRs for the rest of the tool surface (channels, patterns, modulators, modulation routing, MIDI, generic `set_parameter`).
-- **PR-6** — Install docs for multiple agentic platforms + multi-agent usage examples + README rewrite.
+- **PR-2** — Embed HTTP MCP server in the plugin; write status file; `tools/list` works. (In progress — see tracker.)
+
+- **PR-3** — Read-only discovery tools. `get_project_info` plus the discovery set agents need before any mutation is composable: `list_channels` (channels with their patterns/effects), `list_available_patterns` / `list_available_effects` / `list_available_modulators` (from `LXRegistry` — without these, `add_pattern` args are unguessable), and `get_parameter`. Proves the tool-registration pattern end-to-end.
+  - Decisions to settle here, since they shape every later tool:
+    - `Result<T>` wire shape over MCP — `isError` + text content vs. structured content; check whether the Java SDK (2.0.0-RC1) supports `outputSchema`/structured tool output.
+    - Tool naming convention (verb_noun snake_case, singular vs. plural, etc.) — fixed once, before the fan-out.
+    - Canonical entity addressing — LX OSC path (e.g. `/lx/mixer/channel/3/pattern/2/...`) vs. component id. Decide here, where read tools exercise it cheaply; PR-3b implements the resolver.
+  - Verification: JUnit integration tests call each tool over in-process HTTP against the headless harness; live check from any MCP client against a running Chromatik.
+
+- **PR-3b** — Path/entity resolver. The `resolve(lx, path) → component/parameter` domain primitive that PR-1b's review flagged as a hard prerequisite for roughly half the v1 tool surface (`set_parameter`, `wire_modulator`, `add_midi_mapping`, every `remove_*`). Implements the addressing convention decided in PR-3. Unit tests against the headless harness: valid paths, missing components, type mismatches — each mapping to a typed error. Lands before any mutation that takes a path argument.
+
+- **PR-4** — First mutation (`add_macro_knob`) via `LXCommand`. Also nails the `Result.error` mapping pattern at the tool seam — the first mutation is the first real error surface.
+  - Verification: do→undo→assert in JUnit; live demo: knob appears in Chromatik, Cmd-Z undoes.
+
+- **PR-5 fan-out** — the rest of the v1 tool surface, pre-sliced so parallel sessions don't collide (one tracker line each). Each slice follows the per-tool template in `docs/spike/qa-strategy.md`: domain primitives + handlers + do→undo→assert tests.
+  - **PR-5a** — `set_parameter`. First: it reuses the PR-3b resolver, has the highest leverage, and exercises the polymorphic `SetValue`/`SetNormalized`/`SetString`/`SetColor` dispatch.
+  - **PR-5b** — channels + patterns + effects (`add_channel`, `remove_channel`, `add_pattern`, `remove_pattern`, `add_effect`, `remove_effect`).
+  - **PR-5c** — modulators + routing (`add_modulator`, `wire_modulator` continuous + trigger, `remove_modulation` both kinds).
+  - **PR-5d** — MIDI mapping (`add_midi_mapping`).
+
+- **PR-6** — Install docs for multiple agentic platforms + multi-agent usage examples + README rewrite + **license decision** (currently TBD; must land before this publicity step). Bump the MCP SDK to GA here if it has been released by then.
 
 **Phase 2 (post-MVP, not in the current PR list):**
 
@@ -161,6 +184,6 @@ For orientation only. Each will get its own focused plan once the spike findings
 
 ```
 PR-0 ──┬──> PR-1a ┐
-       │   PR-1b ├──> PR-2 ──> PR-3 ──> PR-4 ──┬──> PR-5 (parallel)
-       └──> PR-1c ┘                             └──> PR-6 (docs)
+       │   PR-1b ├──> PR-2 ──> PR-3 ──> PR-3b ──> PR-4 ──┬──> PR-5a ──> PR-5b / PR-5c / PR-5d (parallel)
+       └──> PR-1c ┘                                       └──> PR-6 (docs)
 ```
