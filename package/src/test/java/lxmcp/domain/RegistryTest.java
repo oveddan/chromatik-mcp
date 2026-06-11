@@ -11,10 +11,16 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXComponent;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.pattern.color.GradientPattern;
 
 class RegistryTest {
+
+  /** The expectation the production filter implements: registered minus @Hidden. */
+  private static long visibleCount(List<? extends Class<? extends LXComponent>> classes) {
+    return classes.stream().filter(c -> !c.isAnnotationPresent(LXComponent.Hidden.class)).count();
+  }
 
   private LX lx;
 
@@ -35,7 +41,7 @@ class RegistryTest {
   void enumeratesRegisteredPatternClasses() {
     LX lx = newHeadlessLx();
     List<Registry.ComponentType> patterns = Registry.patterns(lx);
-    assertEquals(lx.registry.patterns.size(), patterns.size());
+    assertEquals(visibleCount(lx.registry.patterns), patterns.size());
     assertTrue(
         patterns.stream().anyMatch(t -> t.className().equals(GradientPattern.class.getName())),
         "built-in GradientPattern should be registered");
@@ -50,8 +56,8 @@ class RegistryTest {
   @Test
   void effectsAndModulatorsMatchRegistrySizes() {
     LX lx = newHeadlessLx();
-    assertEquals(lx.registry.effects.size(), Registry.effects(lx).size());
-    assertEquals(lx.registry.modulators.size(), Registry.modulators(lx).size());
+    assertEquals(visibleCount(lx.registry.effects), Registry.effects(lx).size());
+    assertEquals(visibleCount(lx.registry.modulators), Registry.modulators(lx).size());
     assertFalse(Registry.effects(lx).isEmpty(), "LX registers built-in effects");
     assertFalse(Registry.modulators(lx).isEmpty(), "LX registers built-in modulators");
   }

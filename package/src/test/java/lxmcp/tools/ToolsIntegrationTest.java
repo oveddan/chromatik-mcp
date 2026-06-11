@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.Timeout;
 import heronarts.lx.LX;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
+import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.pattern.color.GradientPattern;
 
 import io.modelcontextprotocol.client.McpClient;
@@ -29,21 +31,24 @@ import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTranspor
 import io.modelcontextprotocol.spec.McpSchema;
 
 import lxmcp.domain.Registry;
+import lxmcp.domain.Resolve;
 import lxmcp.engine.EngineExecutor;
 import lxmcp.mcp.EmbeddedMcpServer;
 
 /**
- * The PR-3 integration gate from the qa-strategy per-tool template: the six discovery
- * tools served over real streamable-HTTP against a headless LX. A drainer thread stands
- * in for LX's engine thread (the headless harness never starts {@code lx.engine}), so
- * the blocking {@code EngineExecutor.call(...)} inside each handler completes.
+ * The integration gate from the qa-strategy per-tool template: every registered tool
+ * served over real streamable-HTTP against a headless LX. A drainer thread stands in
+ * for LX's engine thread (the headless harness never starts {@code lx.engine}), so the
+ * blocking {@code EngineExecutor.call(...)} inside each handler completes.
  *
  * <p>One LX + server + client for the whole class ({@code @BeforeAll}), not per test:
  * repeated {@code new LX(...)} construction in one JVM deadlocks on the JDK-global
  * javax.sound/CoreMIDI lock (a previous instance's MIDI device-scan thread holds it
  * while the next construction enters audio init — the same hazard the surefire
- * {@code reuseForks=false} comment documents). All LX fixture state is built before the
- * drainer starts; after that, tests only read.
+ * {@code reuseForks=false} comment documents). Direct LX fixture mutation happens only
+ * before the drainer starts; afterwards tests touch LX state exclusively through tool
+ * calls (engine-task-marshalled) and assert against live state, so they stay
+ * order-independent.
  */
 @Timeout(60)
 class ToolsIntegrationTest {
@@ -113,17 +118,34 @@ class ToolsIntegrationTest {
   }
 
   @Test
-  void advertisesAllDiscoveryTools() {
+  void advertisesAllToolsWithReadOnlyHints() {
     McpSchema.ListToolsResult tools = client.listTools();
     Set<String> names = tools.tools().stream().map(McpSchema.Tool::name).collect(Collectors.toSet());
     assertEquals(
         Set.of("get_project_info", "list_channels", "list_available_patterns",
-            "list_available_effects", "list_available_modulators", "get_parameter"),
+            "list_available_effects", "list_available_modulators", "get_parameter",
+            "add_macro_knob"),
         names);
     for (McpSchema.Tool tool : tools.tools()) {
-      assertEquals(Boolean.TRUE, tool.annotations().readOnlyHint(),
-          tool.name() + " is advertised read-only");
+      boolean expectReadOnly = !tool.name().equals("add_macro_knob");
+      assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),
+          tool.name() + " readOnlyHint");
     }
+  }
+
+  @Test
+  void addMacroKnobOverMcpMutatesEngineState() {
+    int before = lx.engine.modulation.modulators.size();
+
+    Map<String, Object> payload = structured(call("add_macro_knob", Map.of()));
+
+    assertEquals(before + 1, lx.engine.modulation.modulators.size());
+    assertEquals(MacroKnobs.class.getName(), payload.get("class"));
+    assertEquals(Boolean.TRUE, payload.get("running"));
+    String path = (String) payload.get("path");
+    assertNotNull(path);
+    // The returned path addresses the new modulator (the resolver round-trip).
+    assertSame(lx.engine.modulation.modulators.get(before), Resolve.component(lx, path));
   }
 
   @Test

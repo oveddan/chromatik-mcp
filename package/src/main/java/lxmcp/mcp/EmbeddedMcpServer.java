@@ -60,6 +60,27 @@ public final class EmbeddedMcpServer {
       String version,
       int requestedPort,
       List<McpServerFeatures.SyncToolSpecification> tools) {
+    // The SDK resolves its JSON mapper + schema validator via ServiceLoader on the
+    // thread-context classloader, eagerly at builder time. Inside Chromatik this jar
+    // lives in a child classloader (LXClassLoader) that is never the TCCL, so without
+    // this swap initialize() dies with ServiceConfigurationError — while every test
+    // passes, because tests have the SDK on the system classpath. The SDK memoizes the
+    // resolved instances, so the swap is only needed for the duration of startup.
+    Thread thread = Thread.currentThread();
+    ClassLoader prior = thread.getContextClassLoader();
+    thread.setContextClassLoader(EmbeddedMcpServer.class.getClassLoader());
+    try {
+      return startWithContextClassLoader(serverName, version, requestedPort, tools);
+    } finally {
+      thread.setContextClassLoader(prior);
+    }
+  }
+
+  private static EmbeddedMcpServer startWithContextClassLoader(
+      String serverName,
+      String version,
+      int requestedPort,
+      List<McpServerFeatures.SyncToolSpecification> tools) {
     HttpServletStreamableServerTransportProvider transport =
         HttpServletStreamableServerTransportProvider.builder()
             .mcpEndpoint(ENDPOINT)
@@ -85,8 +106,12 @@ public final class EmbeddedMcpServer {
     context.addChild(wrapper);
     context.addServletMappingDecoded("/*", "mcp");
 
-    // Touch the connector before start so setPort(0) yields an ephemeral bind.
-    tomcat.getConnector().setAsyncTimeout(30_000);
+    // Loopback only: status.json discovery is inherently local, and the tool surface
+    // mutates a live show — never an unauthenticated listener on the LAN. (Touching
+    // the connector before start also makes setPort(0) yield an ephemeral bind. No
+    // async timeout is set: the SDK servlet disables it via setTimeout(0), so the
+    // EngineExecutor call timeout is the only bound on a blocked tool call.)
+    tomcat.getConnector().setProperty("address", "127.0.0.1");
 
     try {
       tomcat.start();

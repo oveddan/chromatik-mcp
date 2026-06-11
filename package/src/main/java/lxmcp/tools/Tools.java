@@ -36,13 +36,15 @@ public final class Tools {
             new ListAvailable(ListAvailable.Kind.PATTERNS),
             new ListAvailable(ListAvailable.Kind.EFFECTS),
             new ListAvailable(ListAvailable.Kind.MODULATORS),
-            new GetParameter())
+            new GetParameter(),
+            new AddMacroKnob())
         .stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();
   }
 
-  private static McpServerFeatures.SyncToolSpecification specification(LxTool tool, LX lx, EngineExecutor executor) {
+  // Package-private so the seam's exception mapping is testable without HTTP.
+  static McpServerFeatures.SyncToolSpecification specification(LxTool tool, LX lx, EngineExecutor executor) {
     McpSchema.Tool spec = McpSchema.Tool.builder()
         .name(tool.name())
         .description(tool.description())

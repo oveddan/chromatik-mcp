@@ -46,19 +46,24 @@ Good (composed primitive, single point of swap):
 ```java
 // domain/Modulators.java
 public static LXModulator addGlobalModulator(LX lx, Class<? extends LXModulator> kind) {
-  lx.command.perform(new LXCommand.Modulation.AddModulator(lx.engine.modulation, kind));
   var mods = lx.engine.modulation.modulators;
-  return mods.get(mods.size() - 1);
+  int before = mods.size();
+  lx.command.perform(new LXCommand.Modulation.AddModulator(lx.engine.modulation, kind));
+  // perform() swallows command failures — verify the mutation applied (docs/tool-conventions.md)
+  if (mods.size() != before + 1) {
+    throw new IllegalStateException("AddModulator did not add a " + kind.getName());
+  }
+  return mods.get(before);
 }
 
 // tools/AddMacroKnob.java
-protected Result<ModulatorInfo> handle(AddMacroKnobArgs args) {
+public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
   LXModulator m = Modulators.addGlobalModulator(lx, MacroKnobs.class);
-  return Result.ok(ModulatorInfo.from(m));
+  return Result.ok(Map.of("path", m.getCanonicalPath(), "label", m.getLabel()));
 }
 ```
 
-`addGlobalModulator` is reused by every tool that adds a global modulator (MacroKnobs, MacroSwitches, MacroTriggers, LFOs, envelopes). The handler is a one-liner with no `LXCommand` knowledge. If we ever need to swap the implementation (e.g., add validation, switch from `LXCommand` to direct edit, fan out a notification), only the primitive changes.
+`addGlobalModulator` is reused by every tool that adds a global modulator (MacroKnobs, MacroSwitches, MacroTriggers, LFOs, envelopes). The handler calls one primitive and shapes the payload — no `LXCommand` knowledge. If we ever need to swap the implementation (e.g., add validation, switch from `LXCommand` to direct edit, fan out a notification), only the primitive changes.
 
 ### When primitives multiply
 

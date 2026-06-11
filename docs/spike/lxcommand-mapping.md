@@ -10,7 +10,7 @@ Upstream artifacts: `docs/spike/pr-1b/01-research-notes.md` (enumeration + citat
 - **Fine-grained primitives only. No `compose_scene`.** Scene assembly composes at the *agent* layer against shared in-process LX state, not at the tool layer.
 - **Two tools split into two primitives each:** `wire_modulator` → `wireModulation` (continuous) + `wireTrigger` (boolean); `remove_modulation` → `removeModulation` + `removeTrigger`. The source/target types are genuinely different and a single primitive would need an unsafe cast.
 - **Engine-thread concurrency is the real risk.** LX mutations are expected on the engine thread; parallel agents hitting one `LX` instance need a server-side serialization queue (PR-1c / PR-2), not a coarser tool.
-- **Exceptions cross `perform()`.** `ModulationException` and `InstantiationException` (and locked-effect) surface from `lx.command.perform()`; primitives must map them to `Result.error` at the seam.
+- **Exceptions cross `perform()`.** ~~`ModulationException` and `InstantiationException` (and locked-effect) surface from `lx.command.perform()`~~ — **superseded by PR-4**: `lx.command.perform()` *swallows* these (pushes a UI error, wipes the undo stack, returns normally). Mutation primitives verify by state-read and throw; see the Mutations section of `docs/tool-conventions.md` before building PR-5 primitives on this table's exception column.
 - **Phase-2 introspection: metadata + parameters YES, source/algorithm NO.** Registry + RUNTIME annotations + parameter-tree walk are sufficient for comprehension of *what knobs exist*; *what the pattern does algorithmically* requires decompilation outside LX's surface.
 
 ## Mapping table

@@ -37,16 +37,40 @@ fi
 echo "==> mvn package + test-compile"
 mvn -q -B package test-compile
 
-# Resolve the provided-scope classpath (LX + its transitive deps).
+# Resolve ONLY LX + its transitive deps — the faithful Chromatik app classpath.
+# Resolving from this project's pom (even with includeScope=provided) emits the
+# entire dependency tree including the shaded-in MCP SDK, which let ServiceLoader
+# resolve from the parent classpath and made this gate a false positive for
+# deployment-shape bugs (the SDK's ServiceLoader lookup fails inside Chromatik's
+# child classloader unless the plugin handles it). A throwaway pom that depends
+# on LX alone reproduces what Chromatik actually provides.
+LX_VERSION="$(mvn -q help:evaluate -Dexpression=lx.version -DforceStdout)"
 CP_FILE="$(mktemp)"
-mvn -q dependency:build-classpath -Dmdep.includeScope=provided -Dmdep.outputFile="$CP_FILE"
+GATE_POM_DIR="$(mktemp -d)"
+cat > "$GATE_POM_DIR/pom.xml" <<EOF
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>co.lxmcp</groupId>
+  <artifactId>load-gate-classpath</artifactId>
+  <version>0</version>
+  <packaging>pom</packaging>
+  <dependencies>
+    <dependency>
+      <groupId>com.heronarts</groupId>
+      <artifactId>lx</artifactId>
+      <version>${LX_VERSION}</version>
+    </dependency>
+  </dependencies>
+</project>
+EOF
+mvn -q -f "$GATE_POM_DIR/pom.xml" dependency:build-classpath -Dmdep.outputFile="$CP_FILE"
 LX_CP="$(cat "$CP_FILE")"
 
 # Isolated media root: LX bootstraps <user.home>/LXStudio/Packages. It reads the
 # JVM `user.home` system property (NOT the HOME env var), so override that.
 FAKE_HOME="$(mktemp -d)"
 LOG="$(mktemp)"
-trap 'rm -f "$CP_FILE" "$LOG"; rm -rf "$FAKE_HOME"' EXIT
+trap 'rm -f "$CP_FILE" "$LOG"; rm -rf "$FAKE_HOME" "$GATE_POM_DIR"' EXIT
 mkdir -p "$FAKE_HOME/LXStudio/Packages"
 cp "$JAR" "$FAKE_HOME/LXStudio/Packages/"
 

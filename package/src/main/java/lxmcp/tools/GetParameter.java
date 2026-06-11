@@ -62,7 +62,9 @@ public final class GetParameter implements LxTool {
     if (info.options() != null) {
       payload.put("options", info.options());
     }
-    payload.put("formatted", info.formatted());
+    if (info.formatted() != null) {
+      payload.put("formatted", info.formatted());
+    }
     return Result.ok(payload);
   }
 }

@@ -40,6 +40,28 @@ them is a cross-cutting change that touches every tool — propose it as its own
   validation semantics for `isError` results against a declared schema are unverified.
   Revisit at the SDK GA bump (tracker follow-up in `docs/build-plan.md`).
 
+## Mutations
+
+- Mutations route through `LXCommand` via a domain primitive (CLAUDE.md layering).
+  **`lx.command.perform()` swallows command failures** — it pushes a UI error and
+  returns normally (`LXCommandEngine.java:77-85`) — so a mutation primitive must verify
+  its effect by observing engine state and throw if it didn't apply. "Command-backed"
+  does not mean "cannot fail", and an unverified read-back returns the wrong object on
+  failure.
+- Two LX-behavior caveats on that failure path: `perform()` also calls `clear()`, which
+  **wipes the user's entire undo and redo history**, and the failure is double-reported
+  (Chromatik shows the `pushError` dialog; the MCP client gets the `internal` error) —
+  both are LX's behavior, not ours; don't "fix" the duplication at the seam.
+- A state-read size check suffices when the command's only realistic failure precedes
+  its first mutation (instantiation, validation). For commands that can fail *after*
+  mutating, the exact detector is `lx.command.getUndoCommand()` — the performed command
+  on success, empty stack after a failed `perform()`. Decide per primitive in PR-5.
+- A tool call that times out (`internal: Engine task timed out…`) has **not** been
+  cancelled: the task stays in the engine queue and the mutation still applies when the
+  engine drains it. Agents should re-read state after a timeout, never blind-retry.
+- Every mutation's domain test is do → undo → assert restored (qa-strategy); the undo
+  assertion doubles as proof the primitive used a real `LXCommand`.
+
 ## Threading
 
 - Every handler runs on the LX engine thread via `EngineExecutor.call(...)`; Tomcat

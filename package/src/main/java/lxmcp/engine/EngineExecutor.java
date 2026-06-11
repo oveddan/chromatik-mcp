@@ -29,7 +29,11 @@ import heronarts.lx.LX;
  */
 public final class EngineExecutor {
 
-  /** Default bound for {@link #call(Supplier)}, matching the Tomcat async timeout. */
+  /**
+   * Default bound for {@link #call(Supplier)} — and the only timeout in play: the MCP
+   * SDK's servlet disables Tomcat's async timeout ({@code setTimeout(0)}). A timed-out
+   * task is NOT cancelled; it remains queued and still runs when the engine drains it.
+   */
   public static final long DEFAULT_TIMEOUT_MS = 30_000;
 
   private final LX lx;
