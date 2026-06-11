@@ -21,8 +21,8 @@ Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; le
 - [x] **PR-1b** — LXCommand inventory + tool mapping — merged via [#5](https://github.com/oveddan/lx-mcp/pull/5); deliverable `docs/spike/lxcommand-mapping.md` (every v1 tool maps 1:1 to an LXCommand; no `compose_scene`; engine-thread concurrency flagged as top risk).
 - [x] **PR-1c** — Automated QA strategy — merged via [#6](https://github.com/oveddan/lx-mcp/pull/6); deliverable `docs/spike/qa-strategy.md` (LX confirmed headless-testable; do→undo→assert as built-in correctness check; engine-thread concurrency test shape). Adds `HeadlessLxHarnessTest` (executable gate) + `.github/workflows/build.yml` (CI).
 - [x] *Spike-phase gate*: all three deliverables exist + all Review agents PASS + embed test runs
-- [~] **PR-2** — Embed HTTP MCP server + status file — branch `claude/jolly-swanson-c3b04c`. Embed + status file already landed in PR-1a; this PR makes `tools/list` work (server advertises the tools capability via the `EmbeddedMcpServer.start(..., tools)` overload) and lands the engine-thread serialization executor (`lxmcp.engine.EngineExecutor`, the #1-risk mechanism the spike docs assign here) + its concurrency regression test. No tools yet (PR-3). Jar slimming deferred — see follow-up below.
-- [ ] **PR-3** — Read-only discovery tools (`get_project_info`, `list_channels`, `list_available_patterns`/`effects`/`modulators`, `get_parameter`) + wire-shape decisions —
+- [x] **PR-2** — Embed HTTP MCP server + status file — merged via [#7](https://github.com/oveddan/lx-mcp/pull/7); `tools/list` works, `lxmcp.engine.EngineExecutor` (engine-thread serialization, the #1-risk mechanism) + concurrency regression test landed. Jar slimming deferred — see follow-up below.
+- [~] **PR-3** — Read-only discovery tools (`get_project_info`, `list_channels`, `list_available_patterns`/`effects`/`modulators`, `get_parameter`) + wire-shape decisions — branch `pr-3-discovery-tools`; conventions recorded in `docs/tool-conventions.md`
 - [ ] **PR-3b** — Path/entity resolver (`resolve(lx, path)` domain primitive; prerequisite for every path-taking mutation) —
 - [ ] **PR-4** — First mutation (`add_macro_knob`) via LXCommand —
 - [ ] **PR-5a** — `set_parameter` (first fan-out slice; reuses the resolver) —
@@ -33,7 +33,7 @@ Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; le
 - [ ] *Follow-up (deferred from PR-2)* — slim the shaded jar: exclude unused Tomcat submodules / optional deps to drop the non-fatal `ClassNotFoundException: jakarta.mail.Authenticator` at load and shrink the ~9 MB artifact —
 - [ ] *Follow-up* — status.json lifecycle: delete on `dispose()`, rewrite when the open project changes (LX listener), document the pid-liveness check as the client contract (file is currently written once at startup and never cleaned up; two Chromatik instances overwrite each other) —
 - [ ] *Follow-up* — bump MCP SDK `2.0.0-RC1` → GA when released —
-- [ ] *Open question* — `save_project` persistence tool: v1 or Phase 2? All mutations are in-memory; an agent that composes a show has no way to persist it without the user manually saving —
+- [x] *Resolved (2026-06-10)* — `save_project` persistence tool deferred to **Phase 2**: v1 mutations stay in-memory; the user saves manually in Chromatik —
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` merged. When you pick up a PR, set it to `[~]` and put your branch name after the dash so parallel sessions don't collide.
 

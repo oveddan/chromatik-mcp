@@ -2,7 +2,7 @@
 
 A drop-in LX/Chromatik package for AI-driven show composition over MCP.
 
-**Status**: planning + scaffolding. See [docs/build-plan.md](docs/build-plan.md) for the active roadmap.
+**Status**: spike complete; tool surface in progress. See [docs/build-plan.md](docs/build-plan.md) for the active roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
 
 ## Architecture
 

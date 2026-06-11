@@ -110,6 +110,11 @@
                          accumulate and deadlock construction, so give every test class a
                          fresh JVM rather than reusing one. -->
                     <reuseForks>false</reuseForks>
+                    <!-- The same javax.sound contention can deadlock a fork outright
+                         (LX construction blocked on the CoreMIDI lock). JUnit @Timeout
+                         doesn't cover lifecycle methods, so bound the whole fork: a
+                         wedged test JVM fails the build instead of hanging it. -->
+                    <forkedProcessTimeoutInSeconds>900</forkedProcessTimeoutInSeconds>
                 </configuration>
             </plugin>
             <!-- LX loads a package as a single jar via its own child classloader, so

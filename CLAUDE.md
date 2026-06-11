@@ -77,6 +77,7 @@ If three tools each need to "find the channel by id, then walk to a parameter, t
 - Comments: only when the *why* is non-obvious. Don't narrate the *what*.
 - Tests: every domain primitive gets a JUnit test against a constructed `LX` instance or a fixture. Tool handlers get an integration test that exercises the MCP schema + the primitive. The detailed QA strategy lives in `docs/spike/qa-strategy.md` (produced by PR-1c).
 - LX idioms: follow [docs/lx-coding-guidelines.md](docs/lx-coding-guidelines.md) — model variants with `enum`s (not maps/magic constants), share an `interface` across implementations, use framework helpers (`setColors`, `EnumParameter` labels) instead of reinventing them, don't allocate in render loops, and keep diffs minimal. Distilled from upstream review feedback so we don't relearn it per PR.
+- Tool surface: follow [docs/tool-conventions.md](docs/tool-conventions.md) — naming, canonical-path addressing, `Result` wire shape, engine-thread rule. Decided once in PR-3; don't re-decide per tool.
 
 ## References
 
