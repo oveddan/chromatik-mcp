@@ -36,13 +36,11 @@ public final class GetParameter implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("path") instanceof String path) || path.isEmpty()) {
+    if (!(args.get("path") instanceof String path)) {
       return Result.error(Result.INVALID_ARGUMENT, "Required string argument: path");
     }
+    // Resolution failures are typed ResolveExceptions; the seam maps them to wire codes.
     Parameters.ParameterInfo info = Parameters.get(lx, path);
-    if (info == null) {
-      return Result.error(Result.NOT_FOUND, "No parameter at path: " + path);
-    }
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("path", info.path());
     payload.put("label", info.label());

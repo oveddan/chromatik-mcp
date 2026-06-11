@@ -3,6 +3,7 @@ package lxmcp.domain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -97,10 +98,17 @@ class ParametersTest {
   }
 
   @Test
-  void unknownPathReturnsNull() {
+  void badPathsThrowTypedResolveErrors() {
     LX lx = newHeadlessLx();
-    assertNull(Parameters.get(lx, "/lx/nope/nothing"));
-    assertNull(Parameters.get(lx, "/lx/mixer/channel/99/fader"));
-    assertNull(Parameters.get(lx, "/lx/mixer"), "a component path is not a parameter");
+    assertEquals(Resolve.Failure.NOT_FOUND,
+        assertThrows(Resolve.ResolveException.class,
+            () -> Parameters.get(lx, "/lx/nope/nothing")).failure);
+    assertEquals(Resolve.Failure.NOT_FOUND,
+        assertThrows(Resolve.ResolveException.class,
+            () -> Parameters.get(lx, "/lx/mixer/channel/99/fader")).failure);
+    assertEquals(Resolve.Failure.TYPE_MISMATCH,
+        assertThrows(Resolve.ResolveException.class,
+            () -> Parameters.get(lx, "/lx/mixer")).failure,
+        "a component path is not a parameter");
   }
 }
