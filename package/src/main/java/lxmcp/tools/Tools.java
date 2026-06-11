@@ -10,6 +10,7 @@ import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 
+import lxmcp.domain.Resolve;
 import lxmcp.engine.EngineExecutor;
 
 /**
@@ -60,6 +61,11 @@ public final class Tools {
     try {
       Map<String, Object> args = (request.arguments() == null) ? Map.of() : request.arguments();
       result = executor.call(() -> tool.handle(lx, args));
+    } catch (Resolve.ResolveException e) {
+      // Expected failure, not a defect: typed resolver errors map to wire codes, no log.
+      result = Result.error(
+          (e.failure == Resolve.Failure.NOT_FOUND) ? Result.NOT_FOUND : Result.INVALID_ARGUMENT,
+          e.getMessage());
     } catch (RuntimeException e) {
       LX.error(e, "[LX-MCP] Tool " + tool.name() + " failed");
       result = Result.error(Result.INTERNAL,

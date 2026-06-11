@@ -3,7 +3,6 @@ package lxmcp.domain;
 import java.util.List;
 
 import heronarts.lx.LX;
-import heronarts.lx.LXPath;
 import heronarts.lx.color.ColorParameter;
 import heronarts.lx.parameter.BooleanParameter;
 import heronarts.lx.parameter.BoundedParameter;
@@ -28,12 +27,13 @@ public final class Parameters {
 
   /**
    * Resolve a canonical path (as produced by {@code getCanonicalPath()}, e.g.
-   * {@code /lx/mixer/channel/1/fader}) to a snapshot, or null if no parameter is there.
-   * Call on the engine thread.
+   * {@code /lx/mixer/channel/1/fader}) to a snapshot. Call on the engine thread.
+   *
+   * @throws Resolve.ResolveException typed failure when the path is malformed, empty,
+   *     or doesn't lead to a parameter
    */
   public static ParameterInfo get(LX lx, String path) {
-    LXParameter parameter = LXPath.getParameter(lx, path);
-    return (parameter == null) ? null : describe(parameter);
+    return describe(Resolve.parameter(lx, path));
   }
 
   static ParameterInfo describe(LXParameter parameter) {

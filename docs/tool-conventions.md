@@ -14,8 +14,9 @@ them is a cross-cutting change that touches every tool — propose it as its own
 
 - The **canonical LX path** is the one address every tool accepts and returns (e.g.
   `/lx/mixer/channel/1/fader`): `LXPath.getCanonicalPath()` produces it,
-  `LXPath.get(lx, path)` resolves it natively — the two round-trip. PR-3b wraps
-  resolution in a domain primitive with typed errors.
+  `LXPath.get(lx, path)` resolves it natively — the two round-trip. Tools resolve paths
+  through `lxmcp.domain.Resolve` (PR-3b), whose typed failures (`NOT_FOUND`,
+  `TYPE_MISMATCH`, `INVALID_PATH`) the seam maps to the wire codes below.
 - List tools include the `LXComponent` id (stable int, `lx.getComponent(id)`) for each
   component entry as supplementary output; tools do **not** accept ids as input in v1.
 - Child arrays are 1-indexed in paths (LX's OSC convention); numeric `index` fields in

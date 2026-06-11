@@ -197,5 +197,12 @@ class ToolsIntegrationTest {
     assertEquals(Boolean.TRUE, empty.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, empty.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+
+    // A component path is a typed TYPE_MISMATCH from the resolver — pin its wire code.
+    McpSchema.CallToolResult mismatch = call("get_parameter", Map.of("path", "/lx/mixer"));
+    assertEquals(Boolean.TRUE, mismatch.isError());
+    McpSchema.TextContent mismatchText =
+        assertInstanceOf(McpSchema.TextContent.class, mismatch.content().get(0));
+    assertTrue(mismatchText.text().startsWith(Result.INVALID_ARGUMENT));
   }
 }
