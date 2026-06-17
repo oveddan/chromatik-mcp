@@ -12,6 +12,8 @@ The original "PR-1 spike" bundled five distinct deliverables (SDK feasibility, L
 
 A **PR-0 scaffold step** lands first to give the spike PRs a buildable Java project to work in.
 
+> **How this gets built:** the agent dev loop that produces these PRs — pipeline, objective gates, failure modes — is documented in [`loop-engineering.md`](loop-engineering.md), with the `/lx-mcp-loop` skill (`.claude/skills/lx-mcp-loop/`) as the operational checklist.
+
 ## Progress tracker
 
 Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; leave a one-line note (branch / PR link / blocker) after the dash. Keep it honest — `[~]` means in-progress, `[ ]` not started.
@@ -36,6 +38,14 @@ Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; le
 - [x] *Resolved (2026-06-10)* — `save_project` persistence tool deferred to **Phase 2**: v1 mutations stay in-memory; the user saves manually in Chromatik —
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` merged. When you pick up a PR, set it to `[~]` and put your branch name after the dash so parallel sessions don't collide.
+
+### Lessons learned
+
+Distilled rules from work that landed — write them here (and in file-based memory), not in chat, so the next session consults them instead of re-deriving. The dev loop that produces these PRs is documented in [`loop-engineering.md`](loop-engineering.md).
+
+- **`lx.command.perform()` swallows command failures** (pushes a UI error, wipes undo/redo, returns normally). Mutation primitives must verify by state-read and throw if the command didn't apply — an unverified `get(size-1)` read-back returns the wrong object on failure. (PR-4; now in `tool-conventions.md`.)
+- **The MCP SDK resolves its JSON mapper via the thread-context classloader**, which Chromatik's child `LXClassLoader` is never set as. `EmbeddedMcpServer.start` swaps the TCCL for startup. CI missed this because tests have the SDK on the system classpath — `verify-load.sh` now uses a deployment-faithful (LX-only) classpath. (PR-4.)
+- **Repeated `new LX()` in one JVM deadlocks** on the JDK-global javax.sound/CoreMIDI lock. Construct LX once per test class; surefire has a fork timeout so a wedged fork fails the build instead of hanging it. (PR-3.)
 
 ## PR-0 — Java/Maven scaffold (pre-step)
 
@@ -176,11 +186,11 @@ Planned in detail now that the spike findings are in. Each PR stays independentl
 
 **Phase 2 (post-MVP, not in the current PR list):**
 
-- **Pattern/effect comprehension agent**: a runtime agent that reads a pattern or effect's source code to understand its algorithm, so an orchestrator can choose patterns by behavior. Requires an MCP tool that exposes pattern source / class metadata. PR-1b lightly skims LX's pattern-introspection surface so we know the tool is buildable; the tool itself waits for Phase 2.
+These are scoped and feasibility-checked in [`loop-engineering.md` → Future explorations](loop-engineering.md#future-explorations); pick them up from there.
 
-**Future ideas (not yet planned):**
-
-- **Visual-feedback agent (v2+)**: a runtime agent that grabs the current LX output and verifies the desired effect is actually happening. Requires a frame-grab tool. Captured as an idea — no PR allocation, no spike investigation.
+- **Runtime visual self-correction loop** (was "Visual-feedback agent"): an agent composing a show reads its rendered output, then a verifier sub-agent grades it against a written visual rubric and the agent self-corrects. **Feasibility proven** — headless frame readback works via `lx.engine.copyFrameThreadSafe(LXEngine.Frame)` (`LXEngine.java:1346`): the `int[]` color buffer indexed by point, plus `LXPoint.xn/yn/zn` geometry, all CPU-side. Keystone is a read-only `get_frame`/render-summary tool. Deferred by choice, not by risk.
+- **Pattern/effect comprehension agent**: choose patterns by behavior. **Constraint recorded** — LX exposes no source/bytecode surface, only registry metadata + annotations + the parameter tree (what knobs exist, not what the algorithm does). The metadata-level version is buildable now; algorithm-level comprehension needs filesystem source-read or a decompiler, outside LX's API.
+- **Formal verifier + objective `/goal` gate for the dev loop**: bind "done" to `mvn package` + headless harness + do→undo→assert green, checked by an independent verifier separate from the implementer (the maker/checker split). Today the review agent is ad hoc; formalize when the fan-out volume makes hand-spawning a reviewer per PR the bottleneck.
 
 ```
 PR-0 ──┬──> PR-1a ┐
