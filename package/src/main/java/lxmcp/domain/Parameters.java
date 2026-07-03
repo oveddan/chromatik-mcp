@@ -1,23 +1,29 @@
 package lxmcp.domain;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import heronarts.lx.LX;
 import heronarts.lx.color.ColorParameter;
+import heronarts.lx.command.LXCommand;
+import heronarts.lx.parameter.AggregateParameter;
 import heronarts.lx.parameter.BooleanParameter;
 import heronarts.lx.parameter.BoundedParameter;
 import heronarts.lx.parameter.DiscreteParameter;
+import heronarts.lx.parameter.FunctionalParameter;
 import heronarts.lx.parameter.LXNormalizedParameter;
 import heronarts.lx.parameter.LXParameter;
 import heronarts.lx.parameter.StringParameter;
+import heronarts.lx.parameter.TriggerParameter;
 
-/** Read-only parameter lookup + introspection by canonical LX path. */
+/** Parameter lookup, introspection, and undoable set by canonical LX path. */
 public final class Parameters {
 
   /**
    * {@code value} is type-appropriate (Boolean / String / Integer / Double; colors as an
-   * 0xAARRGGBB hex string); {@code normalized}, {@code min}/{@code max}, {@code options}
-   * and {@code formatted} are null where the parameter type has no such concept.
+   * 0xAARRGGBB hex string) and reports the base (unmodulated) value; {@code normalized},
+   * {@code min}/{@code max}, {@code options} and {@code formatted} are null where the
+   * parameter type has no such concept.
    */
   public record ParameterInfo(String path, String label, String description, String type,
       Object value, Double normalized, String units, Double min, Double max,
@@ -34,6 +40,105 @@ public final class Parameters {
    */
   public static ParameterInfo get(LX lx, String path) {
     return describe(Resolve.parameter(lx, path));
+  }
+
+  /**
+   * Set the parameter at {@code path} to {@code value}, routed through the matching
+   * {@code LXCommand.Parameter} setter so the change is undoable. This is the single place
+   * that knows how each parameter type is set — dispatched on the resolved runtime type.
+   * Call on the engine thread.
+   *
+   * <p>{@code value} must match the parameter: a number for numeric/bounded parameters, an
+   * in-range integer for discrete/enum, a boolean for toggles, a string for text. An {@link
+   * AggregateParameter} (colors, MIDI filters, …) packs several subparameters — those are set
+   * individually via their own paths, so setting the aggregate directly is rejected. Momentary
+   * triggers are actions, not values, and are likewise rejected.
+   *
+   * @return a fresh snapshot of the parameter after the set.
+   * @throws Resolve.ResolveException typed failure: bad path, non-parameter target, an
+   *     unsettable parameter (aggregate, trigger, computed), or a value whose type doesn't
+   *     match the parameter.
+   */
+  public static ParameterInfo set(LX lx, String path, Object value) {
+    LXParameter parameter = Resolve.parameter(lx, path);
+    if (parameter instanceof StringParameter s) {
+      perform(lx, new LXCommand.Parameter.SetString(s, requireString(parameter, value)));
+    } else if (parameter instanceof TriggerParameter) {
+      // Fires side effects and synchronously resets to false — the snapshot would echo
+      // value=false for a set(true) (inviting client retries that re-fire the trigger)
+      // and the undo entry would be a false->false no-op. A fire_trigger tool is separate work.
+      throw mismatch(parameter, "is a momentary trigger and cannot be set");
+    } else if (parameter instanceof BooleanParameter b) {
+      perform(lx, new LXCommand.Parameter.SetNormalized(b, requireBoolean(parameter, value)));
+    } else if (parameter instanceof DiscreteParameter d) {
+      perform(lx, new LXCommand.Parameter.SetValue(d, requireInt(d, value)));
+    } else if (parameter instanceof AggregateParameter a) {
+      // No command sets a packed aggregate double sanely (colors: SetColor covers only
+      // hue+saturation; MIDI filters bit-unpack the raw double into six subparameters);
+      // the subparameters are individually addressable, so route the caller there.
+      throw mismatch(parameter, "is an aggregate — set its components via the "
+          + a.subparameters.keySet().stream()
+              .map(key -> ".../" + key).collect(Collectors.joining(", "))
+          + " paths");
+    } else if (parameter instanceof FunctionalParameter) {
+      // setValue() throws UnsupportedOperationException, which perform() would swallow
+      // (silently wiping the undo stack) and we'd return a false success — reject up front.
+      throw mismatch(parameter, "is a computed read-only parameter and cannot be set");
+    } else {
+      perform(lx, new LXCommand.Parameter.SetValue(parameter, requireNumber(parameter, value)));
+    }
+    return describe(parameter);
+  }
+
+  private static void perform(LX lx, LXCommand command) {
+    lx.command.perform(command);
+    // perform() swallows command failures and clears the undo stack (docs/tool-conventions.md);
+    // the committed command sitting on top of the stack is the success detector.
+    if (lx.command.getUndoCommand() != command) {
+      throw new IllegalStateException(command.getClass().getSimpleName() + " did not apply");
+    }
+  }
+
+  private static String requireString(LXParameter p, Object value) {
+    if (value instanceof String s) {
+      return s;
+    }
+    throw mismatch(p, "expects a string value");
+  }
+
+  private static boolean requireBoolean(LXParameter p, Object value) {
+    if (value instanceof Boolean b) {
+      return b;
+    }
+    throw mismatch(p, "expects a boolean value");
+  }
+
+  private static int requireInt(DiscreteParameter p, Object value) {
+    if (value instanceof Number n) {
+      double d = n.doubleValue();
+      if (d != Math.rint(d)) {
+        throw mismatch(p, "expects an integer value");
+      }
+      // DiscreteParameter silently wraps out-of-range values modulo the range — reject instead.
+      if (d < p.getMinValue() || d > p.getMaxValue()) {
+        throw mismatch(p, "expects an integer in ["
+            + p.getMinValue() + ", " + p.getMaxValue() + "]");
+      }
+      return (int) d;
+    }
+    throw mismatch(p, "expects an integer value");
+  }
+
+  private static double requireNumber(LXParameter p, Object value) {
+    if (value instanceof Number n) {
+      return n.doubleValue();
+    }
+    throw mismatch(p, "expects a numeric value");
+  }
+
+  private static Resolve.ResolveException mismatch(LXParameter p, String detail) {
+    return new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+        p.getCanonicalPath() + " (" + p.getClass().getSimpleName() + ") " + detail);
   }
 
   static ParameterInfo describe(LXParameter parameter) {
@@ -62,12 +167,14 @@ public final class Parameters {
         formatted = d.getFormatter().format(d.getValue());
       }
     } else {
-      value = parameter.getValue();
+      // Base value, not getValue(): a modulated CompoundParameter layers live modulation on
+      // top, and a set-then-read client must see the value it actually set.
+      value = parameter.getBaseValue();
       if (parameter instanceof BoundedParameter b) {
         min = b.range.min;
         max = b.range.max;
       }
-      formatted = parameter.getFormatter().format(parameter.getValue());
+      formatted = parameter.getFormatter().format(parameter.getBaseValue());
     }
     return new ParameterInfo(
         parameter.getCanonicalPath(),
@@ -75,7 +182,7 @@ public final class Parameters {
         parameter.getDescription(),
         parameter.getClass().getSimpleName(),
         value,
-        (parameter instanceof LXNormalizedParameter n) ? n.getNormalized() : null,
+        (parameter instanceof LXNormalizedParameter n) ? n.getBaseNormalized() : null,
         parameter.getUnits().name(),
         min,
         max,

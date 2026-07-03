@@ -124,13 +124,32 @@ class ToolsIntegrationTest {
     assertEquals(
         Set.of("get_project_info", "list_channels", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
-            "add_macro_knob"),
+            "set_parameter", "add_macro_knob"),
         names);
+    Set<String> mutators = Set.of("set_parameter", "add_macro_knob");
     for (McpSchema.Tool tool : tools.tools()) {
-      boolean expectReadOnly = !tool.name().equals("add_macro_knob");
+      boolean expectReadOnly = !mutators.contains(tool.name());
       assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),
           tool.name() + " readOnlyHint");
     }
+  }
+
+  @Test
+  void setParameterOverMcpMutatesEngineState() {
+    Map<String, Object> payload = structured(
+        call("set_parameter", Map.of("path", channel.fader.getCanonicalPath(), "value", 0.5)));
+    assertEquals(channel.fader.getCanonicalPath(), payload.get("path"));
+    assertEquals(0.5, ((Number) payload.get("value")).doubleValue(), 1e-9);
+    assertEquals(0.5, channel.fader.getValue(), 1e-9, "the live parameter changed");
+  }
+
+  @Test
+  void setParameterWrongTypeIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("set_parameter",
+        Map.of("path", channel.fader.getCanonicalPath(), "value", "loud"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT), "type mismatch is invalid_argument");
   }
 
   @Test

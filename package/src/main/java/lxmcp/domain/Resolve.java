@@ -19,7 +19,8 @@ public final class Resolve {
   public enum Failure {
     /** Nothing exists at the path. */
     NOT_FOUND,
-    /** Something exists, but not of the requested kind. */
+    /** Something exists, but not of the requested kind — or a supplied value's type
+     * doesn't match the resolved parameter. Both map to {@code invalid_argument}. */
     TYPE_MISMATCH,
     /** The path is malformed (empty, or not rooted at /lx). */
     INVALID_PATH;

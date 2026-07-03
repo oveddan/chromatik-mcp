@@ -27,7 +27,7 @@ Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; le
 - [x] **PR-3** — Read-only discovery tools + wire-shape decisions — merged via [#9](https://github.com/oveddan/lx-mcp/pull/9); conventions recorded in `docs/tool-conventions.md`
 - [x] **PR-3b** — Path/entity resolver (`resolve(lx, path)` domain primitive; prerequisite for every path-taking mutation) — merged via [#12](https://github.com/oveddan/lx-mcp/pull/12) (replaced auto-closed [#10](https://github.com/oveddan/lx-mcp/pull/10)); typed failures NOT_FOUND / TYPE_MISMATCH / INVALID_PATH
 - [x] **PR-4** — First mutation (`add_macro_knob`) via LXCommand — merged via [#11](https://github.com/oveddan/lx-mcp/pull/11); also fixed the deployment blocker (SDK ServiceLoader vs Chromatik's child classloader — TCCL swap in `EmbeddedMcpServer.start`), made `verify-load.sh` deployment-faithful, and bound the server to 127.0.0.1. **Live Chromatik demo passed 2026-06-11**: plugin enabled in preferences, MCP handshake + add_macro_knob over HTTP against a running Apotheosis project (18 channels), knob bank appeared, Cmd-Z removed it
-- [ ] **PR-5a** — `set_parameter` (first fan-out slice; reuses the resolver) —
+- [~] **PR-5a** — `set_parameter` (first fan-out slice; reuses the resolver) — branch `pr-5a-set-parameter`; `Parameters.set` dispatches on runtime type (String/Boolean/Discrete-int/numeric) via `LXCommand.Parameter.*`; aggregate colors routed to their component paths (`SetColor` covers only hue+saturation, no undoable packed-color command); do→undo→assert per type
 - [ ] **PR-5b** — Channels / patterns / effects tools —
 - [ ] **PR-5c** — Modulators + modulation-routing tools —
 - [ ] **PR-5d** — MIDI mapping tool —
