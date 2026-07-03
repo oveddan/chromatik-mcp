@@ -38,7 +38,10 @@ public final class Tools {
             new ListAvailable(ListAvailable.Kind.MODULATORS),
             new GetParameter(),
             new SetParameter(),
-            new AddMacroKnob())
+            new AddModulator(),
+            new WireModulator(),
+            new WireTrigger(),
+            new RemoveModulation())
         .stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();

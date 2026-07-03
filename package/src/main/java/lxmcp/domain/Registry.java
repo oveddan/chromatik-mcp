@@ -5,6 +5,7 @@ import java.util.List;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
+import heronarts.lx.modulator.LXModulator;
 
 /**
  * Read-only view of the LX registry: the pattern/effect/modulator classes available to
@@ -13,7 +14,9 @@ import heronarts.lx.LXComponent;
  */
 public final class Registry {
 
-  public record ComponentType(String className, String name, String category, List<String> tags) {}
+  /** {@code global}/{@code device} are the modulator scope annotations; null for patterns/effects. */
+  public record ComponentType(String className, String name, String category, List<String> tags,
+      Boolean global, Boolean device) {}
 
   private Registry() {}
 
@@ -37,11 +40,16 @@ public final class Registry {
         continue;
       }
       List<String> tags = lx.registry.getTags(clazz);
+      // add_modulator gates on these annotations — advertise them so clients can predict
+      // which scopes a modulator accepts instead of probing.
+      boolean modulator = LXModulator.class.isAssignableFrom(clazz);
       result.add(new ComponentType(
           clazz.getName(),
           LXComponent.getComponentName(clazz),
           LXComponent.getCategory(clazz),
-          (tags == null) ? List.of() : List.copyOf(tags)));
+          (tags == null) ? List.of() : List.copyOf(tags),
+          modulator ? clazz.isAnnotationPresent(LXModulator.Global.class) : null,
+          modulator ? clazz.isAnnotationPresent(LXModulator.Device.class) : null));
     }
     return result;
   }

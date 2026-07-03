@@ -7,7 +7,10 @@ import heronarts.lx.LX;
 /** Read-only snapshot of project-level state. */
 public final class Projects {
 
-  public record ProjectInfo(String lxVersion, String projectPath, int channelCount) {}
+  public record OscInfo(int receivePort, boolean receiveActive,
+      int transmitPort, boolean transmitActive) {}
+
+  public record ProjectInfo(String lxVersion, String projectPath, int channelCount, OscInfo osc) {}
 
   private Projects() {}
 
@@ -17,6 +20,11 @@ public final class Projects {
     return new ProjectInfo(
         LX.VERSION,
         (project == null) ? null : project.getAbsolutePath(),
-        lx.engine.mixer.channels.size());
+        lx.engine.mixer.channels.size(),
+        new OscInfo(
+            lx.engine.osc.receivePort.getValuei(),
+            lx.engine.osc.receiveActive.isOn(),
+            lx.engine.osc.transmitPort.getValuei(),
+            lx.engine.osc.transmitActive.isOn()));
   }
 }

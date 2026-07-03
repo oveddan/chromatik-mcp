@@ -9,10 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+
 import heronarts.lx.LX;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulation.LXCompoundModulation;
+import heronarts.lx.modulator.MacroKnobs;
 
 class ParametersTest {
 
@@ -112,6 +115,25 @@ class ParametersTest {
         assertThrows(Resolve.ResolveException.class,
             () -> Parameters.get(lx, "/lx/mixer")).failure,
         "a component path is not a parameter");
+  }
+
+  @Test
+  void describesOscAddresses() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    // Ordinary component parameters: OSC address == canonical path.
+    Parameters.ParameterInfo fader = Parameters.get(lx, channel.fader.getCanonicalPath());
+    assertEquals(channel.fader.getCanonicalPath(), fader.oscAddress());
+
+    // Modulator parameters: OSC segments use the sanitized *label*, not the array index —
+    // the address an OSC controller must send to (docs/osc-addressing.md).
+    MacroKnobs knobs =
+        (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    Parameters.ParameterInfo macro = Parameters.get(lx, knobs.macro1.getCanonicalPath());
+    assertEquals(lx.engine.modulation.getCanonicalPath() + "/" + knobs.getOscLabel() + "/macro1",
+        macro.oscAddress());
+    assertNotEquals(macro.path(), macro.oscAddress(),
+        "label-based OSC address differs from the canonical path");
   }
 
   // ---- set: do -> undo -> assert restored, one per dispatched type ----

@@ -23,6 +23,7 @@ import heronarts.lx.LX;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.MacroKnobs;
+import heronarts.lx.modulator.MacroTriggers;
 import heronarts.lx.pattern.color.GradientPattern;
 
 import io.modelcontextprotocol.client.McpClient;
@@ -124,9 +125,11 @@ class ToolsIntegrationTest {
     assertEquals(
         Set.of("get_project_info", "list_channels", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
-            "set_parameter", "add_macro_knob"),
+            "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
+            "remove_modulation"),
         names);
-    Set<String> mutators = Set.of("set_parameter", "add_macro_knob");
+    Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
+        "wire_trigger", "remove_modulation");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
       assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),
@@ -153,10 +156,12 @@ class ToolsIntegrationTest {
   }
 
   @Test
-  void addMacroKnobOverMcpMutatesEngineState() {
+  @SuppressWarnings("unchecked")
+  void addModulatorOverMcpMutatesEngineState() {
     int before = lx.engine.modulation.modulators.size();
 
-    Map<String, Object> payload = structured(call("add_macro_knob", Map.of()));
+    Map<String, Object> payload = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
 
     assertEquals(before + 1, lx.engine.modulation.modulators.size());
     assertEquals(MacroKnobs.class.getName(), payload.get("class"));
@@ -165,6 +170,136 @@ class ToolsIntegrationTest {
     assertNotNull(path);
     // The returned path addresses the new modulator (the resolver round-trip).
     assertSame(lx.engine.modulation.modulators.get(before), Resolve.component(lx, path));
+
+    // Every macro knob comes back with a label-based OSC address — the user goal.
+    List<Map<String, Object>> parameters = (List<Map<String, Object>>) payload.get("parameters");
+    List<Map<String, Object>> macros = parameters.stream()
+        .filter(p -> ((String) p.get("path")).matches(".*/macro[1-8]$"))
+        .toList();
+    assertEquals(8, macros.size());
+    for (Map<String, Object> macro : macros) {
+      String oscAddress = (String) macro.get("oscAddress");
+      assertNotNull(oscAddress);
+      assertNotEquals(macro.get("path"), oscAddress,
+          "modulator OSC addresses are label-based, not index-based");
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void addModulatorScopedToDeviceLandsInItsChain() {
+    var pattern = channel.patterns.get(0);
+    int before = pattern.modulation.modulators.size();
+
+    Map<String, Object> payload = structured(call("add_modulator", Map.of(
+        "type", MacroKnobs.class.getName(),
+        "scope", pattern.getCanonicalPath())));
+
+    assertEquals(before + 1, pattern.modulation.modulators.size(),
+        "the modulator lands in the device's own engine");
+    assertTrue(((String) payload.get("path")).startsWith(pattern.getCanonicalPath()));
+  }
+
+  @Test
+  void wireModulatorThenRemoveModulation() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+    String macro1 = knobs.get("path") + "/macro1";
+    int before = lx.engine.modulation.modulations.size();
+
+    Map<String, Object> wired = structured(call("wire_modulator", Map.of(
+        "source", macro1, "target", channel.fader.getCanonicalPath())));
+    assertEquals(before + 1, lx.engine.modulation.modulations.size());
+    assertEquals(lx.engine.modulation.getCanonicalPath(), wired.get("enginePath"));
+    assertNotNull(wired.get("rangePath"), "modulation depth is set_parameter-able");
+
+    Map<String, Object> removed = structured(
+        call("remove_modulation", Map.of("path", wired.get("path"))));
+    assertEquals("modulation", removed.get("kind"));
+    assertEquals(before, lx.engine.modulation.modulations.size());
+  }
+
+  @Test
+  void wireModulatorRejectsNonCompoundTarget() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+    McpSchema.CallToolResult result = call("wire_modulator", Map.of(
+        "source", knobs.get("path") + "/macro1",
+        "target", channel.enabled.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT),
+        "a boolean cannot receive continuous modulation");
+  }
+
+  @Test
+  void wireModulatorScopeViolationIsInvalidArgument() {
+    var pattern = channel.patterns.get(0);
+    Map<String, Object> knobs = structured(call("add_modulator", Map.of(
+        "type", MacroKnobs.class.getName(), "scope", pattern.getCanonicalPath())));
+    // Device knob -> global fader: out of the device engine's scope.
+    McpSchema.CallToolResult result = call("wire_modulator", Map.of(
+        "source", knobs.get("path") + "/macro1",
+        "target", channel.fader.getCanonicalPath(),
+        "scope", pattern.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void wireModulatorInfersDeviceEngineFromSource() {
+    var pattern = channel.patterns.get(0);
+    Map<String, Object> knobs = structured(call("add_modulator", Map.of(
+        "type", MacroKnobs.class.getName(), "scope", pattern.getCanonicalPath())));
+    int before = pattern.modulation.modulations.size();
+
+    // No scope arg: the device source's own engine hosts the wiring.
+    Map<String, Object> wired = structured(call("wire_modulator", Map.of(
+        "source", knobs.get("path") + "/macro1",
+        "target", knobs.get("path") + "/macro2")));
+    assertEquals(pattern.modulation.getCanonicalPath(), wired.get("enginePath"));
+    assertEquals(before + 1, pattern.modulation.modulations.size());
+
+    structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listAvailableModulatorsAdvertisesScopeFlags() {
+    Map<String, Object> payload = structured(call("list_available_modulators", Map.of()));
+    List<Map<String, Object>> modulators = (List<Map<String, Object>>) payload.get("modulators");
+    Map<String, Object> knobs = modulators.stream()
+        .filter(m -> MacroKnobs.class.getName().equals(m.get("class")))
+        .findFirst().orElseThrow();
+    assertEquals(Boolean.TRUE, knobs.get("global"), "add_modulator gates on these flags");
+    assertEquals(Boolean.TRUE, knobs.get("device"));
+  }
+
+  @Test
+  void wireTriggerOverMcp() {
+    Map<String, Object> triggers = structured(
+        call("add_modulator", Map.of("type", MacroTriggers.class.getName())));
+    int before = lx.engine.modulation.triggers.size();
+
+    Map<String, Object> wired = structured(call("wire_trigger", Map.of(
+        "source", triggers.get("path") + "/macro1",
+        "target", channel.enabled.getCanonicalPath())));
+    assertEquals(before + 1, lx.engine.modulation.triggers.size());
+
+    Map<String, Object> removed = structured(
+        call("remove_modulation", Map.of("path", wired.get("path"))));
+    assertEquals("trigger", removed.get("kind"));
+    assertEquals(before, lx.engine.modulation.triggers.size());
+  }
+
+  @Test
+  void removeModulationUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result =
+        call("remove_modulation", Map.of("path", "/lx/modulation/modulation/99"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
   }
 
   @Test
@@ -174,6 +309,11 @@ class ToolsIntegrationTest {
     assertEquals(LX.VERSION, payload.get("lxVersion"));
     assertEquals(lx.engine.mixer.channels.size(),
         ((Number) payload.get("channelCount")).intValue());
+    @SuppressWarnings("unchecked")
+    Map<String, Object> osc = (Map<String, Object>) payload.get("osc");
+    assertEquals(lx.engine.osc.receivePort.getValuei(),
+        ((Number) osc.get("receivePort")).intValue());
+    assertNotNull(osc.get("receiveActive"));
 
     assertFalse(result.content().isEmpty(), "success also carries a text mirror");
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));

@@ -36,6 +36,16 @@ class ProjectsTest {
   }
 
   @Test
+  void reportsOscEngineState() {
+    LX lx = newHeadlessLx();
+    Projects.OscInfo osc = Projects.info(lx).osc();
+    assertEquals(lx.engine.osc.receivePort.getValuei(), osc.receivePort());
+    assertEquals(lx.engine.osc.receiveActive.isOn(), osc.receiveActive());
+    assertEquals(lx.engine.osc.transmitPort.getValuei(), osc.transmitPort());
+    assertEquals(lx.engine.osc.transmitActive.isOn(), osc.transmitActive());
+  }
+
+  @Test
   void channelCountTracksMixer() {
     LX lx = newHeadlessLx();
     int before = Projects.info(lx).channelCount();

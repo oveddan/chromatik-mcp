@@ -72,6 +72,12 @@ public final class ListAvailable implements LxTool {
       entry.put("name", type.name());
       entry.put("category", type.category());
       entry.put("tags", type.tags());
+      if (type.global() != null) {
+        entry.put("global", type.global());
+      }
+      if (type.device() != null) {
+        entry.put("device", type.device());
+      }
       entries.add(entry);
     }
     return Result.ok(Map.of(this.kind.payloadKey, entries));

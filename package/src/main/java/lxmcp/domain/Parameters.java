@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 import heronarts.lx.LX;
 import heronarts.lx.color.ColorParameter;
 import heronarts.lx.command.LXCommand;
+import heronarts.lx.osc.LXOscEngine;
 import heronarts.lx.parameter.AggregateParameter;
 import heronarts.lx.parameter.BooleanParameter;
 import heronarts.lx.parameter.BoundedParameter;
@@ -27,7 +28,7 @@ public final class Parameters {
    */
   public record ParameterInfo(String path, String label, String description, String type,
       Object value, Double normalized, String units, Double min, Double max,
-      List<String> options, String formatted) {}
+      List<String> options, String formatted, String oscAddress) {}
 
   private Parameters() {}
 
@@ -62,16 +63,16 @@ public final class Parameters {
   public static ParameterInfo set(LX lx, String path, Object value) {
     LXParameter parameter = Resolve.parameter(lx, path);
     if (parameter instanceof StringParameter s) {
-      perform(lx, new LXCommand.Parameter.SetString(s, requireString(parameter, value)));
+      Commands.perform(lx, new LXCommand.Parameter.SetString(s, requireString(parameter, value)));
     } else if (parameter instanceof TriggerParameter) {
       // Fires side effects and synchronously resets to false — the snapshot would echo
       // value=false for a set(true) (inviting client retries that re-fire the trigger)
       // and the undo entry would be a false->false no-op. A fire_trigger tool is separate work.
       throw mismatch(parameter, "is a momentary trigger and cannot be set");
     } else if (parameter instanceof BooleanParameter b) {
-      perform(lx, new LXCommand.Parameter.SetNormalized(b, requireBoolean(parameter, value)));
+      Commands.perform(lx, new LXCommand.Parameter.SetNormalized(b, requireBoolean(parameter, value)));
     } else if (parameter instanceof DiscreteParameter d) {
-      perform(lx, new LXCommand.Parameter.SetValue(d, requireInt(d, value)));
+      Commands.perform(lx, new LXCommand.Parameter.SetValue(d, requireInt(d, value)));
     } else if (parameter instanceof AggregateParameter a) {
       // No command sets a packed aggregate double sanely (colors: SetColor covers only
       // hue+saturation; MIDI filters bit-unpack the raw double into six subparameters);
@@ -85,18 +86,9 @@ public final class Parameters {
       // (silently wiping the undo stack) and we'd return a false success — reject up front.
       throw mismatch(parameter, "is a computed read-only parameter and cannot be set");
     } else {
-      perform(lx, new LXCommand.Parameter.SetValue(parameter, requireNumber(parameter, value)));
+      Commands.perform(lx, new LXCommand.Parameter.SetValue(parameter, requireNumber(parameter, value)));
     }
     return describe(parameter);
-  }
-
-  private static void perform(LX lx, LXCommand command) {
-    lx.command.perform(command);
-    // perform() swallows command failures and clears the undo stack (docs/tool-conventions.md);
-    // the committed command sitting on top of the stack is the success detector.
-    if (lx.command.getUndoCommand() != command) {
-      throw new IllegalStateException(command.getClass().getSimpleName() + " did not apply");
-    }
   }
 
   private static String requireString(LXParameter p, Object value) {
@@ -187,6 +179,9 @@ public final class Parameters {
         min,
         max,
         options,
-        formatted);
+        formatted,
+        // Differs from the canonical path for modulator-owned parameters (label-based
+        // segments); null for parameters LX does not expose over OSC. docs/osc-addressing.md
+        LXOscEngine.getOscAddress(parameter));
   }
 }

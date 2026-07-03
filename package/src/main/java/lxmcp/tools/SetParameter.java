@@ -58,6 +58,9 @@ public final class SetParameter implements LxTool {
     if (info.formatted() != null) {
       payload.put("formatted", info.formatted());
     }
+    if (info.oscAddress() != null) {
+      payload.put("oscAddress", info.oscAddress());
+    }
     return Result.ok(payload);
   }
 }
