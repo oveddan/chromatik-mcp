@@ -126,10 +126,10 @@ class ToolsIntegrationTest {
         Set.of("get_project_info", "list_channels", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
             "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
-            "remove_modulation"),
+            "remove_modulation", "list_modulations", "fire_trigger"),
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
-        "wire_trigger", "remove_modulation");
+        "wire_trigger", "remove_modulation", "fire_trigger");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
       assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),
@@ -291,6 +291,67 @@ class ToolsIntegrationTest {
         call("remove_modulation", Map.of("path", wired.get("path"))));
     assertEquals("trigger", removed.get("kind"));
     assertEquals(before, lx.engine.modulation.triggers.size());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listModulationsDiscoversWirings() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+    Map<String, Object> wired = structured(call("wire_modulator", Map.of(
+        "source", knobs.get("path") + "/macro1",
+        "target", channel.fader.getCanonicalPath())));
+    Map<String, Object> triggerBank = structured(
+        call("add_modulator", Map.of("type", MacroTriggers.class.getName())));
+    Map<String, Object> wiredTrigger = structured(call("wire_trigger", Map.of(
+        "source", triggerBank.get("path") + "/macro1",
+        "target", channel.enabled.getCanonicalPath())));
+
+    Map<String, Object> payload = structured(call("list_modulations", Map.of()));
+    List<Map<String, Object>> modulators = (List<Map<String, Object>>) payload.get("modulators");
+    assertTrue(modulators.stream().anyMatch(m -> knobs.get("path").equals(m.get("path"))),
+        "the added bank is discoverable");
+    List<Map<String, Object>> modulations = (List<Map<String, Object>>) payload.get("modulations");
+    Map<String, Object> entry = modulations.stream()
+        .filter(m -> wired.get("path").equals(m.get("path"))).findFirst().orElseThrow();
+    assertEquals(channel.fader.getCanonicalPath(), entry.get("targetPath"));
+    assertNotNull(entry.get("id"), "component id rides along per tool-conventions");
+    assertNotNull(entry.get("rangePath"), "depth is adjustable via set_parameter");
+    List<Map<String, Object>> triggers = (List<Map<String, Object>>) payload.get("triggers");
+    Map<String, Object> triggerEntry = triggers.stream()
+        .filter(t -> wiredTrigger.get("path").equals(t.get("path"))).findFirst().orElseThrow();
+    assertEquals(channel.enabled.getCanonicalPath(), triggerEntry.get("targetPath"));
+
+    structured(call("remove_modulation", Map.of("path", wiredTrigger.get("path"))));
+    structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+  }
+
+  @Test
+  void fireTriggerPulsesAMomentaryMacro() {
+    Map<String, Object> triggers = structured(
+        call("add_modulator", Map.of("type", MacroTriggers.class.getName())));
+
+    Map<String, Object> payload = structured(
+        call("fire_trigger", Map.of("path", triggers.get("path") + "/macro1")));
+    assertEquals(triggers.get("path") + "/macro1", payload.get("path"));
+    assertEquals(Boolean.TRUE, payload.get("fired"));
+    assertEquals(Boolean.FALSE, payload.get("value"), "auto-reset after the pulse");
+
+    // A toggle is rejected toward set_parameter.
+    McpSchema.CallToolResult mismatch =
+        call("fire_trigger", Map.of("path", channel.enabled.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, mismatch.isError());
+    McpSchema.TextContent mismatchText =
+        assertInstanceOf(McpSchema.TextContent.class, mismatch.content().get(0));
+    assertTrue(mismatchText.text().startsWith(Result.INVALID_ARGUMENT));
+
+    // An unknown path maps to not_found at the seam.
+    McpSchema.CallToolResult missing =
+        call("fire_trigger", Map.of("path", "/lx/nope/nothing"));
+    assertEquals(Boolean.TRUE, missing.isError());
+    McpSchema.TextContent missingText =
+        assertInstanceOf(McpSchema.TextContent.class, missing.content().get(0));
+    assertTrue(missingText.text().startsWith(Result.NOT_FOUND));
   }
 
   @Test

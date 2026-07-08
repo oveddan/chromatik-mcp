@@ -21,8 +21,8 @@ public final class SetParameter implements LxTool {
         + "The value's type must match the parameter: a number for numeric/bounded, an "
         + "in-range integer for discrete/enum, a boolean for toggles, a string for text. "
         + "Aggregate parameters (color, MIDI filter) are set via their component paths "
-        + "(e.g. .../hue, .../saturation, .../brightness); momentary triggers cannot be set. "
-        + "Undoable in Chromatik with Cmd-Z.";
+        + "(e.g. .../hue, .../saturation, .../brightness); momentary triggers fire via "
+        + "fire_trigger. Undoable in Chromatik with Cmd-Z.";
   }
 
   @Override

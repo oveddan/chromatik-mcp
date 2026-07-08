@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import heronarts.lx.LX;
@@ -16,6 +17,8 @@ import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulation.LXCompoundModulation;
 import heronarts.lx.modulator.MacroKnobs;
+import heronarts.lx.modulator.MacroTriggers;
+import heronarts.lx.pattern.color.GradientPattern;
 
 class ParametersTest {
 
@@ -274,6 +277,99 @@ class ParametersTest {
     assertEquals(0.25, ((Number) after.value()).doubleValue(), 1e-9,
         "the echoed value is the base value just set, not the modulated one");
     assertEquals(0.25, after.normalized(), 1e-9);
+  }
+
+  // ---- fire: momentary triggers, deliberately outside LXCommand ----
+
+  @Test
+  void fireMomentaryBooleanFiresWiredTriggerModulations() {
+    LX lx = newHeadlessLx();
+    MacroTriggers triggers =
+        (MacroTriggers) Modulators.addModulator(lx, lx.engine.modulation, MacroTriggers.class);
+    Modulators.wireTrigger(lx, lx.engine.modulation, triggers.macro1, triggers.macro2);
+    int[] sourceEdges = {0};
+    int[] targetEdges = {0};
+    triggers.macro1.addListener(p -> {
+      if (triggers.macro1.isOn()) {
+        sourceEdges[0]++;
+      }
+    });
+    triggers.macro2.addListener(p -> {
+      if (triggers.macro2.isOn()) {
+        targetEdges[0]++;
+      }
+    });
+
+    Parameters.FireInfo fire = Parameters.fire(lx, triggers.macro1.getCanonicalPath());
+    assertEquals(1, sourceEdges[0], "exactly one press/release pulse");
+    assertEquals(1, targetEdges[0], "the wired trigger modulation fired the target — end to end");
+    assertFalse(fire.pending());
+    assertEquals(false, fire.parameter().value(), "the value has auto-reset");
+    assertEquals(false, triggers.macro1.isOn());
+  }
+
+  @Test
+  void fireAlreadyHeldMomentaryStillDeliversARisingEdge() {
+    LX lx = newHeadlessLx();
+    MacroTriggers triggers =
+        (MacroTriggers) Modulators.addModulator(lx, lx.engine.modulation, MacroTriggers.class);
+    triggers.macro1.setValue(true); // held by a UI/MIDI press
+    int[] risingEdges = {0};
+    triggers.macro1.addListener(p -> {
+      if (triggers.macro1.isOn()) {
+        risingEdges[0]++;
+      }
+    });
+
+    // setValue(true) on an already-true parameter is a no-op — fire releases first.
+    Parameters.fire(lx, triggers.macro1.getCanonicalPath());
+    assertEquals(1, risingEdges[0], "released then pulsed — the edge still happens");
+    assertEquals(false, triggers.macro1.isOn());
+  }
+
+  @Test
+  void fireTriggerParameterFiresAndResets() {
+    LX lx = newHeadlessLx();
+    // tempo.trigger is a real TriggerParameter — listeners see the rising edge before
+    // the synchronous auto-reset (LX queues the listener-initiated reset).
+    int[] fired = {0};
+    lx.engine.tempo.trigger.addListener(p -> {
+      if (lx.engine.tempo.trigger.isOn()) {
+        fired[0]++;
+      }
+    });
+    Parameters.FireInfo fire = Parameters.fire(lx, lx.engine.tempo.trigger.getCanonicalPath());
+    assertEquals(1, fired[0], "the trigger actually raised");
+    assertFalse(fire.pending());
+    assertEquals(false, fire.parameter().value());
+  }
+
+  @Test
+  void fireReportsPendingUnderLaunchQuantization() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    GradientPattern pattern = new GradientPattern(lx);
+    channel.addPattern(pattern);
+    // Quantize launches: the headless tempo never marks a division active, so a
+    // quantized fire deterministically defers instead of firing.
+    lx.engine.tempo.launchQuantization.setValue(1);
+
+    Parameters.FireInfo fire = Parameters.fire(lx, pattern.launch.getCanonicalPath());
+    assertTrue(fire.pending(),
+        "a quantized launch is pending, not fired — clients must not re-fire");
+  }
+
+  @Test
+  void fireRejectsNonMomentaryParameters() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    // A toggle boolean and a numeric parameter are set_parameter territory.
+    assertEquals(Resolve.Failure.TYPE_MISMATCH,
+        assertThrows(Resolve.ResolveException.class,
+            () -> Parameters.fire(lx, channel.enabled.getCanonicalPath())).failure);
+    assertEquals(Resolve.Failure.TYPE_MISMATCH,
+        assertThrows(Resolve.ResolveException.class,
+            () -> Parameters.fire(lx, channel.fader.getCanonicalPath())).failure);
   }
 
   @Test
