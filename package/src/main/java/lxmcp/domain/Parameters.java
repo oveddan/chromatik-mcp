@@ -14,6 +14,7 @@ import heronarts.lx.parameter.DiscreteParameter;
 import heronarts.lx.parameter.FunctionalParameter;
 import heronarts.lx.parameter.LXNormalizedParameter;
 import heronarts.lx.parameter.LXParameter;
+import heronarts.lx.parameter.QuantizedTriggerParameter;
 import heronarts.lx.parameter.StringParameter;
 import heronarts.lx.parameter.TriggerParameter;
 
@@ -67,8 +68,8 @@ public final class Parameters {
     } else if (parameter instanceof TriggerParameter) {
       // Fires side effects and synchronously resets to false — the snapshot would echo
       // value=false for a set(true) (inviting client retries that re-fire the trigger)
-      // and the undo entry would be a false->false no-op. A fire_trigger tool is separate work.
-      throw mismatch(parameter, "is a momentary trigger and cannot be set");
+      // and the undo entry would be a false->false no-op.
+      throw mismatch(parameter, "is a momentary trigger — use fire_trigger");
     } else if (parameter instanceof BooleanParameter b) {
       Commands.perform(lx, new LXCommand.Parameter.SetNormalized(b, requireBoolean(parameter, value)));
     } else if (parameter instanceof DiscreteParameter d) {
@@ -89,6 +90,47 @@ public final class Parameters {
       Commands.perform(lx, new LXCommand.Parameter.SetValue(parameter, requireNumber(parameter, value)));
     }
     return describe(parameter);
+  }
+
+  /** {@code pending}: launch quantization deferred the fire to the next tempo boundary. */
+  public record FireInfo(ParameterInfo parameter, boolean pending) {}
+
+  /**
+   * Fire the momentary trigger at {@code path}: a {@link TriggerParameter} fires and
+   * auto-resets; a momentary {@link BooleanParameter} (e.g. a MacroTriggers macro) gets a
+   * press/release pulse, whose rising edge fires any wired trigger modulations.
+   *
+   * <p>Deliberately not routed through LXCommand: firing is an action with side effects,
+   * not undoable state — there is nothing for Cmd-Z to restore (the value is already
+   * false again). Toggles and plain values are set_parameter territory.
+   *
+   * @return the post-fire snapshot plus whether the fire is merely *pending*: a
+   *     {@link QuantizedTriggerParameter} (pattern/clip launch) under launch quantization
+   *     defers to the next tempo boundary — a caller that treats pending as failed and
+   *     re-fires would queue duplicate launches.
+   * @throws Resolve.ResolveException typed failure: bad path, or not a momentary trigger.
+   */
+  public static FireInfo fire(LX lx, String path) {
+    LXParameter parameter = Resolve.parameter(lx, path);
+    boolean pending = false;
+    if (parameter instanceof TriggerParameter t) {
+      t.trigger();
+      if (t instanceof QuantizedTriggerParameter q) {
+        pending = q.pending.isOn();
+      }
+    } else if (parameter instanceof BooleanParameter b
+        && b.getMode() == BooleanParameter.Mode.MOMENTARY) {
+      if (b.isOn()) {
+        // Already held (a UI/MIDI press): release first so the pulse still has a rising edge.
+        b.setValue(false);
+      }
+      b.setValue(true);
+      b.setValue(false);
+    } else {
+      throw mismatch(parameter,
+          "is not a momentary trigger — use set_parameter for toggles and values");
+    }
+    return new FireInfo(describe(parameter), pending);
   }
 
   private static String requireString(LXParameter p, Object value) {

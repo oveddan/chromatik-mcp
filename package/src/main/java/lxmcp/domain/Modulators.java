@@ -1,5 +1,6 @@
 package lxmcp.domain;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import heronarts.lx.LX;
@@ -22,6 +23,52 @@ import heronarts.lx.parameter.LXParameter;
 public final class Modulators {
 
   private Modulators() {}
+
+  public record ModulatorInfo(String path, int id, String label, String className,
+      boolean running, String oscAddress) {}
+
+  public record ModulationInfo(String path, int id, String sourcePath, String targetPath,
+      double range, String polarity, String rangePath) {}
+
+  public record TriggerInfo(String path, int id, String sourcePath, String targetPath) {}
+
+  /** Read-only snapshot of one engine's live modulators and wirings. */
+  public record EngineInfo(String path, List<ModulatorInfo> modulators,
+      List<ModulationInfo> modulations, List<TriggerInfo> triggers) {}
+
+  /** Snapshot {@code engine}'s modulators and wirings; call on the engine thread. */
+  public static EngineInfo listEngine(LX lx, LXModulationEngine engine) {
+    List<ModulatorInfo> modulators = new ArrayList<>();
+    for (LXModulator modulator : engine.modulators) {
+      modulators.add(new ModulatorInfo(
+          modulator.getCanonicalPath(),
+          modulator.getId(),
+          modulator.getLabel(),
+          modulator.getClass().getName(),
+          modulator.isRunning(),
+          modulator.getOscAddress()));
+    }
+    List<ModulationInfo> modulations = new ArrayList<>();
+    for (LXCompoundModulation modulation : engine.modulations) {
+      modulations.add(new ModulationInfo(
+          modulation.getCanonicalPath(),
+          modulation.getId(),
+          modulation.source.getCanonicalPath(),
+          modulation.target.getCanonicalPath(),
+          modulation.range.getValue(),
+          modulation.polarity.getEnum().name(),
+          modulation.range.getCanonicalPath()));
+    }
+    List<TriggerInfo> triggers = new ArrayList<>();
+    for (LXTriggerModulation trigger : engine.triggers) {
+      triggers.add(new TriggerInfo(
+          trigger.getCanonicalPath(),
+          trigger.getId(),
+          trigger.source.getCanonicalPath(),
+          trigger.target.getCanonicalPath()));
+    }
+    return new EngineInfo(engine.getCanonicalPath(), modulators, modulations, triggers);
+  }
 
   /**
    * Resolve a modulator class name against the LX registry. Never {@code Class.forName}:

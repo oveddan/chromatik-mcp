@@ -295,6 +295,49 @@ class ModulatorsTest {
     assertEquals(before, lx.engine.modulation.triggers.size());
   }
 
+  // ---- discovery ----
+
+  @Test
+  void listEngineSnapshotsModulatorsAndWirings() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    MacroKnobs knobs = (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    MacroTriggers triggers =
+        (MacroTriggers) Modulators.addModulator(lx, lx.engine.modulation, MacroTriggers.class);
+    LXCompoundModulation wired =
+        Modulators.wireModulation(lx, lx.engine.modulation, knobs.macro1, channel.fader);
+    Modulators.wireTrigger(lx, lx.engine.modulation, triggers.macro1, channel.enabled);
+
+    Modulators.EngineInfo info = Modulators.listEngine(lx, lx.engine.modulation);
+    assertEquals(lx.engine.modulation.getCanonicalPath(), info.path());
+    assertEquals(2, info.modulators().size());
+    assertEquals(knobs.getCanonicalPath(), info.modulators().get(0).path());
+    assertEquals(knobs.getOscAddress(), info.modulators().get(0).oscAddress());
+
+    assertEquals(1, info.modulations().size());
+    Modulators.ModulationInfo modulation = info.modulations().get(0);
+    assertEquals(wired.getCanonicalPath(), modulation.path());
+    assertEquals(knobs.macro1.getCanonicalPath(), modulation.sourcePath());
+    assertEquals(channel.fader.getCanonicalPath(), modulation.targetPath());
+    assertEquals(wired.range.getCanonicalPath(), modulation.rangePath());
+
+    assertEquals(1, info.triggers().size());
+    assertEquals(triggers.macro1.getCanonicalPath(), info.triggers().get(0).sourcePath());
+    assertEquals(channel.enabled.getCanonicalPath(), info.triggers().get(0).targetPath());
+  }
+
+  @Test
+  void listEngineScopedToDeviceSeesOnlyItsChain() {
+    LX lx = newHeadlessLx();
+    LXPattern pattern = newDevice(lx);
+    Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    MacroKnobs device = (MacroKnobs) Modulators.addModulator(lx, pattern.modulation, MacroKnobs.class);
+
+    Modulators.EngineInfo info = Modulators.listEngine(lx, pattern.modulation);
+    assertEquals(1, info.modulators().size(), "the global bank is not in the device engine");
+    assertEquals(device.getCanonicalPath(), info.modulators().get(0).path());
+  }
+
   // ---- removes: do -> undo -> assert restored (undo reconstructs a fresh instance) ----
 
   @Test

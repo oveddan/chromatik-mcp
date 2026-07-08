@@ -35,7 +35,7 @@ Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; le
 - [ ] *Follow-up (deferred from PR-2)* — slim the shaded jar: exclude unused Tomcat submodules / optional deps to drop the non-fatal `ClassNotFoundException: jakarta.mail.Authenticator` at load and shrink the ~9 MB artifact —
 - [ ] *Follow-up* — status.json lifecycle: delete on `dispose()`, rewrite when the open project changes (LX listener), document the pid-liveness check as the client contract (file is currently written once at startup and never cleaned up; two Chromatik instances overwrite each other) —
 - [ ] *Follow-up* — bump MCP SDK `2.0.0-RC1` → GA when released —
-- [ ] *Follow-up (from PR-5c)* — `list_modulations` (discover existing wirings; wire_* responses carry paths, so deferred) and `fire_trigger` (momentary triggers are rejected by `set_parameter` since PR-5a) —
+- [~] *Follow-up (from PR-5c)* — `list_modulations` + `fire_trigger` — branch `pr-5c2-modulation-discovery` (stacked on PR-5c); `list_modulations {scope?}` snapshots one engine's live modulators (with OSC addresses) + continuous/trigger wirings (with rangePath); `fire_trigger {path}` pulses a TriggerParameter or momentary boolean — deliberately NOT command-backed (firing is an action, not undoable state; the auto-reset leaves nothing for Cmd-Z to restore) —
 - [x] *Resolved (2026-06-10)* — `save_project` persistence tool deferred to **Phase 2**: v1 mutations stay in-memory; the user saves manually in Chromatik —
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` merged. When you pick up a PR, set it to `[~]` and put your branch name after the dash so parallel sessions don't collide.
