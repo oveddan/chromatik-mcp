@@ -44,7 +44,16 @@ public final class Tools {
             new RemoveModulation(),
             new ListModulations(),
             new FireTrigger(),
-            new GetComponentDoc())
+            new GetComponentDoc(),
+            new AddChannel(),
+            new RemoveChannel(),
+            new AddPattern(),
+            new RemovePattern(),
+            new ActivatePattern(),
+            new MovePattern(),
+            new AddEffect(),
+            new RemoveEffect(),
+            new MoveEffect())
         .stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();

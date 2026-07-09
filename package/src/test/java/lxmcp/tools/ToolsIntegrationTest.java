@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import heronarts.lx.LX;
+import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.MacroKnobs;
@@ -126,10 +127,14 @@ class ToolsIntegrationTest {
         Set.of("get_project_info", "list_channels", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
             "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
-            "remove_modulation", "list_modulations", "fire_trigger", "get_component_doc"),
+            "remove_modulation", "list_modulations", "fire_trigger", "get_component_doc",
+            "add_channel", "remove_channel", "add_pattern", "remove_pattern",
+            "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect"),
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
-        "wire_trigger", "remove_modulation", "fire_trigger");
+        "wire_trigger", "remove_modulation", "fire_trigger",
+        "add_channel", "remove_channel", "add_pattern", "remove_pattern",
+        "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
       assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),
@@ -358,6 +363,136 @@ class ToolsIntegrationTest {
   void removeModulationUnknownPathIsNotFound() {
     McpSchema.CallToolResult result =
         call("remove_modulation", Map.of("path", "/lx/modulation/modulation/99"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  // ── Channel tool integration tests ──────────────────────────────────────────
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void addChannelAndRemoveChannel() {
+    int before = lx.engine.mixer.channels.size();
+
+    Map<String, Object> added = structured(call("add_channel", Map.of()));
+    String channelPath = (String) added.get("path");
+    try {
+      assertNotNull(channelPath);
+      assertEquals(before + 1, lx.engine.mixer.channels.size());
+    } finally {
+      Map<String, Object> removed = structured(call("remove_channel", Map.of("path", channelPath)));
+      assertEquals(channelPath, removed.get("removed"));
+    }
+    assertEquals(before, lx.engine.mixer.channels.size());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void addChannelWithPatternSeededOnCreation() {
+    int before = lx.engine.mixer.channels.size();
+
+    Map<String, Object> added = structured(call("add_channel",
+        Map.of("pattern", GradientPattern.class.getName())));
+    String channelPath = (String) added.get("path");
+    try {
+      assertNotNull(channelPath);
+      assertEquals(before + 1, lx.engine.mixer.channels.size());
+
+      // Verify pattern seeded — the channel's patterns list should have one entry
+      Map<String, Object> channels = structured(call("list_channels", Map.of()));
+      List<Map<String, Object>> channelList = (List<Map<String, Object>>) channels.get("channels");
+      Map<String, Object> newChannel = channelList.stream()
+          .filter(c -> channelPath.equals(c.get("path")))
+          .findFirst().orElseThrow();
+      List<Map<String, Object>> patterns = (List<Map<String, Object>>) newChannel.get("patterns");
+      assertEquals(1, patterns.size());
+      assertEquals(GradientPattern.class.getName(), patterns.get(0).get("class"));
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+    assertEquals(before, lx.engine.mixer.channels.size());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void addPatternActivatePatternFlow() {
+    // Add a fresh channel for isolation
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      // Add first pattern
+      Map<String, Object> p1 = structured(call("add_pattern", Map.of(
+          "channel", channelPath, "type", GradientPattern.class.getName())));
+      String p1path = (String) p1.get("path");
+      assertNotNull(p1path);
+
+      // Add second pattern
+      Map<String, Object> p2 = structured(call("add_pattern", Map.of(
+          "channel", channelPath, "type", GradientPattern.class.getName())));
+      String p2path = (String) p2.get("path");
+
+      // Activate the second pattern
+      Map<String, Object> activated = structured(
+          call("activate_pattern", Map.of("path", p2path)));
+      assertEquals(p2path, activated.get("path"));
+      assertEquals(Boolean.TRUE, activated.get("active"));
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  void activatePatternUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result =
+        call("activate_pattern", Map.of("path", "/lx/mixer/channel/999/pattern/1"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void addEffectMoveEffectRemoveEffect() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> e1 = structured(call("add_effect", Map.of(
+          "container", channelPath, "type", BlurEffect.class.getName())));
+      String e1path = (String) e1.get("path");
+      assertNotNull(e1path);
+
+      Map<String, Object> e2 = structured(call("add_effect", Map.of(
+          "container", channelPath, "type", BlurEffect.class.getName())));
+      String e2path = (String) e2.get("path");
+
+      // Move e1 to index 1
+      Map<String, Object> moved = structured(
+          call("move_effect", Map.of("path", e1path, "index", 1)));
+      // After moving e1 to index 1, its path may change (index-based paths shift)
+      assertNotNull(moved.get("path"));
+      assertEquals(1, ((Number) moved.get("index")).intValue());
+
+      // Remove e2 (still at index 0 after e1 moved)
+      structured(call("remove_effect", Map.of("path", e2path)));
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  void addEffectInvalidContainerIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("add_effect", Map.of(
+        "container", "/lx/mixer", "type", BlurEffect.class.getName()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void removeChannelUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result =
+        call("remove_channel", Map.of("path", "/lx/mixer/channel/999"));
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.NOT_FOUND));
