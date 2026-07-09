@@ -126,7 +126,7 @@ class ToolsIntegrationTest {
         Set.of("get_project_info", "list_channels", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
             "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
-            "remove_modulation", "list_modulations", "fire_trigger"),
+            "remove_modulation", "list_modulations", "fire_trigger", "get_component_doc"),
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
         "wire_trigger", "remove_modulation", "fire_trigger");
@@ -421,6 +421,84 @@ class ToolsIntegrationTest {
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.NOT_FOUND), "error text leads with the stable code");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void getComponentDocDocumentedClass() {
+    Map<String, Object> payload = structured(
+        call("get_component_doc", Map.of("class", GradientPattern.class.getName())));
+    assertEquals(GradientPattern.class.getName(), payload.get("class"));
+    assertEquals(Boolean.TRUE, payload.get("documented"));
+    assertNotNull(payload.get("summary"), "summary is present");
+    assertFalse(((String) payload.get("summary")).isEmpty(), "summary is non-empty");
+
+    Map<String, Object> catalog = (Map<String, Object>) payload.get("catalog");
+    assertNotNull(catalog, "catalog metadata present for documented class");
+    assertNotNull(catalog.get("generatedAt"));
+    assertNotNull(catalog.get("lxVersion"));
+    assertNotNull(catalog.get("stale"), "stale field always present");
+    // Test classpath uses the same ~/.m2 jar as generation: stale should be false.
+    // If bytes differ (fresh rebuild), assert that the stale value is a boolean.
+    Object stale = catalog.get("stale");
+    assertTrue(stale instanceof Boolean, "stale is a boolean when bytecode is readable");
+    assertEquals("class-jar", catalog.get("source"));
+  }
+
+  @Test
+  void getComponentDocUndocumentedClass() {
+    // MacroKnobs is registered but has no catalog entry in the lx-mcp jar.
+    Map<String, Object> payload = structured(
+        call("get_component_doc", Map.of("class", MacroKnobs.class.getName())));
+    assertEquals(MacroKnobs.class.getName(), payload.get("class"));
+    assertEquals(Boolean.FALSE, payload.get("documented"));
+    // No error — undocumented is a valid, expected state.
+    assertFalse(payload.containsKey("summary"), "no summary for undocumented class");
+    assertFalse(payload.containsKey("catalog"), "no catalog metadata for undocumented class");
+  }
+
+  @Test
+  void getComponentDocUnknownClassIsNotFound() {
+    McpSchema.CallToolResult result = call("get_component_doc",
+        Map.of("class", "com.example.NoSuchPattern"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  void getComponentDocMissingArgIsRejected() {
+    McpSchema.CallToolResult result = call("get_component_doc", Map.of());
+    assertEquals(Boolean.TRUE, result.isError());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listAvailablePatternsCarryDocumentedFlag() {
+    Map<String, Object> payload = structured(call("list_available_patterns", Map.of()));
+    List<Map<String, Object>> patterns = (List<Map<String, Object>>) payload.get("patterns");
+    assertFalse(patterns.isEmpty(), "at least one pattern is registered");
+    for (Map<String, Object> entry : patterns) {
+      assertTrue(entry.containsKey("documented"),
+          "every pattern entry carries a documented flag: " + entry.get("class"));
+    }
+    // GradientPattern has a catalog entry — verify it's flagged documented.
+    Map<String, Object> gradient = patterns.stream()
+        .filter(p -> GradientPattern.class.getName().equals(p.get("class")))
+        .findFirst().orElseThrow(() -> new AssertionError("GradientPattern not in registry"));
+    assertEquals(Boolean.TRUE, gradient.get("documented"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listAvailableModulatorsCarryDocumentedFlag() {
+    Map<String, Object> payload = structured(call("list_available_modulators", Map.of()));
+    List<Map<String, Object>> modulators = (List<Map<String, Object>>) payload.get("modulators");
+    Map<String, Object> knobs = modulators.stream()
+        .filter(m -> MacroKnobs.class.getName().equals(m.get("class")))
+        .findFirst().orElseThrow();
+    assertEquals(Boolean.FALSE, knobs.get("documented"),
+        "MacroKnobs has no catalog entry");
   }
 
   @Test
