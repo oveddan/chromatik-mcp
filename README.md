@@ -2,7 +2,17 @@
 
 A drop-in LX/Chromatik package for AI-driven show composition over MCP.
 
-**Status**: core parameter + modulation tool surface working end-to-end (discovery, set, macro-knob mapping, OSC addressing); channels/patterns/effects and MIDI-mapping slices in progress. See [docs/build-plan.md](docs/build-plan.md) for the active roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
+**Status**: the v1 tool surface is working end-to-end — discovery, parameters, macro-knob mapping, channels/patterns/effect chains, OSC addressing, and a generated semantic catalog of what each component does. MIDI mapping is the remaining slice. See [docs/build-plan.md](docs/build-plan.md) for the roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
+
+## Quick start
+
+```sh
+cd package && mvn install -Pinstall        # builds + copies the jar to ~/Chromatik/Packages
+# then: enable LX-MCP in Chromatik Preferences → Plugins, restart, and connect:
+claude mcp add --transport http lx "http://127.0.0.1:$(jq -r .port ~/.lx-mcp/status.json)/mcp"
+```
+
+The plugin publishes its ephemeral port in `~/.lx-mcp/status.json` (`{pid, port, projectPath, lxVersion}`); the endpoint is `http://127.0.0.1:<port>/mcp` and works with any streamable-HTTP MCP client. Full walkthrough and troubleshooting: **[docs/install.md](docs/install.md)**. Concrete agent flows — building show structure, chaining effects, macro mapping, multi-agent patterns: **[docs/usage-examples.md](docs/usage-examples.md)**.
 
 ## Capabilities
 
@@ -17,10 +27,22 @@ Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`),
 | `list_available_patterns` / `_effects` / `_modulators` | instantiable classes from the LX registry (modulators carry `global`/`device` flags — where they may be added) |
 | `list_modulations` | one modulation engine's live modulators and wirings — global side panel by default, or a device's own chain via `scope` |
 | `get_parameter` | one parameter: value, type, range, options, units, and its **OSC address** |
+| `get_component_doc` | what a pattern/effect/modulator *does* — generated behavior docs from the [semantic catalog](docs/catalog-format.md), with a bytecode-hash `stale` flag so the answer is honest when code has changed. `list_available_*` entries carry `documented` flags |
 
 ### Read & set parameters
 
 `set_parameter {path, value}` dispatches on the parameter's runtime type (number / integer enum index / boolean / string) and rejects what can't be set sanely: aggregate parameters (set a color's `.../hue`, `.../saturation`, `.../brightness` components instead), computed read-only parameters, out-of-range enum indices (LX would silently wrap), and momentary triggers (see `fire_trigger`). The response echoes the **base** value, so set-then-verify works even while modulation rides on top.
+
+### Build structure: channels, patterns, effect chains
+
+| tool | what it does |
+|---|---|
+| `add_channel {pattern?}` / `remove_channel {path}` | mixer channels, optionally seeded with a first pattern (LX moves UI focus to a new channel) |
+| `add_pattern {channel, type, index?}` / `remove_pattern` / `move_pattern {path, index}` | manage a channel's pattern list |
+| `activate_pattern {path}` | switch the active pattern (PLAYLIST mode; BLEND-mode channels layer patterns via their `enabled` params instead) |
+| `add_effect {container, type}` / `remove_effect` / `move_effect {path, index}` | effect chains — run serially in list order — on channels, the master bus, or an individual pattern |
+
+Structural paths are 1-based and reindex on remove/insert — re-list rather than reusing cached paths.
 
 ### Map macro knobs (and any modulation)
 
