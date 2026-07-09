@@ -1,0 +1,16 @@
+{
+  "LX": {
+    "url": "git@github.com:heronarts/LX.git",
+    "srcDir": "src/main/java",
+    "classBytes": "maven:com.heronarts:lx:1.2.1",
+    "version": "1.2.1",
+    "target": "lx-mcp"
+  },
+  "Apotheneum": {
+    "url": "git@github.com:Apotheneum/Apotheneum.git",
+    "srcDir": "src/main/java",
+    "classBytes": "target/classes",
+    "version": "local",
+    "target": "repo"
+  }
+}

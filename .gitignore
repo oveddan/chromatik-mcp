@@ -15,3 +15,6 @@ server/*.tsbuildinfo
 
 # Logs
 *.log
+
+# lx-mcp-catalog machine-local checkout paths
+.claude/skills/lx-mcp-catalog/sources.local.json

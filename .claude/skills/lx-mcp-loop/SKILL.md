@@ -34,12 +34,19 @@ Load the project's persistent knowledge before touching code:
    PR's build-plan slice.
 4. **Gate.** `cd package && mvn package` — must be green (compiles + full JUnit suite +
    headless harness). This is the objective bar; do not weaken it to pass.
-5. **Review (recommended).** Spawn a fresh-context review agent on the diff vs. the branch
+5. **Catalog freshness.** Run the [`lx-mcp-catalog`](../lx-mcp-catalog/SKILL.md)
+   incremental pass. It is hash-keyed, so on an unchanged codebase it no-ops in seconds —
+   run it **every iteration**, not just when you think something changed. Regenerated
+   entries ride in this PR; if any were regenerated, re-run the gate (CatalogFormatTest
+   validates them once PR-7b lands). This is what keeps agent-facing semantic docs from drifting:
+   staleness is caught at the PR that caused it, when the diff is small, not discovered
+   later by a confused agent.
+6. **Review (recommended).** Spawn a fresh-context review agent on the diff vs. the branch
    base, briefed with the PR spec + `CLAUDE.md` + `qa-strategy.md`. Fix real findings;
    re-run the gate. (Ad hoc by design — your judgment, not a mandated step.)
-6. **Open PR.** Squash to one commit, push, `gh pr create` with base = the stack parent.
+7. **Open PR.** Squash to one commit, push, `gh pr create` with base = the stack parent.
    Body carries the gate result + review summary. The user merges.
-7. **Maintain the stack.** After a base PR is squash-merged, rebase the remaining
+8. **Maintain the stack.** After a base PR is squash-merged, rebase the remaining
    single-commit branches and retarget with `gh pr edit --base`.
 
 ## Never do

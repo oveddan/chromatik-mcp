@@ -31,15 +31,22 @@ One PR per iteration, run by `/loop` or by hand. The pipeline:
    slice — anything bigger is too big (the scope guard in `CLAUDE.md`).
 4. **Gate (objective).** `cd package && mvn package` — compiles and runs the full JUnit
    suite, including the headless harness and any do→undo→assert tests. Green is the bar.
-5. **Review (recommended).** Spawn a **fresh-context** review agent on the diff vs. the
+5. **Catalog freshness.** Run the `lx-mcp-catalog` skill's incremental pass every
+   iteration. It is keyed on source-content hashes, so an unchanged codebase no-ops in
+   seconds; when a pattern/effect/modulator source did change, the regenerated entries
+   ride in the same PR. Rationale: the semantic catalog
+   ([`catalog-format.md`](catalog-format.md)) is a cache of source understanding — the
+   loop is the cache-refresh trigger, so staleness is fixed at the PR that caused it
+   rather than discovered later by a confused agent.
+6. **Review (recommended).** Spawn a **fresh-context** review agent on the diff vs. the
    branch base, briefed with the PR's spec, the `CLAUDE.md` layering rules, and
    [`spike/qa-strategy.md`](spike/qa-strategy.md). Fix real findings; re-run the gate.
    This is deliberately **ad hoc** for now — judgment call per PR, not a mandated spec
    (formalizing it is a [future exploration](#future-explorations)).
-6. **Open PR.** Squash to one commit, push, `gh pr create` with base = the stack parent.
+7. **Open PR.** Squash to one commit, push, `gh pr create` with base = the stack parent.
    The body carries the gate result and the review summary. The user merges (no
    auto-merge).
-7. **Maintain the stack.** After a squash-merge of a base PR, rebase the remaining
+8. **Maintain the stack.** After a squash-merge of a base PR, rebase the remaining
    single-commit branches onto the new base and retarget with `gh pr edit --base`.
 
 ### Why this passes the 4-condition test

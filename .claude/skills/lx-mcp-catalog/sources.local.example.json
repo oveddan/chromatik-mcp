@@ -1,0 +1,5 @@
+{
+  "//": "Copy to sources.local.json (git-ignored) and point each repo at your checkout.",
+  "LX": "/path/to/LX",
+  "Apotheneum": "/path/to/Apotheneum"
+}
