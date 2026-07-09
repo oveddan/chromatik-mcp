@@ -43,7 +43,8 @@ public final class Tools {
             new WireTrigger(),
             new RemoveModulation(),
             new ListModulations(),
-            new FireTrigger())
+            new FireTrigger(),
+            new GetComponentDoc())
         .stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();

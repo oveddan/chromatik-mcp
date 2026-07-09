@@ -16,7 +16,7 @@ public final class Registry {
 
   /** {@code global}/{@code device} are the modulator scope annotations; null for patterns/effects. */
   public record ComponentType(String className, String name, String category, List<String> tags,
-      Boolean global, Boolean device) {}
+      Boolean global, Boolean device, Class<? extends LXComponent> clazz) {}
 
   private Registry() {}
 
@@ -49,7 +49,8 @@ public final class Registry {
           LXComponent.getCategory(clazz),
           (tags == null) ? List.of() : List.copyOf(tags),
           modulator ? clazz.isAnnotationPresent(LXModulator.Global.class) : null,
-          modulator ? clazz.isAnnotationPresent(LXModulator.Device.class) : null));
+          modulator ? clazz.isAnnotationPresent(LXModulator.Device.class) : null,
+          clazz));
     }
     return result;
   }

@@ -7,6 +7,7 @@ import java.util.Map;
 
 import heronarts.lx.LX;
 
+import lxmcp.domain.Catalog;
 import lxmcp.domain.Registry;
 
 /**
@@ -78,6 +79,7 @@ public final class ListAvailable implements LxTool {
       if (type.device() != null) {
         entry.put("device", type.device());
       }
+      entry.put("documented", Catalog.hasEntry(type.clazz()));
       entries.add(entry);
     }
     return Result.ok(Map.of(this.kind.payloadKey, entries));
