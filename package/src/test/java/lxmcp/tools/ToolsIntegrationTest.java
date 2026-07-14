@@ -129,12 +129,14 @@ class ToolsIntegrationTest {
             "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "list_modulations", "fire_trigger", "get_component_doc",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
-            "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect"),
+            "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
+            "add_midi_mapping", "list_midi_mappings", "remove_midi_mapping"),
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
         "wire_trigger", "remove_modulation", "fire_trigger",
         "add_channel", "remove_channel", "add_pattern", "remove_pattern",
-        "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect");
+        "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
+        "add_midi_mapping", "remove_midi_mapping");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
       assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),
@@ -493,6 +495,72 @@ class ToolsIntegrationTest {
   void removeChannelUnknownPathIsNotFound() {
     McpSchema.CallToolResult result =
         call("remove_channel", Map.of("path", "/lx/mixer/channel/999"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  // ── MIDI mapping tool integration tests ─────────────────────────────────────
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void addMidiMappingListThenRemove() {
+    int before = lx.engine.midi.mappings.size();
+
+    Map<String, Object> added = structured(call("add_midi_mapping", Map.of(
+        "target", channel.fader.getCanonicalPath(),
+        "type", "cc", "channel", 1, "number", 20)));
+    int index = ((Number) added.get("index")).intValue();
+    assertEquals(channel.fader.getCanonicalPath(), added.get("targetPath"));
+    assertEquals(before + 1, lx.engine.midi.mappings.size());
+
+    Map<String, Object> listed = structured(call("list_midi_mappings", Map.of()));
+    List<Map<String, Object>> mappings = (List<Map<String, Object>>) listed.get("mappings");
+    Map<String, Object> entry = mappings.stream()
+        .filter(m -> index == ((Number) m.get("index")).intValue())
+        .findFirst().orElseThrow();
+    assertEquals("cc", entry.get("type"));
+    assertEquals(1, ((Number) entry.get("channel")).intValue());
+    assertEquals(20, ((Number) entry.get("number")).intValue());
+    assertEquals(channel.fader.getCanonicalPath(), entry.get("targetPath"));
+
+    Map<String, Object> removed = structured(call("remove_midi_mapping", Map.of("index", index)));
+    assertEquals(index, ((Number) removed.get("removed")).intValue());
+    assertEquals(before, lx.engine.midi.mappings.size());
+  }
+
+  @Test
+  void addMidiMappingRejectsOutOfRangeChannelAndNumber() {
+    McpSchema.CallToolResult badChannel = call("add_midi_mapping", Map.of(
+        "target", channel.fader.getCanonicalPath(),
+        "type", "cc", "channel", 17, "number", 20));
+    assertEquals(Boolean.TRUE, badChannel.isError());
+    McpSchema.TextContent badChannelText =
+        assertInstanceOf(McpSchema.TextContent.class, badChannel.content().get(0));
+    assertTrue(badChannelText.text().startsWith(Result.INVALID_ARGUMENT));
+
+    McpSchema.CallToolResult badNumber = call("add_midi_mapping", Map.of(
+        "target", channel.fader.getCanonicalPath(),
+        "type", "note", "channel", 1, "number", 128));
+    assertEquals(Boolean.TRUE, badNumber.isError());
+    McpSchema.TextContent badNumberText =
+        assertInstanceOf(McpSchema.TextContent.class, badNumber.content().get(0));
+    assertTrue(badNumberText.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void addMidiMappingRejectsUnknownType() {
+    // "type" is schema-enum-constrained to note/cc, so this is rejected by the SDK before
+    // the handler runs — same shape as getParameterBadArgsAreRejected's missing-arg case.
+    McpSchema.CallToolResult result = call("add_midi_mapping", Map.of(
+        "target", channel.fader.getCanonicalPath(),
+        "type", "pitchbend", "channel", 1, "number", 20));
+    assertEquals(Boolean.TRUE, result.isError());
+  }
+
+  @Test
+  void removeMidiMappingUnknownIndexIsNotFound() {
+    McpSchema.CallToolResult result = call("remove_midi_mapping", Map.of("index", 999));
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.NOT_FOUND));

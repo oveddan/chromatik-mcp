@@ -53,7 +53,10 @@ public final class Tools {
             new MovePattern(),
             new AddEffect(),
             new RemoveEffect(),
-            new MoveEffect())
+            new MoveEffect(),
+            new AddMidiMapping(),
+            new ListMidiMappings(),
+            new RemoveMidiMapping())
         .stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();
