@@ -126,7 +126,7 @@ class ToolsIntegrationTest {
     assertEquals(
         Set.of("get_project_info", "list_channels", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
-            "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
+            "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "list_modulations", "fire_trigger", "get_component_doc",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect"),
@@ -548,6 +548,46 @@ class ToolsIntegrationTest {
     Map<String, Object> payload = structured(call("get_parameter", Map.of("path", path)));
     assertEquals(path, payload.get("path"));
     assertEquals(channel.fader.getValue(), ((Number) payload.get("value")).doubleValue(), 1e-9);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listParametersDescribesChannel() {
+    Map<String, Object> payload =
+        structured(call("list_parameters", Map.of("path", channel.getCanonicalPath())));
+    assertEquals(channel.getCanonicalPath(), payload.get("path"));
+    assertEquals(channel.getId(), ((Number) payload.get("id")).intValue());
+    assertEquals(channel.getLabel(), payload.get("label"));
+
+    List<Map<String, Object>> parameters = (List<Map<String, Object>>) payload.get("parameters");
+    assertFalse(parameters.isEmpty());
+    Map<String, Object> fader = parameters.stream()
+        .filter(p -> channel.fader.getCanonicalPath().equals(p.get("path")))
+        .findFirst().orElseThrow(() -> new AssertionError("fader not listed"));
+    assertEquals(channel.fader.getValue(), ((Number) fader.get("value")).doubleValue(), 1e-9);
+    Map<String, Object> enabled = parameters.stream()
+        .filter(p -> channel.enabled.getCanonicalPath().equals(p.get("path")))
+        .findFirst().orElseThrow(() -> new AssertionError("enabled not listed"));
+    assertEquals(channel.enabled.isOn(), enabled.get("value"));
+  }
+
+  @Test
+  void listParametersUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result =
+        call("list_parameters", Map.of("path", "/lx/nope/nothing"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  void listParametersOnAParameterPathIsInvalidArgument() {
+    McpSchema.CallToolResult result =
+        call("list_parameters", Map.of("path", channel.fader.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    assertTrue(text.text().contains("get_parameter"), "points the caller at get_parameter");
   }
 
   @Test

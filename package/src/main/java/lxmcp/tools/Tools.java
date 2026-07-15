@@ -37,6 +37,7 @@ public final class Tools {
             new ListAvailable(ListAvailable.Kind.EFFECTS),
             new ListAvailable(ListAvailable.Kind.MODULATORS),
             new GetParameter(),
+            new ListParameters(),
             new SetParameter(),
             new AddModulator(),
             new WireModulator(),

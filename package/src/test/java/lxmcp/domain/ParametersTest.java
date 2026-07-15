@@ -3,6 +3,7 @@ package lxmcp.domain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -103,6 +104,70 @@ class ParametersTest {
     assertEquals(10, value.length(), "color value is an 0xAARRGGBB hex string");
     assertEquals("0x", value.substring(0, 2));
     assertNull(info.formatted(), "the double formatter yields NaN for packed colors");
+  }
+
+  // ---- listFor: enumerate a component's own parameters ----
+
+  @Test
+  void listForIncludesFaderAndEnabledWithRoundTrippingPaths() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    String channelPath = channel.getCanonicalPath();
+
+    Parameters.ComponentParameters info = Parameters.listFor(lx, channelPath);
+    assertEquals(channelPath, info.path());
+    assertEquals(channel.getId(), info.id());
+    assertEquals(channel.getLabel(), info.label());
+    assertEquals(channel.getClass().getName(), info.className(),
+        "class is fully-qualified, matching the other list tools and get_component_doc input");
+
+    Parameters.ParameterInfo fader = info.parameters().stream()
+        .filter(p -> channel.fader.getCanonicalPath().equals(p.path()))
+        .findFirst().orElseThrow(() -> new AssertionError("fader not listed"));
+    assertEquals(channel.fader.getValue(), ((Number) fader.value()).doubleValue(), 1e-9);
+    assertSame(channel.fader, Resolve.parameter(lx, fader.path()), "path round-trips via LXPath.get");
+
+    Parameters.ParameterInfo enabled = info.parameters().stream()
+        .filter(p -> channel.enabled.getCanonicalPath().equals(p.path()))
+        .findFirst().orElseThrow(() -> new AssertionError("enabled not listed"));
+    assertEquals(channel.enabled.isOn(), enabled.value());
+    assertSame(channel.enabled, Resolve.parameter(lx, enabled.path()), "path round-trips via LXPath.get");
+  }
+
+  @Test
+  void listForBogusPathIsNotFound() {
+    LX lx = newHeadlessLx();
+    assertEquals(Resolve.Failure.NOT_FOUND,
+        assertThrows(Resolve.ResolveException.class,
+            () -> Parameters.listFor(lx, "/lx/nope/nothing")).failure);
+  }
+
+  @Test
+  void listForModulatorPathListsAsComponent() {
+    LX lx = newHeadlessLx();
+    // An LXModulator is both LXComponent and LXParameter — the dual-typed case must
+    // resolve as a component and list its parameters, not bounce toward get_parameter.
+    MacroKnobs knobs =
+        (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+
+    Parameters.ComponentParameters info = Parameters.listFor(lx, knobs.getCanonicalPath());
+    assertEquals(knobs.getCanonicalPath(), info.path());
+    assertEquals(MacroKnobs.class.getName(), info.className());
+    assertTrue(info.parameters().stream()
+            .anyMatch(p -> knobs.macro1.getCanonicalPath().equals(p.path())),
+        "macro1 is listed");
+  }
+
+  @Test
+  void listForParameterPathPointsAtGetParameter() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> Parameters.listFor(lx, channel.fader.getCanonicalPath()));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+    assertTrue(e.getMessage().contains("get_parameter"),
+        "error tells the caller to use get_parameter instead");
   }
 
   @Test

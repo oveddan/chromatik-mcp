@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXComponent;
 import heronarts.lx.color.ColorParameter;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.osc.LXOscEngine;
@@ -42,6 +43,48 @@ public final class Parameters {
    */
   public static ParameterInfo get(LX lx, String path) {
     return describe(Resolve.parameter(lx, path));
+  }
+
+  /**
+   * A component's identity plus a snapshot of every parameter it directly owns (no child
+   * component recursion — children are discoverable via list_channels / list_modulations).
+   */
+  public record ComponentParameters(
+      String path, int id, String label, String className, List<ParameterInfo> parameters) {}
+
+  /**
+   * List every parameter directly on the component at {@code path}. Call on the engine
+   * thread.
+   *
+   * @throws Resolve.ResolveException typed failure: bad/unknown path, or a path that
+   *     resolves to a parameter rather than a component (told to use {@code get_parameter}
+   *     instead).
+   */
+  public static ComponentParameters listFor(LX lx, String path) {
+    LXComponent component;
+    try {
+      component = Resolve.component(lx, path);
+    } catch (Resolve.ResolveException e) {
+      if (e.failure == Resolve.Failure.TYPE_MISMATCH) {
+        try {
+          Resolve.parameter(lx, path);
+        } catch (Resolve.ResolveException notAParameter) {
+          throw e;
+        }
+        throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+            "Not a component at path: " + path + " — that path is a parameter, use get_parameter");
+      }
+      throw e;
+    }
+    List<ParameterInfo> parameters = component.getParameters().stream()
+        .map(Parameters::describe)
+        .collect(Collectors.toList());
+    return new ComponentParameters(
+        component.getCanonicalPath(),
+        component.getId(),
+        component.getLabel(),
+        component.getClass().getName(),
+        parameters);
   }
 
   /**
