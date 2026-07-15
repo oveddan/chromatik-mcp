@@ -17,7 +17,10 @@ public final class GetProjectInfo implements LxTool {
   @Override
   public String description() {
     return "The open LX project: LX version, project file path (absent if never saved), "
-        + "channel count, and OSC engine state (receive/transmit ports and whether active).";
+        + "channel count, OSC engine state (receive/transmit ports and whether active), and "
+        + "engine output state. output.enabled is the engine's \"Live\" toggle — when false, "
+        + "nothing reaches physical fixtures regardless of mixer state; set it via "
+        + "set_parameter on output.enabledPath.";
   }
 
   @Override
@@ -45,6 +48,12 @@ public final class GetProjectInfo implements LxTool {
     osc.put("transmitPort", info.osc().transmitPort());
     osc.put("transmitActive", info.osc().transmitActive());
     payload.put("osc", osc);
+    Map<String, Object> output = new LinkedHashMap<>();
+    output.put("enabled", info.output().enabled());
+    output.put("enabledPath", info.output().enabledPath());
+    output.put("brightness", info.output().brightness());
+    output.put("brightnessPath", info.output().brightnessPath());
+    payload.put("output", output);
     return Result.ok(payload);
   }
 }

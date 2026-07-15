@@ -27,6 +27,17 @@ import lxmcp.engine.EngineExecutor;
  */
 public final class Tools {
 
+  /** Server-level MCP {@code instructions}, returned in the initialize result. */
+  public static final String INSTRUCTIONS =
+      "LX mixer semantics: a channel's patternMode is 'playlist' (one active pattern shows) "
+          + "or 'blend' (all enabled patterns composite simultaneously, each scaled by its "
+          + "compositeLevel parameter, 0-1). For pixels to reach fixtures, the whole chain must "
+          + "be on: pattern contributing → channel enabled and fader > 0 → master "
+          + "fader > 0 → engine output enabled (see get_project_info's output object). "
+          + "Every component and parameter is addressed by its canonical LX path (e.g. "
+          + "/lx/mixer/channel/1/fader); use list_parameters on any component path to discover "
+          + "its parameters instead of guessing names.";
+
   private Tools() {}
 
   public static List<McpServerFeatures.SyncToolSpecification> specifications(LX lx, EngineExecutor executor) {

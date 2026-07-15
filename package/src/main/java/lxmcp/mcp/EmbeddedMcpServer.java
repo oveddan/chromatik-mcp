@@ -42,7 +42,7 @@ public final class EmbeddedMcpServer {
 
   /** Start with no tools registered — {@code tools/list} works and returns an empty list. */
   public static EmbeddedMcpServer start(String serverName, String version, int requestedPort) {
-    return start(serverName, version, requestedPort, List.of());
+    return start(serverName, version, requestedPort, List.of(), null);
   }
 
   /**
@@ -60,6 +60,20 @@ public final class EmbeddedMcpServer {
       String version,
       int requestedPort,
       List<McpServerFeatures.SyncToolSpecification> tools) {
+    return start(serverName, version, requestedPort, tools, null);
+  }
+
+  /**
+   * Start the server, additionally setting the MCP {@code instructions} string returned in
+   * the initialize result. {@code instructions} may be {@code null} to omit it. Plain
+   * {@code String} — this class stays LX-agnostic, so callers own the content.
+   */
+  public static EmbeddedMcpServer start(
+      String serverName,
+      String version,
+      int requestedPort,
+      List<McpServerFeatures.SyncToolSpecification> tools,
+      String instructions) {
     // The SDK resolves its JSON mapper + schema validator via ServiceLoader on the
     // thread-context classloader, eagerly at builder time. Inside Chromatik this jar
     // lives in a child classloader (LXClassLoader) that is never the TCCL, so without
@@ -70,7 +84,7 @@ public final class EmbeddedMcpServer {
     ClassLoader prior = thread.getContextClassLoader();
     thread.setContextClassLoader(EmbeddedMcpServer.class.getClassLoader());
     try {
-      return startWithContextClassLoader(serverName, version, requestedPort, tools);
+      return startWithContextClassLoader(serverName, version, requestedPort, tools, instructions);
     } finally {
       thread.setContextClassLoader(prior);
     }
@@ -80,17 +94,21 @@ public final class EmbeddedMcpServer {
       String serverName,
       String version,
       int requestedPort,
-      List<McpServerFeatures.SyncToolSpecification> tools) {
+      List<McpServerFeatures.SyncToolSpecification> tools,
+      String instructions) {
     HttpServletStreamableServerTransportProvider transport =
         HttpServletStreamableServerTransportProvider.builder()
             .mcpEndpoint(ENDPOINT)
             .build();
 
-    McpSyncServer server = McpServer.sync(transport)
+    McpServer.SyncSpecification<?> serverSpec = McpServer.sync(transport)
         .serverInfo(serverName, version)
         .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
-        .tools(tools)
-        .build();
+        .tools(tools);
+    if (instructions != null) {
+      serverSpec = serverSpec.instructions(instructions);
+    }
+    McpSyncServer server = serverSpec.build();
 
     Tomcat tomcat = new Tomcat();
     tomcat.setPort(requestedPort);

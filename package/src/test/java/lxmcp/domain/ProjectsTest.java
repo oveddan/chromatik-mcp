@@ -2,11 +2,13 @@ package lxmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXPath;
 import heronarts.lx.model.GridModel;
 
 class ProjectsTest {
@@ -51,5 +53,26 @@ class ProjectsTest {
     int before = Projects.info(lx).channelCount();
     lx.engine.mixer.addChannel();
     assertEquals(before + 1, Projects.info(lx).channelCount());
+  }
+
+  @Test
+  void reportsOutputEngineState() {
+    LX lx = newHeadlessLx();
+    Projects.OutputInfo output = Projects.info(lx).output();
+    assertEquals(lx.engine.output.enabled.isOn(), output.enabled());
+    assertEquals(lx.engine.output.brightness.getValue(), output.brightness());
+    assertSame(lx.engine.output.enabled, LXPath.get(lx, output.enabledPath()),
+        "output.enabled path must round-trip through LXPath");
+    assertSame(lx.engine.output.brightness, LXPath.get(lx, output.brightnessPath()),
+        "output.brightness path must round-trip through LXPath");
+  }
+
+  @Test
+  void outputSnapshotTracksEngineToggle() {
+    LX lx = newHeadlessLx();
+    lx.engine.output.enabled.setValue(false);
+    assertEquals(false, Projects.info(lx).output().enabled());
+    lx.engine.output.enabled.setValue(true);
+    assertEquals(true, Projects.info(lx).output().enabled());
   }
 }

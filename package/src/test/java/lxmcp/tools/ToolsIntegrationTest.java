@@ -82,7 +82,7 @@ class ToolsIntegrationTest {
     drainer.start();
 
     server = EmbeddedMcpServer.start("LX-MCP", "0.0.1-test", 0,
-        Tools.specifications(lx, new EngineExecutor(lx)));
+        Tools.specifications(lx, new EngineExecutor(lx)), Tools.INSTRUCTIONS);
     HttpClientStreamableHttpTransport transport =
         HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
             .endpoint(EmbeddedMcpServer.ENDPOINT)
@@ -511,9 +511,25 @@ class ToolsIntegrationTest {
         ((Number) osc.get("receivePort")).intValue());
     assertNotNull(osc.get("receiveActive"));
 
+    @SuppressWarnings("unchecked")
+    Map<String, Object> output = (Map<String, Object>) payload.get("output");
+    assertNotNull(output, "get_project_info reports engine output state");
+    assertEquals(lx.engine.output.enabled.isOn(), output.get("enabled"));
+    assertEquals(lx.engine.output.enabled.getCanonicalPath(), output.get("enabledPath"));
+    assertEquals(lx.engine.output.brightness.getValue(),
+        ((Number) output.get("brightness")).doubleValue());
+    assertEquals(lx.engine.output.brightness.getCanonicalPath(), output.get("brightnessPath"));
+
     assertFalse(result.content().isEmpty(), "success also carries a text mirror");
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith("{"), "text mirror is the serialized JSON payload");
+  }
+
+  @Test
+  void initializeResultCarriesServerInstructions() {
+    String instructions = client.getServerInstructions();
+    assertNotNull(instructions, "initialize result should carry mixer-semantics instructions");
+    assertTrue(instructions.contains("patternMode"), "instructions cover mixer semantics");
   }
 
   @Test

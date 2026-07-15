@@ -10,7 +10,10 @@ public final class Projects {
   public record OscInfo(int receivePort, boolean receiveActive,
       int transmitPort, boolean transmitActive) {}
 
-  public record ProjectInfo(String lxVersion, String projectPath, int channelCount, OscInfo osc) {}
+  public record OutputInfo(String enabledPath, boolean enabled, String brightnessPath, double brightness) {}
+
+  public record ProjectInfo(
+      String lxVersion, String projectPath, int channelCount, OscInfo osc, OutputInfo output) {}
 
   private Projects() {}
 
@@ -25,6 +28,11 @@ public final class Projects {
             lx.engine.osc.receivePort.getValuei(),
             lx.engine.osc.receiveActive.isOn(),
             lx.engine.osc.transmitPort.getValuei(),
-            lx.engine.osc.transmitActive.isOn()));
+            lx.engine.osc.transmitActive.isOn()),
+        new OutputInfo(
+            lx.engine.output.enabled.getCanonicalPath(),
+            lx.engine.output.enabled.isOn(),
+            lx.engine.output.brightness.getCanonicalPath(),
+            lx.engine.output.brightness.getValue()));
   }
 }

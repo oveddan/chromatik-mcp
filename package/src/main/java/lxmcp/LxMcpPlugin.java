@@ -26,7 +26,8 @@ public class LxMcpPlugin implements LXPlugin {
     // pushError (user-facing) + marks the plugin as errored. Swallowing here
     // would leave the plugin looking healthy while the server is down.
     this.server = EmbeddedMcpServer.start(
-        SERVER_NAME, SERVER_VERSION, 0, Tools.specifications(lx, new EngineExecutor(lx)));
+        SERVER_NAME, SERVER_VERSION, 0,
+        Tools.specifications(lx, new EngineExecutor(lx)), Tools.INSTRUCTIONS);
     File project = lx.getProject();
     StatusFile.write(this.server.port(), project == null ? null : project.getAbsolutePath(), LX.VERSION);
     LX.log(PREFIX + "MCP server listening on port " + this.server.port());
