@@ -12,8 +12,10 @@ import heronarts.lx.LX;
 import heronarts.lx.LXPath;
 import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.mixer.LXChannel;
+import heronarts.lx.mixer.LXPatternEngine;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.pattern.color.GradientPattern;
+import heronarts.lx.pattern.color.SolidPattern;
 
 class ChannelsTest {
 
@@ -65,6 +67,59 @@ class ChannelsTest {
 
     long activeCount = info.patterns().stream().filter(Channels.PatternInfo::active).count();
     assertEquals(1, activeCount, "exactly one pattern is active on a non-empty channel");
+
+    assertEquals(Channels.PatternMode.PLAYLIST, info.patternMode());
+    for (Channels.PatternInfo pattern : info.patterns()) {
+      assertEquals(pattern.active(), pattern.contributing(),
+          "in PLAYLIST mode, contributing mirrors active");
+    }
+  }
+
+  @Test
+  void blendModeContributingReflectsEnabledAndCompositeLevel() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXPatternEngine engine = channel.getPatternEngine();
+    engine.compositeMode.setValue(LXPatternEngine.CompositeMode.BLEND);
+
+    GradientPattern disabledPattern = new GradientPattern(lx);
+    channel.addPattern(disabledPattern);
+    SolidPattern zeroLevelPattern = new SolidPattern(lx);
+    channel.addPattern(zeroLevelPattern);
+    GradientPattern visiblePattern = new GradientPattern(lx);
+    channel.addPattern(visiblePattern);
+
+    disabledPattern.enabled.setValue(false);
+    zeroLevelPattern.enabled.setValue(true);
+    zeroLevelPattern.compositeLevel.setValue(0);
+    visiblePattern.enabled.setValue(true);
+    visiblePattern.compositeLevel.setValue(1);
+
+    Channels.ChannelInfo info = Channels.list(lx).channels().get(channel.getIndex());
+    assertEquals(Channels.PatternMode.BLEND, info.patternMode());
+
+    Channels.PatternInfo disabledInfo = findByPath(info, disabledPattern);
+    assertFalse(disabledInfo.enabled());
+    assertFalse(disabledInfo.contributing(), "disabled pattern does not contribute in BLEND mode");
+
+    Channels.PatternInfo zeroLevelInfo = findByPath(info, zeroLevelPattern);
+    assertTrue(zeroLevelInfo.enabled());
+    assertEquals(0, zeroLevelInfo.compositeLevel(), 1e-9);
+    assertFalse(zeroLevelInfo.contributing(), "zero compositeLevel does not contribute");
+
+    Channels.PatternInfo visibleInfo = findByPath(info, visiblePattern);
+    assertTrue(visibleInfo.enabled());
+    assertEquals(1, visibleInfo.compositeLevel(), 1e-9);
+    assertTrue(visibleInfo.contributing(), "enabled + compositeLevel > 0 contributes in BLEND mode");
+  }
+
+  private static Channels.PatternInfo findByPath(Channels.ChannelInfo info,
+      heronarts.lx.pattern.LXPattern pattern) {
+    String path = pattern.getCanonicalPath();
+    return info.patterns().stream()
+        .filter(p -> p.path().equals(path))
+        .findFirst()
+        .orElseThrow();
   }
 
   @Test

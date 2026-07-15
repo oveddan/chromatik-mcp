@@ -20,7 +20,14 @@ public final class ListChannels implements LxTool {
   @Override
   public String description() {
     return "List the mixer's channels with their patterns and effects, plus the master bus. "
-        + "Every entry carries its canonical LX path for use with other tools.";
+        + "Every entry carries its canonical LX path for use with other tools. "
+        + "Channels have two pattern modes ('patternMode'): 'playlist' plays one pattern at a "
+        + "time — the one with active=true; 'blend' composites all patterns simultaneously — a "
+        + "pattern shows iff enabled=true AND compositeLevel > 0 ('active' is not meaningful in "
+        + "blend mode). In playlist mode 'enabled' only affects auto-cycle eligibility — it does "
+        + "not hide the active pattern. The per-pattern 'contributing' field applies the correct "
+        + "rule for the channel's mode. A contributing pattern is still invisible if its channel is disabled "
+        + "or its fader is 0, or if engine output is off (see get_project_info).";
   }
 
   @Override
@@ -50,10 +57,11 @@ public final class ListChannels implements LxTool {
       if (channel.groupPath() != null) {
         entry.put("group", channel.groupPath());
       }
+      boolean blend = channel.patternMode() == Channels.PatternMode.BLEND;
       if (channel.type() == Channels.BusType.CHANNEL) {
-        entry.put("compositeMode", channel.compositeMode());
+        entry.put("patternMode", channel.patternMode().name().toLowerCase(Locale.ROOT));
       }
-      entry.put("patterns", patterns(channel.patterns()));
+      entry.put("patterns", patterns(channel.patterns(), blend));
       entry.put("effects", effects(channel.effects()));
       channels.add(entry);
     }
@@ -71,7 +79,8 @@ public final class ListChannels implements LxTool {
     return Result.ok(payload);
   }
 
-  private static List<Map<String, Object>> patterns(List<Channels.PatternInfo> patterns) {
+  private static List<Map<String, Object>> patterns(List<Channels.PatternInfo> patterns,
+      boolean blend) {
     List<Map<String, Object>> result = new ArrayList<>();
     for (Channels.PatternInfo pattern : patterns) {
       Map<String, Object> entry = new LinkedHashMap<>();
@@ -80,6 +89,11 @@ public final class ListChannels implements LxTool {
       entry.put("label", pattern.label());
       entry.put("class", pattern.className());
       entry.put("active", pattern.active());
+      entry.put("enabled", pattern.enabled());
+      if (blend) {
+        entry.put("compositeLevel", pattern.compositeLevel());
+      }
+      entry.put("contributing", pattern.contributing());
       result.add(entry);
     }
     return result;

@@ -23,18 +23,27 @@ public final class Channels {
 
   public enum BusType { CHANNEL, GROUP }
 
-  public record PatternInfo(String path, int id, String label, String className, boolean active) {}
+  public enum PatternMode { PLAYLIST, BLEND }
+
+  /**
+   * {@code active} is the PLAYLIST-mode notion of "current pattern" (meaningless in
+   * BLEND mode, where every pattern renders concurrently). {@code contributing} is the
+   * mode-correct visibility rule: in PLAYLIST mode it mirrors {@code active}; in BLEND
+   * mode it is {@code enabled && compositeLevel > 0}.
+   */
+  public record PatternInfo(String path, int id, String label, String className, boolean active,
+      boolean enabled, double compositeLevel, boolean contributing) {}
 
   public record EffectInfo(String path, int id, String label, String className, boolean enabled) {}
 
   /**
    * {@code groupPath} is the canonical path of the enclosing group, or null at top level
    * — the mixer's channel list is flat, with group members as siblings of their group.
-   * {@code compositeMode} channels render multiple patterns at once, so the single
-   * {@code active} flag on patterns is only meaningful when it is false.
+   * {@code patternMode} channels in BLEND mode render multiple patterns at once, so the
+   * single {@code active} flag on patterns is only meaningful in PLAYLIST mode.
    */
   public record ChannelInfo(String path, int id, String label, int index, BusType type,
-      boolean enabled, double fader, String groupPath, boolean compositeMode,
+      boolean enabled, double fader, String groupPath, PatternMode patternMode,
       List<PatternInfo> patterns, List<EffectInfo> effects) {}
 
   public record MasterInfo(String path, int id, String label, double fader, List<EffectInfo> effects) {}
@@ -171,8 +180,9 @@ public final class Channels {
     LXPatternEngine engine = pattern.getEngine();
     if (!engine.isPlaylist()) {
       throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
-          engine.component.getCanonicalPath() + " is in BLEND composite mode — activate "
-              + "patterns there via set_parameter on the pattern's enabled parameter");
+          engine.component.getCanonicalPath() + " is in BLEND composite mode — control "
+              + "visibility there via set_parameter on the pattern's enabled (on/off) and "
+              + "compositeLevel (0-1) parameters");
     }
     Commands.perform(lx, new LXCommand.Channel.GoPattern(engine, pattern));
     return pattern;
@@ -259,18 +269,26 @@ public final class Channels {
 
   private static ChannelInfo describe(LXAbstractChannel channel) {
     List<PatternInfo> patterns = List.of();
-    boolean compositeMode = false;
+    PatternMode patternMode = null;
     if (channel instanceof LXChannel c) {
-      compositeMode = c.isComposite();
+      boolean blend = c.isComposite();
+      patternMode = blend ? PatternMode.BLEND : PatternMode.PLAYLIST;
       patterns = new ArrayList<>();
       LXPattern active = c.getActivePattern();
       for (LXPattern pattern : c.patterns) {
+        boolean patternEnabled = pattern.enabled.isOn();
+        double compositeLevel = pattern.compositeLevel.getValue();
+        boolean isActive = pattern == active;
+        boolean contributing = blend ? (patternEnabled && compositeLevel > 0) : isActive;
         patterns.add(new PatternInfo(
             pattern.getCanonicalPath(),
             pattern.getId(),
             pattern.getLabel(),
             pattern.getClass().getName(),
-            pattern == active));
+            isActive,
+            patternEnabled,
+            compositeLevel,
+            contributing));
       }
     }
     LXGroup group = channel.getGroup();
@@ -283,7 +301,7 @@ public final class Channels {
         channel.enabled.isOn(),
         channel.fader.getValue(),
         (group == null) ? null : group.getCanonicalPath(),
-        compositeMode,
+        patternMode,
         patterns,
         effects(channel));
   }

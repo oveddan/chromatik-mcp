@@ -405,9 +405,14 @@ class ToolsIntegrationTest {
       Map<String, Object> newChannel = channelList.stream()
           .filter(c -> channelPath.equals(c.get("path")))
           .findFirst().orElseThrow();
+      assertEquals("playlist", newChannel.get("patternMode"));
       List<Map<String, Object>> patterns = (List<Map<String, Object>>) newChannel.get("patterns");
       assertEquals(1, patterns.size());
       assertEquals(GradientPattern.class.getName(), patterns.get(0).get("class"));
+      assertEquals(Boolean.TRUE, patterns.get(0).get("enabled"));
+      assertEquals(Boolean.TRUE, patterns.get(0).get("contributing"));
+      assertFalse(patterns.get(0).containsKey("compositeLevel"),
+          "compositeLevel is only emitted for blend-mode channels");
     } finally {
       structured(call("remove_channel", Map.of("path", channelPath)));
     }
@@ -526,10 +531,60 @@ class ToolsIntegrationTest {
     Map<String, Object> entry = channels.get(channel.getIndex());
     assertEquals(channel.getLabel(), entry.get("label"));
     assertEquals("channel", entry.get("type"));
+    assertEquals("playlist", entry.get("patternMode"));
     List<Map<String, Object>> patterns = (List<Map<String, Object>>) entry.get("patterns");
     assertEquals(channel.patterns.size(), patterns.size());
+    for (Map<String, Object> pattern : patterns) {
+      assertNotNull(pattern.get("active"));
+      assertNotNull(pattern.get("enabled"));
+      assertNotNull(pattern.get("contributing"));
+    }
 
     assertNotNull(payload.get("master"), "master bus is always present");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listChannelsBlendModeEmitsCompositeLevelAndContributing() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      String p1path = (String) structured(call("add_pattern", Map.of(
+          "channel", channelPath, "type", GradientPattern.class.getName()))).get("path");
+      String p2path = (String) structured(call("add_pattern", Map.of(
+          "channel", channelPath, "type", GradientPattern.class.getName()))).get("path");
+
+      // Flip the channel to BLEND (CompositeMode ordinal 1 on the pattern engine's
+      // compositeMode EnumParameter, registered on the channel).
+      structured(call("set_parameter", Map.of(
+          "path", channelPath + "/compositeMode", "value", 1)));
+      structured(call("set_parameter", Map.of("path", p1path + "/enabled", "value", false)));
+      structured(call("set_parameter", Map.of("path", p2path + "/enabled", "value", true)));
+      structured(call("set_parameter", Map.of("path", p2path + "/compositeLevel", "value", 0.8)));
+
+      Map<String, Object> payload = structured(call("list_channels", Map.of()));
+      Map<String, Object> entry = ((List<Map<String, Object>>) payload.get("channels")).stream()
+          .filter(c -> channelPath.equals(c.get("path")))
+          .findFirst().orElseThrow();
+      assertEquals("blend", entry.get("patternMode"));
+
+      List<Map<String, Object>> patterns = (List<Map<String, Object>>) entry.get("patterns");
+      Map<String, Object> p1 = patterns.stream()
+          .filter(p -> p1path.equals(p.get("path"))).findFirst().orElseThrow();
+      assertEquals(Boolean.FALSE, p1.get("enabled"));
+      assertNotNull(p1.get("compositeLevel"), "blend mode emits compositeLevel");
+      assertEquals(Boolean.FALSE, p1.get("contributing"),
+          "disabled pattern does not contribute in blend mode");
+
+      Map<String, Object> p2 = patterns.stream()
+          .filter(p -> p2path.equals(p.get("path"))).findFirst().orElseThrow();
+      assertEquals(Boolean.TRUE, p2.get("enabled"));
+      assertEquals(0.8, ((Number) p2.get("compositeLevel")).doubleValue(), 1e-9);
+      assertEquals(Boolean.TRUE, p2.get("contributing"),
+          "enabled pattern with compositeLevel > 0 contributes in blend mode");
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
   }
 
   @Test
