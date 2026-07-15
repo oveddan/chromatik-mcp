@@ -1,6 +1,7 @@
 package lxmcp.tools;
 
 import java.io.IOException;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -45,6 +46,7 @@ public final class Tools {
             new ListModulations(),
             new FireTrigger(),
             new GetComponentDoc(),
+            new GetFrame(),
             new AddChannel(),
             new RemoveChannel(),
             new AddPattern(),
@@ -90,26 +92,48 @@ public final class Tools {
           (e.getMessage() == null) ? e.getClass().getSimpleName() : e.getMessage());
     }
     return switch (result) {
-      case Result.Ok<Map<String, Object>> ok -> {
+      case Result.Ok<Map<String, Object>> ok -> success(tool, ok.value(), null);
+      case Result.OkImage<Map<String, Object>> ok -> {
+        // Encoded here, on the HTTP worker thread — executor.call has already returned,
+        // so the engine thread never pays for rasterization or PNG compression. The
+        // supplier's contract (Result.OkImage) is to close only over immutable data.
+        byte[] png;
         try {
-          // The SDK's own mapper, so the text mirror serializes identically to
-          // structuredContent (Gson diverges on HTML escaping and null values).
-          yield McpSchema.CallToolResult.builder()
-              .structuredContent(ok.value())
-              .addTextContent(McpJsonDefaults.getMapper().writeValueAsString(ok.value()))
-              .build();
-        } catch (IOException e) {
-          LX.error(e, "[LX-MCP] Tool " + tool.name() + " produced an unserializable payload");
+          png = ok.png().get();
+        } catch (RuntimeException e) {
+          LX.error(e, "[LX-MCP] Tool " + tool.name() + " failed to encode image");
           yield McpSchema.CallToolResult.builder()
               .isError(true)
-              .addTextContent(Result.INTERNAL + ": failed to serialize tool payload")
+              .addTextContent(Result.INTERNAL + ": failed to encode image")
               .build();
         }
+        yield success(tool, ok.value(), png);
       }
       case Result.Error<Map<String, Object>> error -> McpSchema.CallToolResult.builder()
           .isError(true)
           .addTextContent(error.code() + ": " + error.message())
           .build();
     };
+  }
+
+  private static McpSchema.CallToolResult success(LxTool tool, Map<String, Object> value, byte[] png) {
+    try {
+      // The SDK's own mapper, so the text mirror serializes identically to
+      // structuredContent (Gson diverges on HTML escaping and null values).
+      var builder = McpSchema.CallToolResult.builder()
+          .structuredContent(value)
+          .addTextContent(McpJsonDefaults.getMapper().writeValueAsString(value));
+      if (png != null) {
+        builder.addContent(new McpSchema.ImageContent(
+            null, Base64.getEncoder().encodeToString(png), "image/png"));
+      }
+      return builder.build();
+    } catch (IOException e) {
+      LX.error(e, "[LX-MCP] Tool " + tool.name() + " produced an unserializable payload");
+      return McpSchema.CallToolResult.builder()
+          .isError(true)
+          .addTextContent(Result.INTERNAL + ": failed to serialize tool payload")
+          .build();
+    }
   }
 }

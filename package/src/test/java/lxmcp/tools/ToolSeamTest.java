@@ -88,6 +88,88 @@ class ToolSeamTest {
     }
   }
 
+  private static final class ImageTool implements LxTool {
+    private final java.util.function.Supplier<byte[]> png;
+
+    ImageTool(java.util.function.Supplier<byte[]> png) {
+      this.png = png;
+    }
+
+    @Override
+    public String name() {
+      return "image_tool";
+    }
+
+    @Override
+    public String description() {
+      return "returns an image result";
+    }
+
+    @Override
+    public Map<String, Object> inputSchema() {
+      return Schemas.noArgs();
+    }
+
+    @Override
+    public boolean readOnly() {
+      return true;
+    }
+
+    @Override
+    public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
+      return Result.okImage(Map.of("width", 2), this.png);
+    }
+  }
+
+  @Test
+  void okImageCarriesStructuredContentTextMirrorAndPng() {
+    byte[] bytes = {1, 2, 3, 4};
+    McpServerFeatures.SyncToolSpecification spec =
+        Tools.specification(new ImageTool(() -> bytes), this.lx, new EngineExecutor(this.lx));
+
+    McpSchema.CallToolResult result =
+        spec.callHandler().apply(null, new McpSchema.CallToolRequest("image_tool", Map.of()));
+
+    assertEquals(Boolean.FALSE, result.isError());
+    assertEquals(Map.of("width", 2), result.structuredContent());
+    McpSchema.TextContent text =
+        assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().contains("\"width\""), "text mirror of structuredContent: " + text.text());
+    McpSchema.ImageContent image =
+        assertInstanceOf(McpSchema.ImageContent.class, result.content().get(1));
+    assertEquals("image/png", image.mimeType());
+    assertEquals(java.util.Base64.getEncoder().encodeToString(bytes), image.data());
+  }
+
+  @Test
+  void throwingPngSupplierMapsToInternalIsError() {
+    McpServerFeatures.SyncToolSpecification spec = Tools.specification(
+        new ImageTool(() -> {
+          throw new IllegalStateException("encode boom");
+        }),
+        this.lx, new EngineExecutor(this.lx));
+
+    McpSchema.CallToolResult result =
+        spec.callHandler().apply(null, new McpSchema.CallToolRequest("image_tool", Map.of()));
+
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text =
+        assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INTERNAL + ":"),
+        "stable code, no stack trace: " + text.text());
+  }
+
+  @Test
+  void getFrameInvalidViewIsInvalidArgument() {
+    // The SDK's inputSchema enum rejects bad values over the wire; this pins the
+    // handler's own valueOf fallback directly (belt and suspenders for schema drift).
+    Result<Map<String, Object>> result =
+        new GetFrame().handle(this.lx, Map.of("view", "diagonal"));
+    Result.Error<Map<String, Object>> error =
+        assertInstanceOf(Result.Error.class, result);
+    assertEquals(Result.INVALID_ARGUMENT, error.code());
+  }
+
   @Test
   void unexpectedExceptionMapsToInternalIsError() {
     McpServerFeatures.SyncToolSpecification spec =

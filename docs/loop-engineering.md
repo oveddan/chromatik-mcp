@@ -110,21 +110,21 @@ The product's reason for being: let an agent composing a show *see* its output a
 hillclimb to a visual goal — the "a well-designed rubric adds feedback to the
 environment" pattern.
 
-- **Keystone — a read-only `get_frame` / render-summary tool.** Feasibility **proven**:
-  after each engine cycle, `lx.engine.copyFrameThreadSafe(LXEngine.Frame)`
-  (`LXEngine.java:1346`) hands back a thread-safe copy of the rendered `int[] main`
-  color buffer, indexed by point. `LXPoint.xn/yn/zn` give each point's normalized
-  position, so the buffer reduces to something describable ("top half red, bottom blue",
-  a per-region histogram). All CPU-side — **works headless** (`new LX(model)` +
-  `lx.engine.run()`), so it's testable on the same harness as every other tool.
+- **Keystone — a read-only `get_frame` / render-summary tool. Shipped in PR-8.**
+  `lx.engine.copyFrameThreadSafe(LXEngine.Frame)` (`LXEngine.java:1346`) hands back a
+  thread-safe copy of the rendered `int[] main`/`cue`/`aux` buffers, indexed by point;
+  `LXPoint.xn/yn/zn` give normalized positions. `get_frame` returns both a PNG rendering
+  of the point cloud (MCP ImageContent — the model literally sees the frame) and a
+  compact summary (non-black fraction, mean brightness, dominant colors, NxN mean-color
+  grid); `include_image=false` / `grid` / `width` control token cost inside tight loops.
+  All CPU-side and headless-testable, as predicted.
 - **The loop.** Agent mutates (`set_parameter`, `add_pattern`, …) → reads the frame
   summary → a **verifier sub-agent grades it against a written visual rubric in its own
   context window** → self-correct until the rubric holds. The independent grader matters:
   models grade their own output too kindly.
 - **Not on the surface.** No screenshot/recording API in LX; the frame buffer (or a
-  custom `LXOutput` tap) is the path. Returning raw per-point colors over MCP is a lot of
-  tokens — the tool should return a *summary*, with the reduction strategy itself a
-  design question.
+  custom `LXOutput` tap) is the path. Raw per-point colors are never returned — PR-8
+  settled the reduction strategy as PNG + summary with client-tunable resolution.
 
 ### Formal verifier + objective `/goal` gate for the dev loop
 

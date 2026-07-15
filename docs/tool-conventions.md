@@ -40,6 +40,17 @@ them is a cross-cutting change that touches every tool — propose it as its own
   validation semantics for `isError` results against a declared schema are unverified.
   Revisit at the SDK GA bump (tracker follow-up in `docs/build-plan.md`).
 
+## Image-bearing results (PR-8)
+
+- A tool that returns media uses `Result.okImage(payload, pngSupplier)` — the seam adds
+  an `ImageContent` (base64 PNG) after the structuredContent + text mirror. PNG is the
+  only media type until a second media-bearing tool motivates generalizing.
+- **The supplier runs on the HTTP worker thread**, after the handler has left the engine
+  thread — so it must close only over immutable data (a detached snapshot record), never
+  over live LX state. This keeps encoding cost off the engine thread without violating
+  the engine-thread rule below.
+- A supplier that throws maps to `internal` at the seam, like any handler exception.
+
 ## Mutations
 
 - Mutations route through `LXCommand` via a domain primitive (CLAUDE.md layering).

@@ -25,4 +25,17 @@ final class Schemas {
   static Map<String, Object> string(String description) {
     return Map.of("type", "string", "description", description);
   }
+
+  static Map<String, Object> enumString(String description, List<String> values) {
+    return Map.of("type", "string", "description", description, "enum", values);
+  }
+
+  static Map<String, Object> integer(String description, int minimum, int maximum) {
+    return Map.of(
+        "type", "integer", "description", description, "minimum", minimum, "maximum", maximum);
+  }
+
+  static Map<String, Object> bool(String description) {
+    return Map.of("type", "boolean", "description", description);
+  }
 }

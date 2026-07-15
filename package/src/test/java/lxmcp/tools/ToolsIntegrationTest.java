@@ -64,7 +64,10 @@ class ToolsIntegrationTest {
 
   @BeforeAll
   static void setUp() {
-    lx = new LX(new GridModel(8, 8));
+    // reindexPoints: the immutable-model LX constructor does not reindex (only
+    // LXStructure.setStaticModel does), and LXPoint indices come from a JVM-global
+    // counter — required for per-point readback (get_frame) to index buffers correctly.
+    lx = new LX(new GridModel(8, 8).reindexPoints());
     channel = lx.engine.mixer.addChannel();
     channel.addPattern(new GradientPattern(lx));
 
@@ -128,6 +131,7 @@ class ToolsIntegrationTest {
             "list_available_effects", "list_available_modulators", "get_parameter",
             "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "list_modulations", "fire_trigger", "get_component_doc",
+            "get_frame",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect"),
         names);
@@ -634,6 +638,52 @@ class ToolsIntegrationTest {
         .findFirst().orElseThrow();
     assertEquals(Boolean.FALSE, knobs.get("documented"),
         "MacroKnobs has no catalog entry");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void getFrameReturnsImageAndSummary() throws java.io.IOException {
+    McpSchema.CallToolResult result = call("get_frame", Map.of("width", 128, "grid", 2));
+    Map<String, Object> payload = structured(result);
+    assertEquals("main", payload.get("bus"));
+    assertEquals("front", payload.get("view"));
+    assertEquals(64, ((Number) payload.get("points")).intValue());
+    assertNotNull(payload.get("nonBlackFraction"));
+    assertNotNull(payload.get("dominantColors"));
+    List<List<String>> grid = (List<List<String>>) payload.get("grid");
+    assertEquals(2, grid.size());
+    assertEquals(2, grid.get(0).size());
+
+    // Content: text mirror first, then the PNG as ImageContent.
+    McpSchema.ImageContent image =
+        assertInstanceOf(McpSchema.ImageContent.class, result.content().get(1));
+    assertEquals("image/png", image.mimeType());
+    byte[] png = java.util.Base64.getDecoder().decode(image.data());
+    java.awt.image.BufferedImage decoded =
+        javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png));
+    assertNotNull(decoded, "base64 decodes to a readable PNG");
+    assertEquals(128, decoded.getWidth(), "requested width honored");
+  }
+
+  @Test
+  void getFrameSummaryOnlySkipsImage() {
+    McpSchema.CallToolResult result = call("get_frame", Map.of("include_image", false));
+    Map<String, Object> payload = structured(result);
+    assertEquals(64, ((Number) payload.get("points")).intValue());
+    assertFalse(payload.containsKey("imageWidth"), "no image metadata in summary-only mode");
+    for (McpSchema.Content content : result.content()) {
+      assertFalse(content instanceof McpSchema.ImageContent, "no ImageContent when opted out");
+    }
+  }
+
+  @Test
+  void getFrameBadViewIsInvalidArgument() {
+    // The SDK rejects non-enum values via inputSchema before the handler; an empty string
+    // for a defaulted arg falls back rather than erroring, so exercise the handler check
+    // directly with a value the schema can't catch — none exists for enums, so pin the
+    // SDK-side rejection instead.
+    McpSchema.CallToolResult result = call("get_frame", Map.of("view", "diagonal"));
+    assertEquals(Boolean.TRUE, result.isError());
   }
 
   @Test
