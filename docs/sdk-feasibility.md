@@ -29,7 +29,7 @@ gate failure. Proceed to PR-1b / PR-1c.
 
 ## Embedding pattern
 
-The mutation lives in one composable primitive, [`EmbeddedMcpServer`](../../package/src/main/java/lxmcp/mcp/EmbeddedMcpServer.java),
+The mutation lives in one composable primitive, [`EmbeddedMcpServer`](../package/src/main/java/lxmcp/mcp/EmbeddedMcpServer.java),
 kept LX-agnostic so it unit-tests in-process:
 
 ```java
@@ -41,7 +41,7 @@ int port = server.port();
 Internally: build the streamable-HTTP transport (`.mcpEndpoint("/mcp")`), wrap it in
 `McpServer.sync(transport).serverInfo(...).build()`, host the servlet on embedded Tomcat
 bound to port 0, and read back `getConnector().getLocalPort()`. The plugin
-([`LxMcpPlugin`](../../package/src/main/java/lxmcp/LxMcpPlugin.java)) calls this from
+([`LxMcpPlugin`](../package/src/main/java/lxmcp/LxMcpPlugin.java)) calls this from
 `initialize(lx)` and writes the status file — nothing blocks LX startup.
 
 Client side (used by the embed test, and the shape any MCP platform uses):
@@ -62,7 +62,7 @@ client.initialize();   // -> InitializeResult; serverInfo().name() == "LX-MCP"
   headless LX. Tomcat runs its own threads; `initialize()` returns immediately.
 - **Embedding shape?** The `EmbeddedMcpServer.start(...)` primitive above; ~40 lines.
 - **Port-discovery handshake?** Confirmed: `~/.lx-mcp/status.json` with
-  `{pid, port, projectPath, lxVersion}`, written by [`StatusFile`](../../package/src/main/java/lxmcp/mcp/StatusFile.java).
+  `{pid, port, projectPath, lxVersion}`, written by [`StatusFile`](../package/src/main/java/lxmcp/mcp/StatusFile.java).
 
 ## Packaging note (carry into PR-2, not a blocker)
 

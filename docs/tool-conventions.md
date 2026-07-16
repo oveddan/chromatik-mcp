@@ -87,6 +87,6 @@ them is a cross-cutting change that touches every tool — propose it as its own
 
 ## Test shape
 
-Per `docs/spike/qa-strategy.md`: a domain-primitive unit test against headless LX plus a
+Per `docs/qa-strategy.md`: a domain-primitive unit test against headless LX plus a
 handler integration test over in-process streamable-HTTP (`lxmcp.tools.ToolsIntegrationTest`
 is the seed). Mutations additionally get do → undo → assert.

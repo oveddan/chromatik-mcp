@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -57,6 +58,8 @@ import lxmcp.mcp.EmbeddedMcpServer;
 @Timeout(60)
 class ToolsIntegrationTest {
 
+  // @AutoClose runs after the @AfterAll method, so the drainer is stopped before disposal.
+  @AutoClose("dispose")
   private static LX lx;
   private static LXChannel channel;
   private static heronarts.lx.structure.view.LXViewDefinition view;
@@ -121,9 +124,6 @@ class ToolsIntegrationTest {
     draining.set(false);
     if (drainer != null) {
       drainer.join(2_000);
-    }
-    if (lx != null) {
-      lx.dispose();
     }
   }
 

@@ -7,14 +7,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import lxmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXGroup;
-import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.LXModulator;
 
 /**
@@ -22,22 +22,7 @@ import heronarts.lx.modulator.LXModulator;
  * each failure mode (missing object, wrong kind, malformed path) must map to its typed
  * error rather than an unchecked surprise.
  */
-class ResolveTest {
-
-  private LX lx;
-
-  private LX newHeadlessLx() {
-    this.lx = new LX(new GridModel(8, 8));
-    return this.lx;
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
-  }
+class ResolveTest extends HeadlessLxTest {
 
   private static Resolve.Failure failureOf(Runnable call) {
     return assertThrows(Resolve.ResolveException.class, call::run).failure;

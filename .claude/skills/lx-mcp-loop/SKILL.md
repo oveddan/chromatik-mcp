@@ -19,7 +19,7 @@ Load the project's persistent knowledge before touching code:
   failures — verify by state-read and throw), threading.
 - [`docs/lx-coding-guidelines.md`](../../../docs/lx-coding-guidelines.md) — LX idioms from
   upstream review.
-- [`docs/spike/qa-strategy.md`](../../../docs/spike/qa-strategy.md) — the per-tool test
+- [`docs/qa-strategy.md`](../../../docs/qa-strategy.md) — the per-tool test
   template (domain-primitive unit test + handler integration test + do→undo→assert).
 - [`docs/build-plan.md`](../../../docs/build-plan.md) — the tracker (what's next) and the
   per-PR specs.

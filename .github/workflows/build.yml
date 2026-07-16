@@ -22,9 +22,8 @@ jobs:
           distribution: temurin
           cache: maven
 
-      # Compile + the full JUnit suite, headless: embed test (EmbeddedMcpServerTest),
-      # the headless LX harness gate (HeadlessLxHarnessTest), and every domain/handler
-      # test added downstream. com.heronarts:lx:1.2.1 resolves from Maven Central.
+      # Compile + the full JUnit suite, headless: embed test (EmbeddedMcpServerTest)
+      # and every domain/handler test. com.heronarts:lx:1.2.1 resolves from Maven Central.
       - name: mvn package
         run: mvn -B package
 

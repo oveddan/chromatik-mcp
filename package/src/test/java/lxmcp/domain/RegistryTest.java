@@ -7,34 +7,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import lxmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
-import heronarts.lx.model.GridModel;
 import heronarts.lx.pattern.color.GradientPattern;
 
-class RegistryTest {
+class RegistryTest extends HeadlessLxTest {
 
   /** The expectation the production filter implements: registered minus @Hidden. */
   private static long visibleCount(List<? extends Class<? extends LXComponent>> classes) {
     return classes.stream().filter(c -> !c.isAnnotationPresent(LXComponent.Hidden.class)).count();
-  }
-
-  private LX lx;
-
-  private LX newHeadlessLx() {
-    this.lx = new LX(new GridModel(8, 8));
-    return this.lx;
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
   }
 
   @Test

@@ -7,7 +7,7 @@ See [../docs/build-plan.md](../docs/build-plan.md) for the roadmap and [../CLAUD
 **Status**: PR-1a (SDK feasibility) — **GO**. `LxMcpPlugin` starts an embedded streamable-HTTP
 MCP server (official Java MCP SDK on embedded Tomcat) from `initialize()` and writes
 `~/.lx-mcp/status.json` for client discovery. No domain tools yet. See
-[../docs/spike/sdk-feasibility.md](../docs/spike/sdk-feasibility.md).
+[../docs/sdk-feasibility.md](../docs/sdk-feasibility.md).
 
 ## Build & verify
 

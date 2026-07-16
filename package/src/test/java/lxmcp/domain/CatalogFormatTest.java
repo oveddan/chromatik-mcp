@@ -12,8 +12,7 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -32,19 +31,8 @@ class CatalogFormatTest {
 
   private static final Set<String> VALID_KINDS = Set.of("pattern", "effect", "modulator");
 
-  private static LX lx;
-
-  @BeforeAll
-  static void setUp() {
-    lx = new LX(new GridModel(8, 8));
-  }
-
-  @AfterAll
-  static void tearDown() {
-    if (lx != null) {
-      lx.dispose();
-    }
-  }
+  @AutoClose("dispose")
+  private static final LX lx = new LX(new GridModel(8, 8));
 
   static Stream<Path> catalogFiles() throws IOException {
     URL url = CatalogFormatTest.class.getClassLoader().getResource("catalog");

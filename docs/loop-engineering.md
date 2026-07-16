@@ -40,7 +40,7 @@ One PR per iteration, run by `/loop` or by hand. The pipeline:
    rather than discovered later by a confused agent.
 6. **Review (recommended).** Spawn a **fresh-context** review agent on the diff vs. the
    branch base, briefed with the PR's spec, the `CLAUDE.md` layering rules, and
-   [`spike/qa-strategy.md`](spike/qa-strategy.md). Fix real findings; re-run the gate.
+   [`qa-strategy.md`](qa-strategy.md). Fix real findings; re-run the gate.
    This is deliberately **ad hoc** for now — judgment call per PR, not a mandated spec
    (formalizing it is a [future exploration](#future-explorations)).
 7. **Open PR.** Squash to one commit, push, `gh pr create` with base = the stack parent.
@@ -68,8 +68,8 @@ These are what make "done" a fact, not an opinion. Never weaken them to make a l
 | Gate | Proves | Where |
 | --- | --- | --- |
 | `mvn package` | compiles + full JUnit suite green | `package/` |
-| `HeadlessLxHarnessTest` | LX runs headless; an `LXCommand` round-trips through undo | `package/src/test/java/lxmcp/qa/` |
-| do → undo → assert | the mutation used a *real* `LXCommand` (undo restores state) | per-tool tests, [`spike/qa-strategy.md`](spike/qa-strategy.md) |
+| domain-primitive suite | LX runs headless; each mutation test round-trips its `LXCommand` through undo | `package/src/test/java/lxmcp/domain/` |
+| do → undo → assert | the mutation used a *real* `LXCommand` (undo restores state) | per-tool tests, [`qa-strategy.md`](qa-strategy.md) |
 | `EmbeddedMcpServerTest` / `ToolsIntegrationTest` | tools answer over in-process streamable-HTTP | `package/src/test/java/lxmcp/` |
 | `verify-load.sh` | the shaded jar loads inside real LX from a deployment-faithful classpath | `package/scripts/` |
 

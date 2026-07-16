@@ -2,7 +2,7 @@
 
 Canonical deliverable. Maps every planned v1 MCP tool to a concrete `LXCommand` action and the domain primitive that wraps it. Citations are `LXCommand.java:<line>` against the LX source at `/Users/danoved/Source/LX/`.
 
-Upstream artifacts: `docs/spike/pr-1b/01-research-notes.md` (enumeration + citations), `docs/spike/pr-1b/02-analysis.md` (decisions).
+Upstream artifacts (raw LXCommand enumeration + decisions) were spike-pipeline outputs, since removed; they remain in git history under `docs/spike/pr-1b/`.
 
 ## TL;DR
 

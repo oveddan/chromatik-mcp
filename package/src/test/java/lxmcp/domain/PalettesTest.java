@@ -5,30 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import lxmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXPath;
 import heronarts.lx.color.LXSwatch;
-import heronarts.lx.model.GridModel;
 
-class PalettesTest {
-
-  private LX lx;
-
-  private LX newHeadlessLx() {
-    this.lx = new LX(new GridModel(8, 8));
-    return this.lx;
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
-  }
+class PalettesTest extends HeadlessLxTest {
 
   @Test
   void activeSwatchSnapshotMatchesLiveStateAndPathsRoundTrip() {

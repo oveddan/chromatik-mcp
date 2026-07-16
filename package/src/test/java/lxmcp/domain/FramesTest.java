@@ -6,32 +6,24 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import lxmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
+import heronarts.lx.model.LXModel;
 import heronarts.lx.pattern.color.SolidPattern;
 
-class FramesTest {
+class FramesTest extends HeadlessLxTest {
 
-  private LX lx;
-
-  private LX newHeadlessLx() {
+  @Override
+  protected LXModel newModel() {
     // reindexPoints: LXPoint indices come from a JVM-global counter, and the immutable-
     // model LX constructor does not reindex (only LXStructure.setStaticModel does) — so a
     // second LX in the same JVM gets points indexed 64.., breaking per-point readback.
-    this.lx = new LX(new GridModel(8, 8).reindexPoints());
-    return this.lx;
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
+    return new GridModel(8, 8).reindexPoints();
   }
 
   private static LXChannel redChannel(LX lx) {

@@ -13,43 +13,21 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import lxmcp.HeadlessLxTest;
+
 import heronarts.lx.LX;
 import heronarts.lx.command.LXCommand;
-import heronarts.lx.model.GridModel;
-import heronarts.lx.model.LXModel;
 
 /**
  * The PR-2 engine-thread serialization gate. {@link EngineExecutor} marshals work onto
  * the LX engine thread; this proves the queue serializes FIFO, surfaces results and
  * failures, and that real {@code LXCommand} mutations apply through it. Mirrors the
- * concurrency test shape seeded in {@code docs/spike/qa-strategy.md}.
- *
- * <p>Each test disposes its {@link LX} in {@link #tearDown()}. {@code new LX(...)} starts a
- * non-daemon MIDI device-update thread that, on macOS, contends on a static CoreMIDI lock;
- * without disposal these accumulate across tests and deadlock construction. Disposing keeps
- * at most one alive at a time.
+ * concurrency test shape seeded in {@code docs/qa-strategy.md}.
  */
-class EngineExecutorTest {
-
-  private LX lx;
-
-  private LX newHeadlessLx() {
-    LXModel model = new GridModel(8, 8);
-    this.lx = new LX(model);
-    return this.lx;
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
-  }
+class EngineExecutorTest extends HeadlessLxTest {
 
   @Test
   void submitDrainsInFifoOrderOnEngineThread() {

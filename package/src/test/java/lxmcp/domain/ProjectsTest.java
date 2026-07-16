@@ -4,29 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import lxmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXPath;
-import heronarts.lx.model.GridModel;
 
-class ProjectsTest {
-
-  private LX lx;
-
-  private LX newHeadlessLx() {
-    this.lx = new LX(new GridModel(8, 8));
-    return this.lx;
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
-  }
+class ProjectsTest extends HeadlessLxTest {
 
   @Test
   void reportsVersionPathAndChannelCount() {

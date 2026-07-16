@@ -10,7 +10,7 @@ This is backed by executable proof, mirroring how PR-1a left `EmbeddedMcpServerT
 
 | Gate | Proves | Where |
 | --- | --- | --- |
-| `HeadlessLxHarnessTest` | LX constructs + ticks with no GUI/GL context and no engine thread; an `LXCommand` round-trips through undo | `package/src/test/java/lxmcp/qa/HeadlessLxHarnessTest.java` |
+| domain-primitive suite | LX constructs + ticks with no GUI/GL context and no engine thread; each mutation test round-trips its `LXCommand` through undo (originally proved by a dedicated `HeadlessLxHarnessTest`, since retired) | `package/src/test/java/lxmcp/domain/` |
 | `EmbeddedMcpServerTest` (PR-1a) | the embedded HTTP MCP server is in-process testable | `package/src/test/java/lxmcp/mcp/EmbeddedMcpServerTest.java` |
 | `verify-load.sh` (PR-0) | the shaded jar loads inside real LX and `initialize()` runs | `package/scripts/verify-load.sh` |
 
@@ -40,13 +40,13 @@ LX lx = new LX(model);                 // no GUI, no GL, no preferences load
 lx.engine.run();                       // advance exactly one frame, on this thread
 ```
 
-`new LX(model)` performs no graphics initialization (`LX.java:435-521`). Because the engine thread is never started, the test owns timing: call `run()` once per frame you need. This is the seed `HeadlessLxHarnessTest` exercises and every downstream tool test builds on.
+`new LX(model)` performs no graphics initialization (`LX.java:435-521`). Because the engine thread is never started, the test owns timing: call `run()` once per frame you need. This is the seed every tool test builds on (shared as the `lxmcp.HeadlessLxTest` fixture).
 
-> If a future change makes LX require a display/GL context, `HeadlessLxHarnessTest` fails at construction. That is an **architecture-level escalation** (re-plan before continuing), not something a tool test should work around.
+> If a future change makes LX require a display/GL context, every domain test fails at construction. That is an **architecture-level escalation** (re-plan before continuing), not something a tool test should work around.
 
 ## Per-tool test shape (the template PR-2+ fills in)
 
-Each tool ships two tests. The split mirrors the [layering rule in `CLAUDE.md`](../../CLAUDE.md) — primitives are tested directly, handlers are tested through the MCP seam.
+Each tool ships two tests. The split mirrors the [layering rule in `CLAUDE.md`](../CLAUDE.md) — primitives are tested directly, handlers are tested through the MCP seam.
 
 **1. Domain-primitive unit test** — the mutation logic, no MCP.
 

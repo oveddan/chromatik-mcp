@@ -7,37 +7,22 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+import lxmcp.HeadlessLxTest;
+
 import heronarts.lx.LX;
 import heronarts.lx.mixer.LXChannel;
-import heronarts.lx.model.GridModel;
 import heronarts.lx.modulation.LXCompoundModulation;
 import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.modulator.MacroTriggers;
 import heronarts.lx.pattern.color.GradientPattern;
 import heronarts.lx.structure.view.LXViewDefinition;
 
-class ParametersTest {
-
-  private LX lx;
-
-  private LX newHeadlessLx() {
-    this.lx = new LX(new GridModel(8, 8));
-    return this.lx;
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
-  }
+class ParametersTest extends HeadlessLxTest {
 
   @Test
   void resolvesBoundedParameterByCanonicalPath() {

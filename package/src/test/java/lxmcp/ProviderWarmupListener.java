@@ -20,8 +20,6 @@ import org.junit.platform.launcher.LauncherSessionListener;
  */
 public class ProviderWarmupListener implements LauncherSessionListener {
 
-  static volatile boolean ran = false;
-
   @Override
   public void launcherSessionOpened(LauncherSession session) {
     try {
@@ -30,8 +28,6 @@ public class ProviderWarmupListener implements LauncherSessionListener {
     } catch (Throwable t) {
       // A soundless/headless machine may throw here (no mixers/devices) — that's fine,
       // the classloading side effect we care about has already happened either way.
-    } finally {
-      ran = true;
     }
   }
 }

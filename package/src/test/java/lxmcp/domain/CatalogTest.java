@@ -12,7 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.Test;
 
 import heronarts.lx.LX;
@@ -25,20 +25,14 @@ import heronarts.lx.pattern.color.GradientPattern;
 
 class CatalogTest {
 
-  private static LX lx;
+  @AutoClose("dispose")
+  private static final LX lx = new LX(new GridModel(8, 8));
+
   private static final Path DEFAULT_OVERLAY =
       Path.of(System.getProperty("user.home"), ".lx-mcp", "catalog");
 
-  @BeforeAll
-  static void setUp() {
-    lx = new LX(new GridModel(8, 8));
-  }
-
   @AfterAll
   static void tearDown() {
-    if (lx != null) {
-      lx.dispose();
-    }
     // Always restore default overlay dir in case a test leaves it pointing elsewhere
     Catalog.setOverlayDir(DEFAULT_OVERLAY);
   }

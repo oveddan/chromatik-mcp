@@ -19,9 +19,9 @@ A **PR-0 scaffold step** lands first to give the spike PRs a buildable Java proj
 Sessions update this as work lands. Mark `[x]` when a PR is merged to `main`; leave a one-line note (branch / PR link / blocker) after the dash. Keep it honest — `[~]` means in-progress, `[ ]` not started.
 
 - [x] **PR-0** — Java/Maven scaffold — merged via [#1](https://github.com/oveddan/lx-mcp/pull/1); scaffold builds, headless load gate passes
-- [x] **PR-1a** — Java MCP SDK feasibility (go/no-go gate) — merged via [#3](https://github.com/oveddan/lx-mcp/pull/3); **GO**. `io.modelcontextprotocol.sdk:mcp:2.0.0-RC1` on embedded Tomcat; in-process `initialize` embed test + headless load gate both green. See `docs/spike/sdk-feasibility.md`.
-- [x] **PR-1b** — LXCommand inventory + tool mapping — merged via [#5](https://github.com/oveddan/lx-mcp/pull/5); deliverable `docs/spike/lxcommand-mapping.md` (every v1 tool maps 1:1 to an LXCommand; no `compose_scene`; engine-thread concurrency flagged as top risk).
-- [x] **PR-1c** — Automated QA strategy — merged via [#6](https://github.com/oveddan/lx-mcp/pull/6); deliverable `docs/spike/qa-strategy.md` (LX confirmed headless-testable; do→undo→assert as built-in correctness check; engine-thread concurrency test shape). Adds `HeadlessLxHarnessTest` (executable gate) + `.github/workflows/build.yml` (CI).
+- [x] **PR-1a** — Java MCP SDK feasibility (go/no-go gate) — merged via [#3](https://github.com/oveddan/lx-mcp/pull/3); **GO**. `io.modelcontextprotocol.sdk:mcp:2.0.0-RC1` on embedded Tomcat; in-process `initialize` embed test + headless load gate both green. See `docs/sdk-feasibility.md`.
+- [x] **PR-1b** — LXCommand inventory + tool mapping — merged via [#5](https://github.com/oveddan/lx-mcp/pull/5); deliverable `docs/lxcommand-mapping.md` (every v1 tool maps 1:1 to an LXCommand; no `compose_scene`; engine-thread concurrency flagged as top risk).
+- [x] **PR-1c** — Automated QA strategy — merged via [#6](https://github.com/oveddan/lx-mcp/pull/6); deliverable `docs/qa-strategy.md` (LX confirmed headless-testable; do→undo→assert as built-in correctness check; engine-thread concurrency test shape). Added `HeadlessLxHarnessTest` (executable gate; since retired — the domain suite exercises the same ground) + `.github/workflows/build.yml` (CI).
 - [x] *Spike-phase gate*: all three deliverables exist + all Review agents PASS + embed test runs
 - [x] **PR-2** — Embed HTTP MCP server + status file — merged via [#7](https://github.com/oveddan/lx-mcp/pull/7); `tools/list` works, `lxmcp.engine.EngineExecutor` (engine-thread serialization, the #1-risk mechanism) + concurrency regression test landed. Jar slimming deferred — see follow-up below.
 - [x] **PR-3** — Read-only discovery tools + wire-shape decisions — merged via [#9](https://github.com/oveddan/lx-mcp/pull/9); conventions recorded in `docs/tool-conventions.md`
@@ -86,7 +86,7 @@ Open questions:
 - What's the embedding pattern — the rough shape of starting the MCP server from `LXPlugin.initialize(lx)`?
 - Port discovery: confirm `~/.lx-mcp/status.json` with `{pid, port, projectPath, lxVersion}` is the right handshake.
 
-Output: `docs/spike/sdk-feasibility.md` + a runnable embed test that accepts an MCP `initialize` request.
+Output: `docs/sdk-feasibility.md` + a runnable embed test that accepts an MCP `initialize` request.
 
 ### PR-1b — LXCommand inventory + tool mapping
 
@@ -98,7 +98,7 @@ Open questions:
 - Tool granularity: do fine-grained primitives compose well for multi-agent fan-out, or do we also need a higher-level `compose_scene` tool?
 - **Phase-2 capability skim** (light, not blocking): does LX expose pattern/effect source or class metadata so a future agent could reason about pattern algorithms? Just enumerate — the tool itself waits.
 
-Output: `docs/spike/lxcommand-mapping.md` with the mapping table front and center.
+Output: `docs/lxcommand-mapping.md` with the mapping table front and center.
 
 ### PR-1c — Automated QA strategy
 
@@ -113,13 +113,13 @@ Open questions:
 - What runs in CI (headless) vs. local-only (live LX)?
 - Multi-agent workflow tests: out of scope for v1, flagged for manual/recorded verification in PR-7.
 
-Output: `docs/spike/qa-strategy.md` — concrete patterns + a verification template that PR-2 onwards fills in per-tool.
+Output: `docs/qa-strategy.md` — concrete patterns + a verification template that PR-2 onwards fills in per-tool.
 
-**Testability assumption + escalation rule**: the default expectation is that LX is testable from JUnit (it's a normal Java library); PR-1c's job is to confirm this and document the patterns. If PR-1c finds a real blocker — LX requires a display/GL context with no headless mode, the Java MCP SDK can't be tested in-process, etc. — that is an **architecture-level escalation**, not something the QA-strategy agent should quietly work around. The Writing Agent surfaces the blocker in `docs/spike/qa-strategy.md`'s TL;DR, and the Review Agent flags it as FAIL with the blocker description. We then re-plan before PR-2.
+**Testability assumption + escalation rule**: the default expectation is that LX is testable from JUnit (it's a normal Java library); PR-1c's job is to confirm this and document the patterns. If PR-1c finds a real blocker — LX requires a display/GL context with no headless mode, the Java MCP SDK can't be tested in-process, etc. — that is an **architecture-level escalation**, not something the QA-strategy agent should quietly work around. The Writing Agent surfaces the blocker in `docs/qa-strategy.md`'s TL;DR, and the Review Agent flags it as FAIL with the blocker description. We then re-plan before PR-2.
 
 ## Per-PR execution: 4-agent pipeline
 
-Each spike PR runs the same pipeline. Sequential. Each agent writes one file under `docs/spike/<pr-id>/`; the next agent reads it. No other handoff state.
+Each spike PR runs the same pipeline. Sequential. Each agent writes one file under `docs/spike/<pr-id>/`; the next agent reads it. No other handoff state. (Those pipeline artifacts were removed after the spike phase completed; the three canonical deliverables were promoted to `docs/`.)
 
 **1. Research Agent** (read-only; Explore-type)
 - *Reads*: the source files and external docs declared per PR (LXCommand.java for 1b, MCP Java SDK docs for 1a, LX/src/test/ for 1c, etc.).
@@ -161,7 +161,7 @@ PR-0 lands first — it's the minimum buildable Java project. PR-1a depends on P
 ## Spike-phase verification
 
 - PR-0's `mvn package` builds; LX-MCP appears in Chromatik's installed packages.
-- All three spike deliverable files exist (`docs/spike/sdk-feasibility.md`, `lxcommand-mapping.md`, `qa-strategy.md`).
+- All three spike deliverable files exist (`docs/sdk-feasibility.md`, `lxcommand-mapping.md`, `qa-strategy.md`).
 - All three Review agents returned PASS.
 - The runnable embed test from PR-1a starts and accepts an MCP `initialize` request.
 
@@ -183,7 +183,7 @@ Planned in detail now that the spike findings are in. Each PR stays independentl
 - **PR-4** — First mutation (`add_macro_knob`) via `LXCommand`. Also nails the `Result.error` mapping pattern at the tool seam — the first mutation is the first real error surface.
   - Verification: do→undo→assert in JUnit; live demo: knob appears in Chromatik, Cmd-Z undoes.
 
-- **PR-5 fan-out** — the rest of the v1 tool surface, pre-sliced so parallel sessions don't collide (one tracker line each). Each slice follows the per-tool template in `docs/spike/qa-strategy.md`: domain primitives + handlers + do→undo→assert tests.
+- **PR-5 fan-out** — the rest of the v1 tool surface, pre-sliced so parallel sessions don't collide (one tracker line each). Each slice follows the per-tool template in `docs/qa-strategy.md`: domain primitives + handlers + do→undo→assert tests.
   - **PR-5a** — `set_parameter`. First: it reuses the PR-3b resolver, has the highest leverage, and exercises the polymorphic `SetValue`/`SetNormalized`/`SetString`/`SetColor` dispatch.
   - **PR-5b** — channels + patterns + effects (`add_channel`, `remove_channel`, `add_pattern`, `remove_pattern`, `add_effect`, `remove_effect`).
   - **PR-5c** — modulators + routing (`add_modulator`, `wire_modulator` continuous + trigger, `remove_modulation` both kinds).

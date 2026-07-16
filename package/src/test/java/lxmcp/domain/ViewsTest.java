@@ -8,8 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import lxmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.mixer.LXChannel;
@@ -19,11 +20,11 @@ import heronarts.lx.model.LXView;
 import heronarts.lx.pattern.color.SolidPattern;
 import heronarts.lx.structure.view.LXViewDefinition;
 
-class ViewsTest {
+class ViewsTest extends HeadlessLxTest {
 
-  private LX lx;
-
-  private LX newTaggedLx() {
+  // Two "cube"-tagged submodels so view selectors have something to match.
+  @Override
+  protected LXModel newModel() {
     List<LXPoint> cube1Points = List.of(new LXPoint(0, 0, 0), new LXPoint(1, 0, 0));
     List<LXPoint> cube2Points = List.of(new LXPoint(0, 1, 0), new LXPoint(1, 1, 0));
     LXModel cube1 = new LXModel(cube1Points, "cube");
@@ -31,22 +32,12 @@ class ViewsTest {
     List<LXPoint> allPoints = new ArrayList<>();
     allPoints.addAll(cube1Points);
     allPoints.addAll(cube2Points);
-    LXModel root = new LXModel(allPoints, new LXModel[] { cube1, cube2 });
-    this.lx = new LX(root);
-    return this.lx;
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
+    return new LXModel(allPoints, new LXModel[] { cube1, cube2 });
   }
 
   @Test
   void describesViewsWithSelectorRoundTripAndLiveMatchFeedback() {
-    LX lx = newTaggedLx();
+    LX lx = newHeadlessLx();
     LXViewDefinition view = lx.structure.views.addView();
     view.label.setValue("Cubes");
     view.selector.setValue("cube");
@@ -64,7 +55,7 @@ class ViewsTest {
 
   @Test
   void collectsDistinctModelTagsRecursively() {
-    LX lx = newTaggedLx();
+    LX lx = newHeadlessLx();
 
     Views.ViewsSnapshot snapshot = Views.describe(lx);
     List<String> tags = snapshot.modelTags().stream().map(Views.TagInfo::tag).toList();
@@ -76,7 +67,7 @@ class ViewsTest {
 
   @Test
   void assignmentsListDevicesReferencingAView() {
-    LX lx = newTaggedLx();
+    LX lx = newHeadlessLx();
     LXViewDefinition view = lx.structure.views.addView();
     view.selector.setValue("cube");
 
@@ -94,7 +85,7 @@ class ViewsTest {
 
   @Test
   void channelViewAssignmentIsListed() {
-    LX lx = newTaggedLx();
+    LX lx = newHeadlessLx();
     LXViewDefinition view = lx.structure.views.addView();
     view.selector.setValue("cube");
 
@@ -110,7 +101,7 @@ class ViewsTest {
 
   @Test
   void addViewComposesAndReportsLiveMatchFeedback() {
-    LX lx = newTaggedLx();
+    LX lx = newHeadlessLx();
 
     Views.ViewInfo info = Views.addView(
         lx, "Cubes", "cube", LXView.Normalization.ABSOLUTE, LXView.Orientation.GROUP);
@@ -127,7 +118,7 @@ class ViewsTest {
 
   @Test
   void addViewWithANonMatchingSelectorReportsZeroFixtures() {
-    LX lx = newTaggedLx();
+    LX lx = newHeadlessLx();
 
     Views.ViewInfo info = Views.addView(
         lx, "Nope", "no-such-tag", LXView.Normalization.RELATIVE, LXView.Orientation.GLOBAL);
@@ -138,7 +129,7 @@ class ViewsTest {
 
   @Test
   void removeViewRemovesItFromTheEngine() {
-    LX lx = newTaggedLx();
+    LX lx = newHeadlessLx();
     LXViewDefinition view = lx.structure.views.addView();
     view.selector.setValue("cube");
 
@@ -149,7 +140,7 @@ class ViewsTest {
 
   @Test
   void removeViewReassignsADeviceSelectorToWhateverNowOccupiesTheOldIndex() {
-    LX lx = newTaggedLx();
+    LX lx = newHeadlessLx();
     LXViewDefinition first = lx.structure.views.addView();
     first.label.setValue("First");
     LXViewDefinition second = lx.structure.views.addView();
@@ -178,7 +169,7 @@ class ViewsTest {
 
   @Test
   void devicesOnDefaultAreOmittedFromAssignments() {
-    LX lx = newTaggedLx();
+    LX lx = newHeadlessLx();
     lx.structure.views.addView();
     LXChannel channel = lx.engine.mixer.addChannel();
     channel.addPattern(new SolidPattern(lx));

@@ -6,8 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import lxmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
@@ -16,7 +17,6 @@ import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.effect.LXEffect;
 import heronarts.lx.mixer.LXAbstractChannel;
 import heronarts.lx.mixer.LXChannel;
-import heronarts.lx.model.GridModel;
 import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.pattern.color.GradientPattern;
 import heronarts.lx.pattern.color.SolidPattern;
@@ -26,22 +26,7 @@ import heronarts.lx.pattern.color.SolidPattern;
  * do → undo → assert-restored template; undo success proves the primitive went through
  * a real LXCommand.
  */
-class ChannelMutationsTest {
-
-  private LX lx;
-
-  private LX newHeadlessLx() {
-    this.lx = new LX(new GridModel(8, 8));
-    return this.lx;
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
-  }
+class ChannelMutationsTest extends HeadlessLxTest {
 
   // ── add/remove channel ───────────────────────────────────────────────────────
 

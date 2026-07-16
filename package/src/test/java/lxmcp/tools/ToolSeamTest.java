@@ -14,10 +14,10 @@ import org.junit.jupiter.api.Timeout;
 
 import heronarts.lx.LX;
 import heronarts.lx.mixer.LXChannel;
-import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.pattern.color.GradientPattern;
 
+import lxmcp.HeadlessLxTest;
 import lxmcp.domain.Modulators;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
@@ -32,7 +32,7 @@ import lxmcp.engine.EngineExecutor;
  * registered callHandler directly (the exchange argument is unused by the seam).
  */
 @Timeout(60)
-class ToolSeamTest {
+class ToolSeamTest extends HeadlessLxTest {
 
   private LX lx;
   private final AtomicBoolean draining = new AtomicBoolean(true);
@@ -40,7 +40,7 @@ class ToolSeamTest {
 
   @BeforeEach
   void setUp() {
-    this.lx = new LX(new GridModel(8, 8));
+    this.lx = newHeadlessLx();
     this.drainer = new Thread(() -> {
       while (this.draining.get()) {
         this.lx.engine.run();
@@ -55,14 +55,13 @@ class ToolSeamTest {
     this.drainer.start();
   }
 
+  // Runs before the inherited disposeLx(): the drainer must stop touching the engine
+  // before the base fixture disposes the LX.
   @AfterEach
-  void tearDown() throws InterruptedException {
+  void stopDrainer() throws InterruptedException {
     this.draining.set(false);
     if (this.drainer != null) {
       this.drainer.join(2_000);
-    }
-    if (this.lx != null) {
-      this.lx.dispose();
     }
   }
 

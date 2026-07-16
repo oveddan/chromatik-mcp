@@ -8,13 +8,13 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+
+import lxmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
 import heronarts.lx.mixer.LXChannel;
-import heronarts.lx.model.GridModel;
 import heronarts.lx.modulation.LXCompoundModulation;
 import heronarts.lx.modulation.LXTriggerModulation;
 import heronarts.lx.modulator.LXModulator;
@@ -31,28 +31,13 @@ import heronarts.lx.pattern.LXPattern;
  * do → undo → assert restored. The undo assertion doubles as proof each primitive routes
  * through a real LXCommand rather than a direct edit.
  */
-class ModulatorsTest {
-
-  private LX lx;
-
-  private LX newHeadlessLx() {
-    this.lx = new LX(new GridModel(8, 8));
-    return this.lx;
-  }
+class ModulatorsTest extends HeadlessLxTest {
 
   private LXPattern newDevice(LX lx) {
     LXChannel channel = lx.engine.mixer.addChannel();
     GradientPattern pattern = new GradientPattern(lx);
     channel.addPattern(pattern);
     return pattern;
-  }
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
   }
 
   @Test

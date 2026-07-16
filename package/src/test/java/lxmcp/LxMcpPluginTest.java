@@ -3,31 +3,19 @@ package lxmcp;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import heronarts.lx.LX;
 import heronarts.lx.model.GridModel;
-import heronarts.lx.model.LXModel;
 
 /**
  * Covers {@link LxMcpPlugin#autoEnableUiPlugin} against a real {@code LXRegistry.Plugin}
  * list — the "LX-MCP UI" companion should get flipped on whenever "LX-MCP" is, so users
  * only ever interact with one checkbox.
  */
-class LxMcpPluginTest {
+class LxMcpPluginTest extends HeadlessLxTest {
 
   private static final String UI_PLUGIN_CLASS_NAME = "lxmcp.ui.LxMcpUiPlugin";
-
-  private LX lx;
-
-  @AfterEach
-  void tearDown() {
-    if (this.lx != null) {
-      this.lx.dispose();
-      this.lx = null;
-    }
-  }
 
   @Test
   void enablesDisabledUiPluginEntry() {
@@ -36,27 +24,25 @@ class LxMcpPluginTest {
     // the auto-enable logic.
     LX.Flags flags = new LX.Flags();
     flags.classpathPlugins.add(UI_PLUGIN_CLASS_NAME);
-    LXModel model = new GridModel(8, 8);
-    this.lx = new LX(flags, model);
+    LX lx = track(new LX(flags, new GridModel(8, 8)));
 
-    heronarts.lx.LXRegistry.Plugin uiPlugin = findUiPlugin(this.lx);
+    heronarts.lx.LXRegistry.Plugin uiPlugin = findUiPlugin(lx);
     uiPlugin.setEnabled(false);
     assertTrue(!uiPlugin.isEnabled(), "test fixture must start disabled");
 
-    LxMcpPlugin.autoEnableUiPlugin(this.lx.registry.plugins);
+    LxMcpPlugin.autoEnableUiPlugin(lx.registry.plugins);
 
     assertTrue(uiPlugin.isEnabled(), "auto-enable should flip the UI companion plugin on");
   }
 
   @Test
   void noOpWhenUiPluginEntryIsAbsent() {
-    LXModel model = new GridModel(8, 8);
-    this.lx = new LX(model);
+    LX lx = newHeadlessLx();
 
-    assertEquals(0, this.lx.registry.plugins.size(), "headless fixture should have no registered plugins");
+    assertEquals(0, lx.registry.plugins.size(), "headless fixture should have no registered plugins");
 
     // Must not throw when the UI class was never scanned into the registry (headless).
-    LxMcpPlugin.autoEnableUiPlugin(this.lx.registry.plugins);
+    LxMcpPlugin.autoEnableUiPlugin(lx.registry.plugins);
   }
 
   private static heronarts.lx.LXRegistry.Plugin findUiPlugin(LX lx) {

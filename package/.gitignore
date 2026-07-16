@@ -16,5 +16,8 @@ target/
 # JVM crashes
 hs_err_pid*
 
+# Written by LX when verify-load.sh runs
+.lxpreferences
+
 # Logs
 *.log
