@@ -85,6 +85,15 @@ If three tools each need to "find the channel by id, then walk to a parameter, t
 - LX idioms: follow [docs/lx-coding-guidelines.md](docs/lx-coding-guidelines.md) — model variants with `enum`s (not maps/magic constants), share an `interface` across implementations, use framework helpers (`setColors`, `EnumParameter` labels) instead of reinventing them, don't allocate in render loops, and keep diffs minimal. Distilled from upstream review feedback so we don't relearn it per PR.
 - Tool surface: follow [docs/tool-conventions.md](docs/tool-conventions.md) — naming, canonical-path addressing, `Result` wire shape, engine-thread rule. Decided once in PR-3; don't re-decide per tool.
 
+## Driving a live instance
+
+When an AI session connects to a running Chromatik (port from `~/.lx-mcp/status.json`, the one by-design filesystem touchpoint) to test or perform:
+
+- **Never answer live-state questions from cached responses.** Re-query the API; a saved response file is only for parsing one large payload, not a source of truth minutes later.
+- **On connection failure, assume Chromatik restarted**: re-read `~/.lx-mcp/status.json`, re-initialize the MCP session, and re-list before reusing any held canonical paths (indices shift, state resets — e.g. `output/enabled` comes back off).
+- **Consult `get_component_doc` before reasoning about a pattern/effect's behavior** — catalog entries exist for most stock LX effects/patterns and cover exactly the semantics (color modes, parameter interactions) that otherwise get guessed wrong.
+- **Reading LX source to answer a live question is a server-gap signal.** An end consumer can't do it. Work around it once, then file the gap (tool payload, description, or catalog entry) as a build-plan follow-up instead of leaving the knowledge in the session.
+
 ## References
 
 - LX source: `/Users/danoved/Source/LX/` (LXCommand categories, LXPlugin interface, modulator base classes, project serialization, OSC engine).

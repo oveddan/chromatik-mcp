@@ -32,8 +32,12 @@ Load the project's persistent knowledge before touching code:
    to exactly **one squashed commit** on its base.
 3. **Implement.** Tool handler → domain primitive → `LXCommand`/engine. Stay inside the
    PR's build-plan slice.
-4. **Gate.** `cd package && mvn package` — must be green (compiles + full JUnit suite +
-   headless harness). This is the objective bar; do not weaken it to pass.
+4. **Gate.** `package/scripts/build-gate.sh` (compact output; falls back to
+   `cd package && mvn package` on branches that predate it) — must be green (compiles +
+   full JUnit suite + headless harness). This is the objective bar; do not weaken it to
+   pass. While iterating, run just the affected test class
+   (`mvn test -Dtest=ClassName -q`, output to a file) and save the full suite for this
+   gate — the full build is only ~10s, but its log is the expensive part in agent context.
 5. **Catalog freshness.** Run the [`lx-mcp-catalog`](../lx-mcp-catalog/SKILL.md)
    incremental pass. It is hash-keyed, so on an unchanged codebase it no-ops in seconds —
    run it **every iteration**, not just when you think something changed. Regenerated
