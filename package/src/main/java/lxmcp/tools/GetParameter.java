@@ -18,7 +18,9 @@ public final class GetParameter implements LxTool {
   @Override
   public String description() {
     return "Read one parameter by its canonical LX path (e.g. /lx/mixer/channel/1/fader): "
-        + "value, type, range, options, and units.";
+        + "value, type, range, options, and units. For a parameter with live modulations, "
+        + "value is the current effective (modulated) reading, baseValue is the knob's set "
+        + "position, and modulated=true; set_parameter changes the base.";
   }
 
   @Override
@@ -67,6 +69,13 @@ public final class GetParameter implements LxTool {
     }
     if (info.oscAddress() != null) {
       payload.put("oscAddress", info.oscAddress());
+    }
+    if (info.modulated()) {
+      payload.put("modulated", true);
+      payload.put("baseValue", info.baseValue());
+      if (info.baseNormalized() != null) {
+        payload.put("baseNormalized", info.baseNormalized());
+      }
     }
     return Result.ok(payload);
   }

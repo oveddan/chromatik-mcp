@@ -21,7 +21,8 @@ public final class ListParameters implements LxTool {
     return "List every parameter on the component at a canonical LX path (channel, pattern, "
         + "effect, modulator, or engine component like the output engine) — names, types, "
         + "ranges, current values, and each parameter's own canonical path for "
-        + "get_parameter/set_parameter. Use this instead of guessing parameter names.";
+        + "get_parameter/set_parameter. Use this instead of guessing parameter names. Parameters "
+        + "with live modulations additionally carry baseValue and modulated=true (value is the effective reading).";
   }
 
   @Override
@@ -77,6 +78,13 @@ public final class ListParameters implements LxTool {
       }
       if (p.oscAddress() != null) {
         entry.put("oscAddress", p.oscAddress());
+      }
+      if (p.modulated()) {
+        entry.put("modulated", true);
+        entry.put("baseValue", p.baseValue());
+        if (p.baseNormalized() != null) {
+          entry.put("baseNormalized", p.baseNormalized());
+        }
       }
       parameters.add(entry);
     }

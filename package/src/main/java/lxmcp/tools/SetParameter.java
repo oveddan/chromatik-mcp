@@ -22,7 +22,8 @@ public final class SetParameter implements LxTool {
         + "in-range integer for discrete/enum, a boolean for toggles, a string for text. "
         + "Aggregate parameters (color, MIDI filter) are set via their component paths "
         + "(e.g. .../hue, .../saturation, .../brightness); momentary triggers fire via "
-        + "fire_trigger. Undoable in Chromatik with Cmd-Z.";
+        + "fire_trigger. Undoable in Chromatik with Cmd-Z. On a parameter with live modulations "
+        + "the response's value is the effective (modulated) reading — baseValue echoes the value you set.";
   }
 
   @Override
@@ -60,6 +61,15 @@ public final class SetParameter implements LxTool {
     }
     if (info.oscAddress() != null) {
       payload.put("oscAddress", info.oscAddress());
+    }
+    if (info.modulated()) {
+      // A live modulation rides on top of the value just set — surface both so the
+      // caller doesn't mistake the effective reading for the base position it wrote.
+      payload.put("modulated", true);
+      payload.put("baseValue", info.baseValue());
+      if (info.baseNormalized() != null) {
+        payload.put("baseNormalized", info.baseNormalized());
+      }
     }
     return Result.ok(payload);
   }

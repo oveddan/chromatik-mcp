@@ -204,6 +204,75 @@ class ParametersTest {
         "label-based OSC address differs from the canonical path");
   }
 
+  // ---- describe/get: live effective value for a modulated compound parameter ----
+
+  @Test
+  void getReportsEffectiveModulatedValueAndBaseSeparately() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.fader.setValue(0.0);
+    MacroKnobs knobs =
+        (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    // A deterministic source value (unlike an LFO) so the effective reading is exact.
+    knobs.macro1.setValue(0.5);
+    LXCompoundModulation modulation =
+        Modulators.wireModulation(lx, lx.engine.modulation, knobs.macro1, channel.fader);
+    modulation.range.setValue(1.0);
+
+    Parameters.ParameterInfo info = Parameters.get(lx, channel.fader.getCanonicalPath());
+    assertTrue(info.modulated(), "an active compound modulation is wired to this target");
+    assertEquals(0.0 + 0.5 * 1.0, ((Number) info.value()).doubleValue(), 1e-9,
+        "value is the live effective reading — base plus the modulation, not a static base");
+    assertEquals(0.0, ((Number) info.baseValue()).doubleValue(), 1e-9,
+        "baseValue is the knob's unmodulated set position");
+    assertEquals(0.5, info.normalized(), 1e-9);
+    assertEquals(0.0, info.baseNormalized(), 1e-9);
+
+    // Polling again without touching anything reproduces the same effective reading —
+    // regression check for the incident: a modulated read must never look like a frozen
+    // base-value snapshot.
+    Parameters.ParameterInfo again = Parameters.get(lx, channel.fader.getCanonicalPath());
+    assertEquals(0.5, ((Number) again.value()).doubleValue(), 1e-9);
+  }
+
+  @Test
+  void getOmitsModulationFieldsWhenNoModulationIsWired() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+
+    Parameters.ParameterInfo info = Parameters.get(lx, channel.fader.getCanonicalPath());
+    assertFalse(info.modulated());
+    assertNull(info.baseValue());
+    assertNull(info.baseNormalized());
+  }
+
+  @Test
+  void getOmitsModulationFieldsWhenModulationIsDisabled() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.fader.setValue(0.0);
+    MacroKnobs knobs =
+        (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    knobs.macro1.setValue(0.5);
+    LXCompoundModulation modulation =
+        Modulators.wireModulation(lx, lx.engine.modulation, knobs.macro1, channel.fader);
+    modulation.range.setValue(1.0);
+
+    // Modulation is active; verify fields are present.
+    Parameters.ParameterInfo infoEnabled = Parameters.get(lx, channel.fader.getCanonicalPath());
+    assertTrue(infoEnabled.modulated(), "active modulation is reported");
+    assertNotNull(infoEnabled.baseValue(), "baseValue is present when modulated");
+
+    // Disable the modulation's enabled parameter.
+    modulation.enabled.setValue(false);
+
+    // Now the modulation is ignored — describe should omit the modulation fields.
+    Parameters.ParameterInfo infoDisabled = Parameters.get(lx, channel.fader.getCanonicalPath());
+    assertFalse(infoDisabled.modulated(), "disabled modulation is not counted as active");
+    assertNull(infoDisabled.baseValue(), "baseValue is omitted when no enabled modulation is wired");
+    assertNull(infoDisabled.baseNormalized(), "baseNormalized is omitted when no enabled modulation is wired");
+  }
+
   // ---- set: do -> undo -> assert restored, one per dispatched type ----
 
   @Test
@@ -328,7 +397,7 @@ class ParametersTest {
   }
 
   @Test
-  void setModulatedParameterEchoesTheBaseValue() throws Exception {
+  void setModulatedParameterReportsEffectiveValueAndEchoesTheBaseSeparately() throws Exception {
     LX lx = newHeadlessLx();
     LXChannel channel = lx.engine.mixer.addChannel();
     LXCompoundModulation modulation = new LXCompoundModulation(
@@ -339,9 +408,13 @@ class ParametersTest {
     Parameters.ParameterInfo after = Parameters.set(lx, channel.fader.getCanonicalPath(), 0.25);
     assertEquals(0.25, channel.fader.getBaseValue(), 1e-9);
     assertTrue(channel.fader.getValue() > 0.25 + 1e-6, "modulation rides on top of the base");
-    assertEquals(0.25, ((Number) after.value()).doubleValue(), 1e-9,
-        "the echoed value is the base value just set, not the modulated one");
-    assertEquals(0.25, after.normalized(), 1e-9);
+    assertTrue(after.modulated(), "a live compound modulation is wired to this target");
+    assertEquals(channel.fader.getValue(), ((Number) after.value()).doubleValue(), 1e-9,
+        "value is the live effective (modulated) reading, matching the render");
+    assertEquals(0.25, ((Number) after.baseValue()).doubleValue(), 1e-9,
+        "baseValue is the position just set");
+    assertEquals(channel.fader.getNormalized(), after.normalized(), 1e-9);
+    assertEquals(0.25, after.baseNormalized(), 1e-9);
   }
 
   // ---- fire: momentary triggers, deliberately outside LXCommand ----

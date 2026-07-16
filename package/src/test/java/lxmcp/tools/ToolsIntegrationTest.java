@@ -622,6 +622,44 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void getParameterReportsEffectiveModulatedValueOverHttp() {
+    double originalFader = channel.fader.getValue();
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+    String macro1 = knobs.get("path") + "/macro1";
+    structured(call("set_parameter",
+        Map.of("path", channel.fader.getCanonicalPath(), "value", 0.0)));
+    // A deterministic source value (unlike an LFO) so the effective reading is exact.
+    structured(call("set_parameter", Map.of("path", macro1, "value", 0.5)));
+    Map<String, Object> wired = structured(call("wire_modulator",
+        Map.of("source", macro1, "target", channel.fader.getCanonicalPath())));
+    try {
+      structured(call("set_parameter",
+          Map.of("path", (String) wired.get("rangePath"), "value", 1.0)));
+
+      Map<String, Object> payload = structured(
+          call("get_parameter", Map.of("path", channel.fader.getCanonicalPath())));
+      assertEquals(Boolean.TRUE, payload.get("modulated"));
+      assertEquals(0.5, ((Number) payload.get("value")).doubleValue(), 1e-9,
+          "value is the live effective reading, not a frozen base snapshot");
+      assertEquals(0.0, ((Number) payload.get("baseValue")).doubleValue(), 1e-9);
+      assertEquals(0.5, ((Number) payload.get("normalized")).doubleValue(), 1e-9);
+      assertEquals(0.0, ((Number) payload.get("baseNormalized")).doubleValue(), 1e-9);
+
+      // Unmodulated parameters carry none of the new fields — no noise on the common case.
+      Map<String, Object> unmodulated =
+          structured(call("get_parameter", Map.of("path", macro1)));
+      assertFalse(unmodulated.containsKey("modulated"));
+      assertFalse(unmodulated.containsKey("baseValue"));
+      assertFalse(unmodulated.containsKey("baseNormalized"));
+    } finally {
+      structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+      structured(call("set_parameter",
+          Map.of("path", channel.fader.getCanonicalPath(), "value", originalFader)));
+    }
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void listParametersDescribesChannel() {
     Map<String, Object> payload =

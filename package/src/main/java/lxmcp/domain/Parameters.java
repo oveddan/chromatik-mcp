@@ -13,6 +13,7 @@ import heronarts.lx.parameter.BooleanParameter;
 import heronarts.lx.parameter.BoundedParameter;
 import heronarts.lx.parameter.DiscreteParameter;
 import heronarts.lx.parameter.FunctionalParameter;
+import heronarts.lx.modulation.LXCompoundModulation;
 import heronarts.lx.parameter.LXNormalizedParameter;
 import heronarts.lx.parameter.LXParameter;
 import heronarts.lx.parameter.QuantizedTriggerParameter;
@@ -24,13 +25,18 @@ public final class Parameters {
 
   /**
    * {@code value} is type-appropriate (Boolean / String / Integer / Double; colors as an
-   * 0xAARRGGBB hex string) and reports the base (unmodulated) value; {@code normalized},
-   * {@code min}/{@code max}, {@code options} and {@code formatted} are null where the
-   * parameter type has no such concept.
+   * 0xAARRGGBB hex string); {@code normalized}, {@code min}/{@code max}, {@code options} and
+   * {@code formatted} are null where the parameter type has no such concept. For a parameter
+   * with at least one active {@link LXCompoundModulation}, {@code value}/{@code normalized}
+   * are the live effective (modulated) reading, {@code modulated} is {@code true}, and
+   * {@code baseValue}/{@code baseNormalized} carry the unmodulated knob position; otherwise
+   * {@code value}/{@code normalized} are the base value, {@code modulated} is {@code false},
+   * and {@code baseValue}/{@code baseNormalized} are null (no noise on the common case).
    */
   public record ParameterInfo(String path, String label, String description, String type,
       Object value, Double normalized, String units, Double min, Double max,
-      List<String> options, String formatted, String oscAddress) {}
+      List<String> options, String formatted, String oscAddress,
+      boolean modulated, Object baseValue, Double baseNormalized) {}
 
   private Parameters() {}
 
@@ -219,7 +225,12 @@ public final class Parameters {
   }
 
   static ParameterInfo describe(LXParameter parameter) {
+    // Only CompoundParameter / CompoundDiscreteParameter implement Target — the only
+    // parameter types LX layers live modulation on top of the base value/normalized.
+    boolean modulated = parameter instanceof LXCompoundModulation.Target target
+        && target.getModulations().stream().anyMatch(m -> m.enabled.isOn());
     Object value;
+    Object baseValue = null;
     Double min = null;
     Double max = null;
     List<String> options = null;
@@ -233,7 +244,12 @@ public final class Parameters {
       // Colors pack an int into getValue() via longBitsToDouble; the formatter yields NaN.
       value = String.format("0x%08x", c.getColor());
     } else if (parameter instanceof DiscreteParameter d) {
+      // getValuei()/getOption()/getFormatter().format(getValue()) already read through live
+      // modulation on a CompoundDiscreteParameter — only the base needs a separate call.
       value = d.getValuei();
+      if (modulated) {
+        baseValue = d.getBaseValuei();
+      }
       min = (double) d.getMinValue();
       max = (double) d.getMaxValue();
       String[] opts = d.getOptions();
@@ -244,14 +260,29 @@ public final class Parameters {
         formatted = d.getFormatter().format(d.getValue());
       }
     } else {
-      // Base value, not getValue(): a modulated CompoundParameter layers live modulation on
-      // top, and a set-then-read client must see the value it actually set.
-      value = parameter.getBaseValue();
+      // Effective (modulated) value when a compound modulation is live, so a polling
+      // client sees the value that's actually driving the render; base value otherwise —
+      // a set-then-read client must see the value it actually set.
+      double effective = modulated ? parameter.getValue() : parameter.getBaseValue();
+      value = effective;
+      if (modulated) {
+        baseValue = parameter.getBaseValue();
+      }
       if (parameter instanceof BoundedParameter b) {
         min = b.range.min;
         max = b.range.max;
       }
-      formatted = parameter.getFormatter().format(parameter.getBaseValue());
+      formatted = parameter.getFormatter().format(effective);
+    }
+    Double normalized = null;
+    Double baseNormalized = null;
+    if (parameter instanceof LXNormalizedParameter n) {
+      if (modulated) {
+        normalized = n.getNormalized();
+        baseNormalized = n.getBaseNormalized();
+      } else {
+        normalized = n.getBaseNormalized();
+      }
     }
     return new ParameterInfo(
         parameter.getCanonicalPath(),
@@ -259,7 +290,7 @@ public final class Parameters {
         parameter.getDescription(),
         parameter.getClass().getSimpleName(),
         value,
-        (parameter instanceof LXNormalizedParameter n) ? n.getBaseNormalized() : null,
+        normalized,
         parameter.getUnits().name(),
         min,
         max,
@@ -267,6 +298,9 @@ public final class Parameters {
         formatted,
         // Differs from the canonical path for modulator-owned parameters (label-based
         // segments); null for parameters LX does not expose over OSC. docs/osc-addressing.md
-        LXOscEngine.getOscAddress(parameter));
+        LXOscEngine.getOscAddress(parameter),
+        modulated,
+        baseValue,
+        baseNormalized);
   }
 }
