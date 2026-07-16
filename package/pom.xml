@@ -156,6 +156,9 @@
     <profiles>
         <profile>
             <id>install</id>
+            <properties>
+                <skipTests>true</skipTests>
+            </properties>
             <build>
                 <plugins>
                     <plugin>

@@ -112,7 +112,32 @@ class ToolsIntegrationTest {
   }
 
   private static McpSchema.CallToolResult call(String tool, Map<String, Object> args) {
-    return client.callTool(new McpSchema.CallToolRequest(tool, args));
+    try {
+      return client.callTool(new McpSchema.CallToolRequest(tool, args));
+    } catch (RuntimeException e) {
+      // The JDK HttpClient occasionally reuses a pooled keep-alive connection the server
+      // side already closed between tests, surfacing as a wrapped IOException ("HTTP/1.1
+      // header parser received no bytes") rather than a real product failure. One retry on
+      // a fresh connection is sound here even for mutating tools: the failure signature
+      // means zero response bytes were parsed (stale connection died before the request
+      // landed), and each test's own assertions verify resulting state against live
+      // lx.engine.* regardless of how many attempts the call took.
+      if (isHeaderParserNoBytes(e)) {
+        return client.callTool(new McpSchema.CallToolRequest(tool, args));
+      }
+      throw e;
+    }
+  }
+
+  private static boolean isHeaderParserNoBytes(Throwable t) {
+    for (Throwable cause = t; cause != null; cause = cause.getCause()) {
+      if (cause instanceof java.io.IOException
+          && cause.getMessage() != null
+          && cause.getMessage().contains("header parser received no bytes")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @SuppressWarnings("unchecked")

@@ -19,6 +19,9 @@ mvn install -Pinstall
 
 The `install` profile copies the shaded jar into `~/Chromatik/Packages/`, where Chromatik
 discovers packages. (Without the profile, `mvn package` just builds it under `target/`.)
+The `install` profile also skips tests — they're the developer/PR gate, not part of the
+consumer install flow. Run `mvn package` for the full suite, or force tests during install
+with `mvn install -Pinstall -DskipTests=false`.
 
 To sanity-check the jar loads inside real LX from a deployment-faithful classpath before
 touching Chromatik:
