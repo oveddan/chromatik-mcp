@@ -113,11 +113,12 @@ environment" pattern.
 - **Keystone — a read-only `get_frame` / render-summary tool. Shipped in PR-8.**
   `lx.engine.copyFrameThreadSafe(LXEngine.Frame)` (`LXEngine.java:1346`) hands back a
   thread-safe copy of the rendered `int[] main`/`cue`/`aux` buffers, indexed by point;
-  `LXPoint.xn/yn/zn` give normalized positions. `get_frame` returns both a PNG rendering
-  of the point cloud (MCP ImageContent — the model literally sees the frame) and a
-  compact summary (non-black fraction, mean brightness, dominant colors, NxN mean-color
-  grid); `include_image=false` / `grid` / `width` control token cost inside tight loops.
-  All CPU-side and headless-testable, as predicted.
+  `LXPoint.xn/yn/zn` give normalized positions. `get_frame` returns a compact summary
+  by default (non-black fraction, mean brightness, dominant colors, NxN mean-color
+  grid); `include_image=true` opts into a PNG rendering of the point cloud too (MCP
+  ImageContent — the model literally sees the frame), used sparingly since image
+  content is token-expensive. `grid` / `width` further control token cost inside tight
+  loops. All CPU-side and headless-testable, as predicted.
 - **The loop.** Agent mutates (`set_parameter`, `add_pattern`, …) → reads the frame
   summary → a **verifier sub-agent grades it against a written visual rubric in its own
   context window** → self-correct until the rubric holds. The independent grader matters:

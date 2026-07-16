@@ -27,10 +27,9 @@ public final class GetFrame implements LxTool {
   @Override
   public String description() {
     return "Preview the rendered output: reads back the last completed engine frame and returns "
-        + "a PNG rendering of the point cloud plus a compact summary (non-black fraction, mean "
-        + "brightness, dominant colors, NxN mean-color grid). For tight iteration loops, keep "
-        + "token cost down with include_image=false (summary only), a larger grid for a "
-        + "text-mode preview, or a small width.";
+        + "a compact summary (non-black fraction, mean brightness, dominant colors, NxN "
+        + "mean-color grid). Pass include_image=true to also get a PNG rendering of the point "
+        + "cloud — use sparingly, image content is token-expensive.";
   }
 
   @Override
@@ -45,7 +44,8 @@ public final class GetFrame implements LxTool {
     properties.put("bus", Schemas.enumString(
         "Which composited buffer to read (default main)", List.of("main", "cue", "aux")));
     properties.put("include_image", Schemas.bool(
-        "Include the PNG rendering (default true); false returns the summary only"));
+        "Include the PNG rendering (default false — image content is token-expensive; "
+            + "request it explicitly when you need to see the frame)"));
     properties.put("grid", Schemas.integer(
         "Grid resolution N for the NxN mean-color summary matrix (default " + DEFAULT_GRID + ")",
         MIN_GRID, MAX_GRID));
@@ -70,7 +70,7 @@ public final class GetFrame implements LxTool {
     }
     int width = intArg(args, "width", DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH);
     int grid = intArg(args, "grid", DEFAULT_GRID, MIN_GRID, MAX_GRID);
-    boolean includeImage = !(args.get("include_image") instanceof Boolean b) || b;
+    boolean includeImage = args.get("include_image") instanceof Boolean b && b;
 
     Frames.FrameSnapshot snap = Frames.capture(lx, bus);
     Map<String, Object> payload = new LinkedHashMap<>();

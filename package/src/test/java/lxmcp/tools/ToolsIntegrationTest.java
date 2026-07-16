@@ -922,7 +922,8 @@ class ToolsIntegrationTest {
   @Test
   @SuppressWarnings("unchecked")
   void getFrameReturnsImageAndSummary() throws java.io.IOException {
-    McpSchema.CallToolResult result = call("get_frame", Map.of("width", 128, "grid", 2));
+    McpSchema.CallToolResult result =
+        call("get_frame", Map.of("width", 128, "grid", 2, "include_image", true));
     Map<String, Object> payload = structured(result);
     assertEquals("main", payload.get("bus"));
     assertEquals("front", payload.get("view"));
@@ -952,6 +953,17 @@ class ToolsIntegrationTest {
     assertFalse(payload.containsKey("imageWidth"), "no image metadata in summary-only mode");
     for (McpSchema.Content content : result.content()) {
       assertFalse(content instanceof McpSchema.ImageContent, "no ImageContent when opted out");
+    }
+  }
+
+  @Test
+  void getFrameDefaultsToSummaryOnly() {
+    McpSchema.CallToolResult result = call("get_frame", Map.of());
+    Map<String, Object> payload = structured(result);
+    assertEquals(64, ((Number) payload.get("points")).intValue());
+    assertFalse(payload.containsKey("imageWidth"), "no image metadata by default");
+    for (McpSchema.Content content : result.content()) {
+      assertFalse(content instanceof McpSchema.ImageContent, "no ImageContent unless requested");
     }
   }
 
