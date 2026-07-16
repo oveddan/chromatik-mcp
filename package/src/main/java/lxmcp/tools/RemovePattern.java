@@ -43,6 +43,7 @@ public final class RemovePattern implements LxTool {
     Channels.removePattern(lx, path);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("removed", path);
+    payload.put("kind", "pattern");
     return Result.ok(payload);
   }
 }

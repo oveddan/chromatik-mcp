@@ -1,6 +1,5 @@
 package lxmcp.tools;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -43,40 +42,6 @@ public final class GetParameter implements LxTool {
     }
     // Resolution failures are typed ResolveExceptions; the seam maps them to wire codes.
     Parameters.ParameterInfo info = Parameters.get(lx, path);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("path", info.path());
-    payload.put("label", info.label());
-    if (info.description() != null) {
-      payload.put("description", info.description());
-    }
-    payload.put("type", info.type());
-    payload.put("value", info.value());
-    if (info.normalized() != null) {
-      payload.put("normalized", info.normalized());
-    }
-    payload.put("units", info.units());
-    if (info.min() != null) {
-      payload.put("min", info.min());
-    }
-    if (info.max() != null) {
-      payload.put("max", info.max());
-    }
-    if (info.options() != null) {
-      payload.put("options", info.options());
-    }
-    if (info.formatted() != null) {
-      payload.put("formatted", info.formatted());
-    }
-    if (info.oscAddress() != null) {
-      payload.put("oscAddress", info.oscAddress());
-    }
-    if (info.modulated()) {
-      payload.put("modulated", true);
-      payload.put("baseValue", info.baseValue());
-      if (info.baseNormalized() != null) {
-        payload.put("baseNormalized", info.baseNormalized());
-      }
-    }
-    return Result.ok(payload);
+    return Result.ok(info.toMap());
   }
 }

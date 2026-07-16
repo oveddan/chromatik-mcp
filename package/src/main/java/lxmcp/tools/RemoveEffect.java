@@ -42,6 +42,7 @@ public final class RemoveEffect implements LxTool {
     Channels.removeEffect(lx, path);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("removed", path);
+    payload.put("kind", "effect");
     return Result.ok(payload);
   }
 }

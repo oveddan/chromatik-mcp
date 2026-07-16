@@ -194,6 +194,7 @@ class ToolsIntegrationTest {
     Map<String, Object> payload = structured(
         call("set_parameter", Map.of("path", channel.fader.getCanonicalPath(), "value", 0.5)));
     assertEquals(channel.fader.getCanonicalPath(), payload.get("path"));
+    assertEquals(channel.fader.getLabel(), payload.get("label"), "same full field set as get_parameter");
     assertEquals(0.5, ((Number) payload.get("value")).doubleValue(), 1e-9);
     assertEquals(0.5, channel.fader.getValue(), 1e-9, "the live parameter changed");
   }
@@ -521,6 +522,7 @@ class ToolsIntegrationTest {
     } finally {
       Map<String, Object> removed = structured(call("remove_channel", Map.of("path", channelPath)));
       assertEquals(channelPath, removed.get("removed"));
+      assertEquals("channel", removed.get("kind"));
     }
     assertEquals(before, lx.engine.mixer.channels.size());
   }
@@ -617,7 +619,9 @@ class ToolsIntegrationTest {
       assertEquals(1, ((Number) moved.get("index")).intValue());
 
       // Remove e2 (still at index 0 after e1 moved)
-      structured(call("remove_effect", Map.of("path", e2path)));
+      Map<String, Object> removed = structured(call("remove_effect", Map.of("path", e2path)));
+      assertEquals(e2path, removed.get("removed"));
+      assertEquals("effect", removed.get("kind"));
     } finally {
       structured(call("remove_channel", Map.of("path", channelPath)));
     }

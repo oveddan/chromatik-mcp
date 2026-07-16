@@ -54,26 +54,10 @@ public final class SetParameter implements LxTool {
       return Result.error(Result.INVALID_ARGUMENT, "Required argument: value");
     }
     // Resolution and value-type failures are typed ResolveExceptions; the seam maps them.
+    // A live modulation rides on top of the value just set — the shared payload surfaces
+    // both modulated/baseValue so the caller doesn't mistake the effective reading for
+    // the base position it wrote.
     Parameters.ParameterInfo info = Parameters.set(lx, path, args.get("value"));
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("path", info.path());
-    payload.put("type", info.type());
-    payload.put("value", info.value());
-    if (info.formatted() != null) {
-      payload.put("formatted", info.formatted());
-    }
-    if (info.oscAddress() != null) {
-      payload.put("oscAddress", info.oscAddress());
-    }
-    if (info.modulated()) {
-      // A live modulation rides on top of the value just set — surface both so the
-      // caller doesn't mistake the effective reading for the base position it wrote.
-      payload.put("modulated", true);
-      payload.put("baseValue", info.baseValue());
-      if (info.baseNormalized() != null) {
-        payload.put("baseNormalized", info.baseNormalized());
-      }
-    }
-    return Result.ok(payload);
+    return Result.ok(info.toMap());
   }
 }

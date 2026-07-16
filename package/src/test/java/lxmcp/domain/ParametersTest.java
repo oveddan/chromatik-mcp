@@ -53,6 +53,25 @@ class ParametersTest extends HeadlessLxTest {
   }
 
   @Test
+  void toMapOmitsOptionalNullFieldsAndTheModulationBlockWhenUnmodulated() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+
+    Parameters.ParameterInfo info = Parameters.get(lx, channel.enabled.getCanonicalPath());
+    var map = info.toMap();
+    assertEquals(info.path(), map.get("path"));
+    assertEquals(info.label(), map.get("label"));
+    assertEquals(info.type(), map.get("type"));
+    assertEquals(info.value(), map.get("value"));
+    assertEquals(info.units(), map.get("units"));
+    assertEquals(info.normalized(), map.get("normalized"));
+    assertFalse(map.containsKey("options"), "boolean has no options list");
+    assertFalse(map.containsKey("modulated"), "unmodulated parameters omit the modulation block");
+    assertFalse(map.containsKey("baseValue"));
+    assertFalse(map.containsKey("baseNormalized"));
+  }
+
+  @Test
   void describesEnumParameterWithOptionsAndFormattedLabel() {
     LX lx = newHeadlessLx();
     LXChannel channel = lx.engine.mixer.addChannel();

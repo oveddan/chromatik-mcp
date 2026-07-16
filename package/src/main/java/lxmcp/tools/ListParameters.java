@@ -55,41 +55,7 @@ public final class ListParameters implements LxTool {
     payload.put("class", info.className());
     List<Map<String, Object>> parameters = new ArrayList<>();
     for (Parameters.ParameterInfo p : info.parameters()) {
-      Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("path", p.path());
-      entry.put("label", p.label());
-      if (p.description() != null) {
-        entry.put("description", p.description());
-      }
-      entry.put("type", p.type());
-      entry.put("value", p.value());
-      if (p.normalized() != null) {
-        entry.put("normalized", p.normalized());
-      }
-      entry.put("units", p.units());
-      if (p.min() != null) {
-        entry.put("min", p.min());
-      }
-      if (p.max() != null) {
-        entry.put("max", p.max());
-      }
-      if (p.options() != null) {
-        entry.put("options", p.options());
-      }
-      if (p.formatted() != null) {
-        entry.put("formatted", p.formatted());
-      }
-      if (p.oscAddress() != null) {
-        entry.put("oscAddress", p.oscAddress());
-      }
-      if (p.modulated()) {
-        entry.put("modulated", true);
-        entry.put("baseValue", p.baseValue());
-        if (p.baseNormalized() != null) {
-          entry.put("baseNormalized", p.baseNormalized());
-        }
-      }
-      parameters.add(entry);
+      parameters.add(p.toMap());
     }
     payload.put("parameters", parameters);
     List<Map<String, Object>> children = new ArrayList<>();

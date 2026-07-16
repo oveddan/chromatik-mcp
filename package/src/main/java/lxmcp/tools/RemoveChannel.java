@@ -41,6 +41,7 @@ public final class RemoveChannel implements LxTool {
     Channels.removeChannel(lx, path);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("removed", path);
+    payload.put("kind", "channel");
     return Result.ok(payload);
   }
 }

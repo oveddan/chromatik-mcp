@@ -2,6 +2,7 @@ package lxmcp.domain;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,7 +41,52 @@ public final class Parameters {
   public record ParameterInfo(String path, String label, String description, String type,
       Object value, Double normalized, String units, Double min, Double max,
       List<String> options, String formatted, String oscAddress,
-      boolean modulated, Object baseValue, Double baseNormalized) {}
+      boolean modulated, Object baseValue, Double baseNormalized) {
+
+    /**
+     * The full wire-shape field set shared by every tool that surfaces a parameter
+     * (get_parameter, list_parameters, set_parameter): omits null-valued optional fields
+     * and the {@code modulated}/{@code baseValue}/{@code baseNormalized} block entirely
+     * when the parameter has no live modulation.
+     */
+    public Map<String, Object> toMap() {
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("path", path);
+      payload.put("label", label);
+      if (description != null) {
+        payload.put("description", description);
+      }
+      payload.put("type", type);
+      payload.put("value", value);
+      if (normalized != null) {
+        payload.put("normalized", normalized);
+      }
+      payload.put("units", units);
+      if (min != null) {
+        payload.put("min", min);
+      }
+      if (max != null) {
+        payload.put("max", max);
+      }
+      if (options != null) {
+        payload.put("options", options);
+      }
+      if (formatted != null) {
+        payload.put("formatted", formatted);
+      }
+      if (oscAddress != null) {
+        payload.put("oscAddress", oscAddress);
+      }
+      if (modulated) {
+        payload.put("modulated", true);
+        payload.put("baseValue", baseValue);
+        if (baseNormalized != null) {
+          payload.put("baseNormalized", baseNormalized);
+        }
+      }
+      return payload;
+    }
+  }
 
   private Parameters() {}
 
