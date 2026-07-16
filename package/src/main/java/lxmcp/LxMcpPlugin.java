@@ -2,10 +2,12 @@ package lxmcp;
 
 import java.io.File;
 import java.io.UncheckedIOException;
+import java.util.List;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXLoopTask;
 import heronarts.lx.LXPlugin;
+import heronarts.lx.LXRegistry;
 
 import lxmcp.engine.EngineExecutor;
 import lxmcp.mcp.ConfigFile;
@@ -21,6 +23,11 @@ public class LxMcpPlugin implements LXPlugin {
   private static final String PREFIX = "[LX-MCP] ";
   private static final String SERVER_NAME = "LX-MCP";
   private static final String SERVER_VERSION = "0.0.1";
+
+  // Referenced by fully-qualified name, never `LxMcpUiPlugin.class` — this class must stay
+  // free of any compile-time coupling to the `ui` package (LxMcpUiPlugin already imports
+  // this class; a reference the other way would create a cycle).
+  private static final String UI_PLUGIN_CLASS_NAME = "lxmcp.ui.LxMcpUiPlugin";
 
   // LXPlugin instances are singletons per LX instance, and LXStudio runs
   // onUIReady() for every plugin only after every plugin's initialize() has
@@ -45,6 +52,8 @@ public class LxMcpPlugin implements LXPlugin {
           + "this address has full control. Remove \"host\" from " + ConfigFile.path()
           + " to restore loopback-only.");
     }
+
+    autoEnableUiPlugin(lx.registry.plugins);
 
     this.lx = lx;
     this.status = new ServerStatus();
@@ -95,6 +104,33 @@ public class LxMcpPlugin implements LXPlugin {
     lx.engine.addLoopTask(this.loopTask);
 
     LX.log(PREFIX + "MCP server listening on " + this.status.url());
+  }
+
+  /**
+   * Enables the {@code lxmcp.ui.LxMcpUiPlugin} companion so users only ever need to toggle
+   * "LX-MCP", not both plugins. Registration order within the jar puts this class before
+   * {@code lxmcp/ui/}, so this entry's {@code initialize(lx)} runs before the UI entry's during
+   * {@code LXRegistry.initializePlugins()} — flipping it here takes effect in the same session,
+   * not just after a restart. If the UI entry is somehow visited first (ordering isn't
+   * contractual) or missing (pure headless, class skipped by the classloader), the persisted
+   * enabled state in the registry JSON self-heals the UI plugin's enabled-ness on the next
+   * launch either way, so we don't need to special-case that here.
+   *
+   * <p>Package-private (not private) so the test in this package can exercise it directly
+   * against a real {@code LXRegistry.Plugin} list.
+   */
+  static void autoEnableUiPlugin(List<LXRegistry.Plugin> plugins) {
+    for (LXRegistry.Plugin plugin : plugins) {
+      if (plugin.clazz.getName().equals(UI_PLUGIN_CLASS_NAME)) {
+        if (!plugin.isEnabled()) {
+          plugin.setEnabled(true);
+          LX.log(PREFIX + "auto-enabled LX-MCP UI companion plugin");
+        }
+        return;
+      }
+    }
+    // Headless: the UI class was never scanned into the registry (studio classes absent).
+    // Expected and unremarkable — headless logs must stay clean.
   }
 
   private void writeStatusFile(boolean connected, Long lastActivityMs) {

@@ -16,6 +16,10 @@ import lxmcp.ServerStatus;
  * failing the whole package, so in headless mode this plugin silently fails to register while
  * {@link LxMcpPlugin} (a plain {@link LXPlugin}, no studio dependency) keeps the MCP server
  * alive. This split is deliberate — never merge the two plugins into one.
+ *
+ * <p>{@link LxMcpPlugin} auto-enables this plugin's registry entry when it itself is
+ * enabled ({@code LxMcpPlugin.autoEnableUiPlugin}), so users only ever need to check the
+ * "LX-MCP" box — they never interact with an "LX-MCP UI" checkbox directly.
  */
 @LXPlugin.Name("LX-MCP UI")
 public class LxMcpUiPlugin implements LXStudio.Plugin {
