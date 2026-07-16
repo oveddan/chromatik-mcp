@@ -5,13 +5,17 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXComponent;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.model.GridModel;
+import heronarts.lx.modulator.LXModulator;
 
 /**
  * The PR-3b gate: every path-taking mutation downstream depends on this resolver, so
@@ -118,5 +122,54 @@ class ResolveTest {
     LX lx = newHeadlessLx();
     assertSame(lx.engine, Resolve.component(lx, "/lx"));
     assertSame(lx.engine, Resolve.component(lx, "lx"));
+  }
+
+  // ── resolveClassName: short-name resolution shared by Modulators/Channels/Catalog ──
+
+  @LXComponent.Name("Dup")
+  abstract static class DupA extends LXModulator {
+    protected DupA() { super("DupA"); }
+  }
+
+  @LXComponent.Name("Dup")
+  abstract static class DupB extends LXModulator {
+    protected DupB() { super("DupB"); }
+  }
+
+  abstract static class Solo extends LXModulator {
+    protected Solo() { super("Solo"); }
+  }
+
+  @Test
+  void resolveClassNameMatchesFullNameOverShortName() {
+    List<Class<? extends LXModulator>> registry = List.of(DupA.class, DupB.class, Solo.class);
+    assertSame(Solo.class,
+        Resolve.resolveClassName(registry, Solo.class.getName(), Resolve.Failure.TYPE_MISMATCH, "unused"));
+  }
+
+  @Test
+  void resolveClassNameMatchesUniqueSimpleOrDisplayName() {
+    List<Class<? extends LXModulator>> registry = List.of(DupA.class, DupB.class, Solo.class);
+    assertSame(Solo.class,
+        Resolve.resolveClassName(registry, "Solo", Resolve.Failure.TYPE_MISMATCH, "unused"));
+  }
+
+  @Test
+  void resolveClassNameAmbiguousDisplayNameThrowsListingCandidates() {
+    List<Class<? extends LXModulator>> registry = List.of(DupA.class, DupB.class, Solo.class);
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> Resolve.resolveClassName(registry, "Dup", Resolve.Failure.TYPE_MISMATCH, "unused"));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+    assertTrue(e.getMessage().contains(DupA.class.getName()), "names DupA as a candidate");
+    assertTrue(e.getMessage().contains(DupB.class.getName()), "names DupB as a candidate");
+  }
+
+  @Test
+  void resolveClassNameUnknownUsesCallerSuppliedFailureAndMessage() {
+    List<Class<? extends LXModulator>> registry = List.of(Solo.class);
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> Resolve.resolveClassName(registry, "Nope", Resolve.Failure.NOT_FOUND, "custom message"));
+    assertEquals(Resolve.Failure.NOT_FOUND, e.failure);
+    assertEquals("custom message", e.getMessage());
   }
 }

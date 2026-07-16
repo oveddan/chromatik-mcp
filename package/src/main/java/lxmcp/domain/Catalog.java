@@ -7,13 +7,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
+import heronarts.lx.effect.LXEffect;
+import heronarts.lx.modulator.LXModulator;
+import heronarts.lx.pattern.LXPattern;
 
 /**
  * Catalog primitives: locate, parse, and assess staleness of semantic documentation
@@ -60,20 +65,24 @@ public final class Catalog {
 
   /**
    * Resolves {@code className} across all three LX registry buckets (patterns, effects,
-   * modulators). Throws {@link Resolve.ResolveException}(NOT_FOUND) if not registered.
+   * modulators): full class name, or a short name ({@code getSimpleName()} / display name)
+   * unique across all three buckets combined — a short name ambiguous across buckets (or
+   * within one) is rejected rather than silently picked. Throws
+   * {@link Resolve.ResolveException}(NOT_FOUND) if not registered at all,
+   * {@link Resolve.ResolveException}(TYPE_MISMATCH) if the short name is ambiguous.
    */
-  @SuppressWarnings("unchecked")
   public static Class<? extends LXComponent> findClass(LX lx, String className) {
-    for (var c : lx.registry.patterns) {
-      if (c.getName().equals(className)) return c;
+    List<Class<? extends LXComponent>> all = new ArrayList<>();
+    for (Class<? extends LXPattern> c : lx.registry.patterns) {
+      all.add(c);
     }
-    for (var c : lx.registry.effects) {
-      if (c.getName().equals(className)) return c;
+    for (Class<? extends LXEffect> c : lx.registry.effects) {
+      all.add(c);
     }
-    for (var c : lx.registry.modulators) {
-      if (c.getName().equals(className)) return c;
+    for (Class<? extends LXModulator> c : lx.registry.modulators) {
+      all.add(c);
     }
-    throw new Resolve.ResolveException(Resolve.Failure.NOT_FOUND,
+    return Resolve.resolveClassName(all, className, Resolve.Failure.NOT_FOUND,
         "Unknown class: " + className
             + " (not registered as a pattern, effect, or modulator)");
   }

@@ -229,6 +229,20 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void addModulatorAcceptsShortTypeName() {
+    int before = lx.engine.modulation.modulators.size();
+
+    // The short name list_available_modulators advertises for MacroKnobs is also
+    // MacroKnobs — this exercises the same simple-name lookup path used by any short name.
+    Map<String, Object> payload = structured(
+        call("add_modulator", Map.of("type", "MacroKnobs")));
+
+    assertEquals(before + 1, lx.engine.modulation.modulators.size());
+    assertEquals(MacroKnobs.class.getName(), payload.get("class"),
+        "the payload still reports the resolved full class name");
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void addModulatorScopedToDeviceLandsInItsChain() {
     var pattern = channel.patterns.get(0);

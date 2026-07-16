@@ -10,6 +10,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXComponent;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.effect.LXEffect;
@@ -189,6 +190,19 @@ class ChannelMutationsTest {
     assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
   }
 
+  @Test
+  void resolvePatternClassAcceptsFullAndShortNames() {
+    LX lx = newHeadlessLx();
+    assertSame(GradientPattern.class,
+        Channels.resolvePatternClass(lx, GradientPattern.class.getName()));
+    assertSame(GradientPattern.class, Channels.resolvePatternClass(lx, "GradientPattern"));
+    // GradientPattern's display name (LXComponent.getComponentName) has the "Pattern"
+    // suffix stripped by LX's generic-superclass convention — differs from the simple name.
+    assertEquals("Gradient", LXComponent.getComponentName(GradientPattern.class),
+        "test assumption: display name strips the Pattern suffix");
+    assertSame(GradientPattern.class, Channels.resolvePatternClass(lx, "Gradient"));
+  }
+
   // ── activate pattern ──────────────────────────────────────────────────────────
 
   @Test
@@ -323,6 +337,16 @@ class ChannelMutationsTest {
     var ex = assertThrows(Resolve.ResolveException.class,
         () -> Channels.resolveEffectClass(lx, "com.fake.NonExistentEffect"));
     assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+  }
+
+  @Test
+  void resolveEffectClassAcceptsFullAndShortNames() {
+    LX lx = newHeadlessLx();
+    assertSame(BlurEffect.class, Channels.resolveEffectClass(lx, BlurEffect.class.getName()));
+    assertSame(BlurEffect.class, Channels.resolveEffectClass(lx, "BlurEffect"));
+    assertEquals("Blur", LXComponent.getComponentName(BlurEffect.class),
+        "test assumption: display name strips the Effect suffix");
+    assertSame(BlurEffect.class, Channels.resolveEffectClass(lx, "Blur"));
   }
 
   @Test

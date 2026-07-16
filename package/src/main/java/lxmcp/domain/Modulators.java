@@ -72,17 +72,14 @@ public final class Modulators {
 
   /**
    * Resolve a modulator class name against the LX registry. Never {@code Class.forName}:
-   * only registered, instantiable modulator types are addressable.
+   * only registered, instantiable modulator types are addressable. Accepts the full class
+   * name, or the short name ({@code getSimpleName()} / display name) advertised by
+   * {@code list_available_modulators}.
    *
-   * @throws Resolve.ResolveException TYPE_MISMATCH for an unregistered name.
+   * @throws Resolve.ResolveException TYPE_MISMATCH for an unregistered or ambiguous name.
    */
   public static Class<? extends LXModulator> resolveModulatorClass(LX lx, String className) {
-    for (Class<? extends LXModulator> clazz : lx.registry.modulators) {
-      if (clazz.getName().equals(className)) {
-        return clazz;
-      }
-    }
-    throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+    return Resolve.resolveClassName(lx.registry.modulators, className, Resolve.Failure.TYPE_MISMATCH,
         "Unknown modulator type: " + className + " (see list_available_modulators)");
   }
 

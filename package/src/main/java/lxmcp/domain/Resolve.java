@@ -1,5 +1,8 @@
 package lxmcp.domain;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
 import heronarts.lx.LXPath;
@@ -66,6 +69,50 @@ public final class Resolve {
               + " (found " + component.getClass().getSimpleName() + ")");
     }
     return type.cast(component);
+  }
+
+  /**
+   * Resolve a registered class by full class name, {@code Class.getSimpleName()}, or the
+   * display name ({@code LXComponent.getComponentName}) that {@code list_available_*}
+   * tools advertise — in that priority order. A full-name match always wins, even when a
+   * short name would also match. Otherwise, exactly one short-name match wins; more than
+   * one is ambiguous.
+   *
+   * @throws ResolveException {@code unknownFailure} for zero matches ({@code unknownMessage}
+   *     — callers keep their existing failure kind and wording for this case) or
+   *     TYPE_MISMATCH for more than one short-name match (message lists the full names of
+   *     all candidates).
+   */
+  public static <T extends LXComponent> Class<? extends T> resolveClassName(
+      Iterable<Class<? extends T>> registry, String query, Failure unknownFailure,
+      String unknownMessage) {
+    for (Class<? extends T> clazz : registry) {
+      if (clazz.getName().equals(query)) {
+        return clazz;
+      }
+    }
+    List<Class<? extends T>> candidates = new ArrayList<>();
+    for (Class<? extends T> clazz : registry) {
+      if (clazz.getSimpleName().equals(query) || LXComponent.getComponentName(clazz).equals(query)) {
+        candidates.add(clazz);
+      }
+    }
+    if (candidates.size() == 1) {
+      return candidates.get(0);
+    }
+    if (candidates.size() > 1) {
+      StringBuilder names = new StringBuilder();
+      for (Class<? extends T> clazz : candidates) {
+        if (names.length() > 0) {
+          names.append(", ");
+        }
+        names.append(clazz.getName());
+      }
+      throw new ResolveException(Failure.TYPE_MISMATCH,
+          "Ambiguous type name: " + query + " matches [" + names
+              + "] — use a full class name");
+    }
+    throw new ResolveException(unknownFailure, unknownMessage);
   }
 
   private static LXPath get(LX lx, String path) {

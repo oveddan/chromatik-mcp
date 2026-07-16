@@ -16,8 +16,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXComponent;
+import heronarts.lx.effect.audio.SoundObjectEffect;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.SinLFO;
+import heronarts.lx.pattern.audio.SoundObjectPattern;
 import heronarts.lx.pattern.color.GradientPattern;
 
 class CatalogTest {
@@ -184,8 +187,35 @@ class CatalogTest {
 
   @Test
   void findClassThrowsForUnknownClass() {
-    assertThrows(Resolve.ResolveException.class, () ->
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class, () ->
         Catalog.findClass(lx, "com.example.NonExistentPattern"));
+    assertEquals(Resolve.Failure.NOT_FOUND, e.failure, "unchanged failure kind for unregistered classes");
+  }
+
+  @Test
+  void findClassAcceptsShortName() {
+    assertEquals(GradientPattern.class, Catalog.findClass(lx, "GradientPattern"));
+    // Display name has the Pattern suffix stripped by LX's generic-superclass convention.
+    assertEquals("Gradient", LXComponent.getComponentName(GradientPattern.class),
+        "test assumption: display name strips the Pattern suffix");
+    assertEquals(GradientPattern.class, Catalog.findClass(lx, "Gradient"));
+  }
+
+  @Test
+  void findClassAmbiguousAcrossBucketsThrowsListingCandidates() {
+    // Both stock classes share the display name "Sound Object" — one in patterns, one in
+    // effects — so the ambiguity spans two of the three registry buckets Catalog merges.
+    assertEquals("Sound Object", LXComponent.getComponentName(SoundObjectPattern.class));
+    assertEquals("Sound Object", LXComponent.getComponentName(SoundObjectEffect.class));
+
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> Catalog.findClass(lx, "Sound Object"));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+    assertTrue(e.getMessage().contains(SoundObjectPattern.class.getName()));
+    assertTrue(e.getMessage().contains(SoundObjectEffect.class.getName()));
+
+    // Full name still resolves unambiguously despite the display-name collision.
+    assertEquals(SoundObjectPattern.class, Catalog.findClass(lx, SoundObjectPattern.class.getName()));
   }
 
   @Test

@@ -18,11 +18,12 @@ public final class AddPattern implements LxTool {
 
   @Override
   public String description() {
-    return "Add a pattern to a channel by class name (from list_available_patterns). "
-        + "Pass an optional 0-based index to insert at a specific position; omit to append. "
-        + "The first pattern added to an empty channel auto-activates. Targets channels "
-        + "only (not PatternRacks). Inserting shifts the 1-based paths of later sibling "
-        + "patterns — re-list rather than reusing cached paths. Undoable in Chromatik with Cmd-Z.";
+    return "Add a pattern to a channel by class name (from list_available_patterns) — "
+        + "either the full class name or the short name it lists. Pass an optional 0-based "
+        + "index to insert at a specific position; omit to append. The first pattern added "
+        + "to an empty channel auto-activates. Targets channels only (not PatternRacks). "
+        + "Inserting shifts the 1-based paths of later sibling patterns — re-list rather "
+        + "than reusing cached paths. Undoable in Chromatik with Cmd-Z.";
   }
 
   @Override
@@ -31,7 +32,8 @@ public final class AddPattern implements LxTool {
     properties.put("channel", Schemas.string(
         "Canonical path of the channel, e.g. /lx/mixer/channel/1"));
     properties.put("type", Schemas.string(
-        "Pattern class name, as returned by list_available_patterns"));
+        "Pattern class name, as returned by list_available_patterns — full class name or "
+            + "short name"));
     properties.put("index", Map.of("type", "integer", "description",
         "0-based insertion index; omit to append at the end"));
     return Schemas.object(properties, List.of("channel", "type"));

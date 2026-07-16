@@ -23,17 +23,20 @@ public final class AddModulator implements LxTool {
   @Override
   public String description() {
     return "Add a modulator by class name (from list_available_modulators) — e.g. "
-        + "heronarts.lx.modulator.MacroKnobs for a bank of eight mappable knobs. By default "
-        + "it lands in the global modulation engine (the Chromatik side panel); pass scope "
-        + "to add it inside a pattern/effect's own chain. The response lists every parameter "
-        + "with its canonical path and OSC address. Undoable in Chromatik with Cmd-Z.";
+        + "heronarts.lx.modulator.MacroKnobs for a bank of eight mappable knobs, or the "
+        + "short name it lists (e.g. VariableLFO for heronarts.lx.modulator.VariableLFO). "
+        + "By default it lands in the global modulation engine (the Chromatik side panel); "
+        + "pass scope to add it inside a pattern/effect's own chain. The response lists "
+        + "every parameter with its canonical path and OSC address. Undoable in Chromatik "
+        + "with Cmd-Z.";
   }
 
   @Override
   public Map<String, Object> inputSchema() {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("type", Schemas.string(
-        "Modulator class name, as returned by list_available_modulators"));
+        "Modulator class name, as returned by list_available_modulators — full class name "
+            + "(e.g. heronarts.lx.modulator.VariableLFO) or short name (e.g. VariableLFO)"));
     properties.put("scope", Schemas.string(
         "Optional canonical path of a pattern/effect to host the modulator in its own "
             + "chain; omit for the global engine"));

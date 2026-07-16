@@ -12,6 +12,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXComponent;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulation.LXCompoundModulation;
@@ -19,7 +20,9 @@ import heronarts.lx.modulation.LXTriggerModulation;
 import heronarts.lx.modulator.LXModulator;
 import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.modulator.MacroTriggers;
+import heronarts.lx.modulator.NoiseModulator;
 import heronarts.lx.modulator.Timer;
+import heronarts.lx.modulator.VariableLFO;
 import heronarts.lx.pattern.color.GradientPattern;
 import heronarts.lx.pattern.LXPattern;
 
@@ -155,6 +158,26 @@ class ModulatorsTest {
     assertEquals(Resolve.Failure.TYPE_MISMATCH,
         assertThrows(Resolve.ResolveException.class,
             () -> Modulators.resolveModulatorClass(lx, "com.evil.NotAModulator")).failure);
+  }
+
+  @Test
+  void resolveModulatorClassAcceptsShortNames() {
+    LX lx = newHeadlessLx();
+    // getSimpleName() matches directly: VariableLFO's simple name is its display name too.
+    assertSame(VariableLFO.class, Modulators.resolveModulatorClass(lx, "VariableLFO"));
+    // Simple name differs from display name: NoiseModulator's LXComponent.getComponentName
+    // strips the "Modulator" suffix. Both should resolve.
+    assertEquals("Noise", LXComponent.getComponentName(NoiseModulator.class),
+        "test assumption: NoiseModulator's display name differs from its simple name");
+    assertSame(NoiseModulator.class, Modulators.resolveModulatorClass(lx, "NoiseModulator"));
+    assertSame(NoiseModulator.class, Modulators.resolveModulatorClass(lx, "Noise"));
+  }
+
+  @Test
+  void resolveModulatorClassFullNameWinsOverShortName() {
+    LX lx = newHeadlessLx();
+    assertSame(VariableLFO.class,
+        Modulators.resolveModulatorClass(lx, VariableLFO.class.getName()));
   }
 
   @Test

@@ -18,10 +18,11 @@ public final class AddEffect implements LxTool {
 
   @Override
   public String description() {
-    return "Add an effect by class name (from list_available_effects) to a channel, "
-        + "master bus, or pattern. The container must be a channel path "
-        + "(e.g. /lx/mixer/channel/1), the master bus path, or a pattern path "
-        + "(e.g. /lx/mixer/channel/1/pattern/1). Undoable in Chromatik with Cmd-Z.";
+    return "Add an effect by class name (from list_available_effects — either the full "
+        + "class name or the short name it lists) to a channel, master bus, or pattern. "
+        + "The container must be a channel path (e.g. /lx/mixer/channel/1), the master bus "
+        + "path, or a pattern path (e.g. /lx/mixer/channel/1/pattern/1). Undoable in "
+        + "Chromatik with Cmd-Z.";
   }
 
   @Override
@@ -30,7 +31,8 @@ public final class AddEffect implements LxTool {
     properties.put("container", Schemas.string(
         "Canonical path of the channel, master bus, or pattern to add the effect to"));
     properties.put("type", Schemas.string(
-        "Effect class name, as returned by list_available_effects"));
+        "Effect class name, as returned by list_available_effects — full class name or "
+            + "short name"));
     return Schemas.object(properties, List.of("container", "type"));
   }
 

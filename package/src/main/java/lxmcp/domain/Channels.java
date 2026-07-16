@@ -70,32 +70,26 @@ public final class Channels {
   // ── Channel mutations ────────────────────────────────────────────────────────
 
   /**
-   * Resolve a pattern class name against the LX registry.
+   * Resolve a pattern class name against the LX registry. Accepts the full class name, or
+   * the short name ({@code getSimpleName()} / display name) advertised by
+   * {@code list_available_patterns}.
    *
-   * @throws Resolve.ResolveException TYPE_MISMATCH for an unregistered name.
+   * @throws Resolve.ResolveException TYPE_MISMATCH for an unregistered or ambiguous name.
    */
   public static Class<? extends LXPattern> resolvePatternClass(LX lx, String className) {
-    for (Class<? extends LXPattern> clazz : lx.registry.patterns) {
-      if (clazz.getName().equals(className)) {
-        return clazz;
-      }
-    }
-    throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+    return Resolve.resolveClassName(lx.registry.patterns, className, Resolve.Failure.TYPE_MISMATCH,
         "Unknown pattern type: " + className + " (see list_available_patterns)");
   }
 
   /**
-   * Resolve an effect class name against the LX registry.
+   * Resolve an effect class name against the LX registry. Accepts the full class name, or
+   * the short name ({@code getSimpleName()} / display name) advertised by
+   * {@code list_available_effects}.
    *
-   * @throws Resolve.ResolveException TYPE_MISMATCH for an unregistered name.
+   * @throws Resolve.ResolveException TYPE_MISMATCH for an unregistered or ambiguous name.
    */
   public static Class<? extends LXEffect> resolveEffectClass(LX lx, String className) {
-    for (Class<? extends LXEffect> clazz : lx.registry.effects) {
-      if (clazz.getName().equals(className)) {
-        return clazz;
-      }
-    }
-    throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+    return Resolve.resolveClassName(lx.registry.effects, className, Resolve.Failure.TYPE_MISMATCH,
         "Unknown effect type: " + className + " (see list_available_effects)");
   }
 

@@ -28,15 +28,19 @@ public final class GetComponentDoc implements LxTool {
   public String description() {
     return "Return the semantic catalog entry for an LX pattern, effect, or modulator class: "
         + "visual summary, parameter interactions, usage tips, and staleness metadata. "
-        + "Registered but undocumented classes return documented:false (not an error).";
+        + "Accepts either the full class name or the short name returned by the "
+        + "list_available_* tools (a short name ambiguous across patterns/effects/modulators "
+        + "is rejected, naming the candidates). Registered but undocumented classes return "
+        + "documented:false (not an error).";
   }
 
   @Override
   public Map<String, Object> inputSchema() {
     return Schemas.object(
         Map.of("class", Schemas.string(
-            "Fully-qualified class name, as returned by list_available_* tools"
-                + " (e.g. heronarts.lx.pattern.color.GradientPattern)")),
+            "Class name, as returned by list_available_* tools — full class name "
+                + "(e.g. heronarts.lx.pattern.color.GradientPattern) or short name "
+                + "(e.g. GradientPattern)")),
         List.of("class"));
   }
 
