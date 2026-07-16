@@ -62,6 +62,7 @@ public final class Tools {
             new WireModulator(),
             new WireTrigger(),
             new RemoveModulation(),
+            new RemoveModulator(),
             new ListModulations(),
             new FireTrigger(),
             new GetComponentDoc(),

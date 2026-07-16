@@ -221,6 +221,26 @@ public final class Modulators {
     Commands.perform(lx, new LXCommand.Modulation.RemoveModulation(modulation.scope, modulation));
   }
 
+  /**
+   * Remove a modulator. {@code RemoveModulator} is an LX {@code RemoveComponent}, so any
+   * wirings (modulations/triggers) sourced from or targeting the modulator are removed
+   * along with it, all undoable as one command.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the modulator's parent is not a
+   *     modulation engine — unsupported state the Chromatik UI never creates.
+   */
+  public static void removeModulator(LX lx, LXModulator modulator) {
+    if (!(modulator.getParent() instanceof LXModulationEngine engine)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Not a removable modulator: " + modulator.getCanonicalPath()
+              + " (parent is not a modulation engine)");
+    }
+    lx.command.perform(new LXCommand.Modulation.RemoveModulator(engine, modulator));
+    if (engine.modulators.contains(modulator)) {
+      throw new IllegalStateException("RemoveModulator did not remove " + modulator.getCanonicalPath());
+    }
+  }
+
   /** Remove a trigger modulation; its engine rides along in {@code trigger.scope}. */
   public static void removeTrigger(LX lx, LXTriggerModulation trigger) {
     Commands.perform(lx, new LXCommand.Modulation.RemoveTrigger(trigger.scope, trigger));

@@ -398,4 +398,57 @@ class ModulatorsTest {
     assertEquals(triggers.macro1.getCanonicalPath(), restored.source.getCanonicalPath());
     assertEquals(channel.enabled.getCanonicalPath(), restored.target.getCanonicalPath());
   }
+
+  @Test
+  void removeModulatorRemovesFromEngine() {
+    LX lx = newHeadlessLx();
+    MacroKnobs knobs = (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    int before = lx.engine.modulation.modulators.size();
+
+    Modulators.removeModulator(lx, knobs);
+
+    assertEquals(before - 1, lx.engine.modulation.modulators.size());
+    assertFalse(lx.engine.modulation.modulators.contains(knobs));
+  }
+
+  @Test
+  void removeModulatorRemovesDependentWirings() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    MacroKnobs knobs = (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    Modulators.wireModulation(lx, lx.engine.modulation, knobs.macro1, channel.fader);
+    assertEquals(1, lx.engine.modulation.modulations.size());
+
+    Modulators.removeModulator(lx, knobs);
+
+    assertFalse(lx.engine.modulation.modulators.contains(knobs), "the modulator is gone");
+    assertEquals(0, lx.engine.modulation.modulations.size(),
+        "the dependent wiring is removed along with its source");
+  }
+
+  @Test
+  void removeModulatorUndoRestores() {
+    LX lx = newHeadlessLx();
+    MacroKnobs knobs = (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    int before = lx.engine.modulation.modulators.size();
+
+    Modulators.removeModulator(lx, knobs);
+    assertEquals(before - 1, lx.engine.modulation.modulators.size());
+
+    lx.command.undo();
+
+    assertEquals(before, lx.engine.modulation.modulators.size(), "undo reconstructs the modulator");
+    LXModulator restored = lx.engine.modulation.modulators.get(lx.engine.modulation.modulators.size() - 1);
+    assertInstanceOf(MacroKnobs.class, restored, "compare by type — undo builds a fresh instance");
+  }
+
+  @Test
+  void removeModulatorRejectsUnparentedModulator() {
+    LX lx = newHeadlessLx();
+    LXModulator orphan = new MacroKnobs();
+
+    assertEquals(Resolve.Failure.TYPE_MISMATCH,
+        assertThrows(Resolve.ResolveException.class,
+            () -> Modulators.removeModulator(lx, orphan)).failure);
+  }
 }

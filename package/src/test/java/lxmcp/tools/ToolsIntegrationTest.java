@@ -164,13 +164,14 @@ class ToolsIntegrationTest {
         Set.of("get_project_info", "get_status", "list_channels", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
             "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
-            "remove_modulation", "list_modulations", "fire_trigger", "get_component_doc",
+            "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
+            "get_component_doc",
             "get_frame", "get_palette",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect"),
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
-        "wire_trigger", "remove_modulation", "fire_trigger",
+        "wire_trigger", "remove_modulation", "remove_modulator", "fire_trigger",
         "add_channel", "remove_channel", "add_pattern", "remove_pattern",
         "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect");
     for (McpSchema.Tool tool : tools.tools()) {
@@ -434,6 +435,53 @@ class ToolsIntegrationTest {
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  void removeModulatorOverMcpMutatesEngineState() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+    String path = (String) knobs.get("path");
+    int before = lx.engine.modulation.modulators.size();
+
+    Map<String, Object> removed = structured(call("remove_modulator", Map.of("path", path)));
+
+    assertEquals(path, removed.get("removed"));
+    assertEquals("modulator", removed.get("kind"));
+    assertEquals(before - 1, lx.engine.modulation.modulators.size());
+  }
+
+  @Test
+  void removeModulatorRemovesDependentWirings() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+    String macro1 = knobs.get("path") + "/macro1";
+    structured(call("wire_modulator", Map.of(
+        "source", macro1, "target", channel.fader.getCanonicalPath())));
+    assertEquals(1, lx.engine.modulation.modulations.size());
+
+    structured(call("remove_modulator", Map.of("path", knobs.get("path"))));
+
+    assertEquals(0, lx.engine.modulation.modulations.size(),
+        "the dependent wiring is removed along with its source");
+  }
+
+  @Test
+  void removeModulatorUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result =
+        call("remove_modulator", Map.of("path", "/lx/modulation/modulator/99"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  void removeModulatorWrongTypeIsInvalidArgument() {
+    McpSchema.CallToolResult result =
+        call("remove_modulator", Map.of("path", channel.fader.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
   }
 
   // ── Channel tool integration tests ──────────────────────────────────────────
