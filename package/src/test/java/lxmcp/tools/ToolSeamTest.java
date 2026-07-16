@@ -13,7 +13,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import heronarts.lx.LX;
+import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
+import heronarts.lx.modulator.MacroKnobs;
+import heronarts.lx.pattern.color.GradientPattern;
+
+import lxmcp.domain.Modulators;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -168,6 +173,26 @@ class ToolSeamTest {
     Result.Error<Map<String, Object>> error =
         assertInstanceOf(Result.Error.class, result);
     assertEquals(Result.INVALID_ARGUMENT, error.code());
+  }
+
+  @Test
+  void wireModulatorRangeNaNIsInvalidArgument() {
+    // HTTP JSON cannot carry NaN, so test the handler directly. NaN fails both >= and <=,
+    // but the inverted check !(range >= -1.0 && range <= 1.0) properly rejects it.
+    LXChannel channel = this.lx.engine.mixer.addChannel();
+    channel.addPattern(new GradientPattern(this.lx));
+    MacroKnobs knobs =
+        (MacroKnobs) Modulators.addModulator(this.lx, this.lx.engine.modulation, MacroKnobs.class);
+
+    Result<Map<String, Object>> result = new WireModulator()
+        .handle(this.lx, Map.of(
+            "source", knobs.macro1.getCanonicalPath(),
+            "target", channel.fader.getCanonicalPath(),
+            "range", Double.NaN));
+    Result.Error<Map<String, Object>> error =
+        assertInstanceOf(Result.Error.class, result);
+    assertEquals(Result.INVALID_ARGUMENT, error.code());
+    assertTrue(error.message().contains("range must be between"), "error message describes bounds");
   }
 
   @Test

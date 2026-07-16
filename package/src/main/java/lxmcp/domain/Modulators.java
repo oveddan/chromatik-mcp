@@ -168,13 +168,37 @@ public final class Modulators {
    */
   public static LXCompoundModulation wireModulation(LX lx, LXModulationEngine engine,
       LXNormalizedParameter source, LXCompoundModulation.Target target) {
+    return wireModulation(lx, engine, source, target, null);
+  }
+
+  /**
+   * As {@link #wireModulation(LX, LXModulationEngine, LXNormalizedParameter,
+   * LXCompoundModulation.Target)}, additionally applying an initial {@code range} (depth) so
+   * the wiring is not inert until a separate set_parameter call; {@code null} leaves the
+   * range at its default (0 — no effect).
+   */
+  public static LXCompoundModulation wireModulation(LX lx, LXModulationEngine engine,
+      LXNormalizedParameter source, LXCompoundModulation.Target target, Double range) {
     requireInScope(engine, source, "Source");
     requireInScope(engine, target, "Target");
     List<LXCompoundModulation> modulations = engine.modulations;
     int before = modulations.size();
     performWiring(lx, new LXCommand.Modulation.AddModulation(engine, source, target),
         source, target);
-    return modulations.get(before);
+    LXCompoundModulation modulation = modulations.get(before);
+    if (range != null) {
+      setModulationRange(lx, modulation, range);
+    }
+    return modulation;
+  }
+
+  /** Apply an initial modulation depth so a fresh wiring has an immediate effect. */
+  public static void setModulationRange(LX lx, LXCompoundModulation modulation, double range) {
+    Commands.perform(lx, new LXCommand.Parameter.SetValue(modulation.range, range));
+    if (modulation.range.getValue() != range) {
+      throw new IllegalStateException("SetValue did not apply range " + range
+          + " to " + modulation.getCanonicalPath());
+    }
   }
 
   /**

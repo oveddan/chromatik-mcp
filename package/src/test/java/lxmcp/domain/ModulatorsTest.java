@@ -211,6 +211,27 @@ class ModulatorsTest {
   }
 
   @Test
+  void wireModulationWithRangeAppliesInitialDepth() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    MacroKnobs knobs = (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    int before = lx.engine.modulation.modulations.size();
+
+    LXCompoundModulation modulation =
+        Modulators.wireModulation(lx, lx.engine.modulation, knobs.macro1, channel.fader, 0.75);
+    assertEquals(before + 1, lx.engine.modulation.modulations.size());
+    assertEquals(0.75, modulation.range.getValue(), 1e-9);
+
+    // AddModulation and the range SetValue are two separate commands, so undoing once only
+    // reverts the range — the wiring itself needs a second undo.
+    lx.command.undo();
+    assertEquals(0.0, modulation.range.getValue(), 1e-9);
+    assertEquals(before + 1, lx.engine.modulation.modulations.size());
+    lx.command.undo();
+    assertEquals(before, lx.engine.modulation.modulations.size());
+  }
+
+  @Test
   void wireModulationDeviceScopedUndoes() {
     LX lx = newHeadlessLx();
     LXPattern pattern = newDevice(lx);

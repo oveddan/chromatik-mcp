@@ -274,6 +274,36 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void wireModulatorWithRangeAppliesInitialDepth() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+    String macro1 = knobs.get("path") + "/macro1";
+
+    Map<String, Object> wired = structured(call("wire_modulator", Map.of(
+        "source", macro1, "target", channel.fader.getCanonicalPath(), "range", 0.75)));
+    assertEquals(0.75, ((Number) wired.get("range")).doubleValue(), 1e-9);
+
+    Map<String, Object> rangeParam = structured(
+        call("get_parameter", Map.of("path", wired.get("rangePath"))));
+    assertEquals(0.75, ((Number) rangeParam.get("value")).doubleValue(), 1e-9);
+
+    structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+  }
+
+  @Test
+  void wireModulatorRangeOutOfBoundsIsInvalidArgument() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+    String macro1 = knobs.get("path") + "/macro1";
+
+    McpSchema.CallToolResult result = call("wire_modulator", Map.of(
+        "source", macro1, "target", channel.fader.getCanonicalPath(), "range", 2.0));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void listAvailableModulatorsAdvertisesScopeFlags() {
     Map<String, Object> payload = structured(call("list_available_modulators", Map.of()));
