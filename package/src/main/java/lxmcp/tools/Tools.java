@@ -37,7 +37,12 @@ public final class Tools {
           + "fader > 0 → engine output enabled (see get_project_info's output object). "
           + "Every component and parameter is addressed by its canonical LX path (e.g. "
           + "/lx/mixer/channel/1/fader); use list_parameters on any component path to discover "
-          + "its parameters instead of guessing names.";
+          + "its parameters instead of guessing names. Scene colors flow from the global "
+          + "palette (get_palette) to palette-linked patterns and effects; recall a saved "
+          + "swatch via fire_trigger on its recallPath. A parameter with live modulations "
+          + "reports its effective value plus baseValue; set_parameter moves the base. A new "
+          + "wire_modulator wiring needs depth: pass its range argument or set rangePath "
+          + "afterwards.";
 
   private Tools() {}
 
@@ -59,6 +64,7 @@ public final class Tools {
             new FireTrigger(),
             new GetComponentDoc(),
             new GetFrame(),
+            new GetPalette(),
             new AddChannel(),
             new RemoveChannel(),
             new AddPattern(),

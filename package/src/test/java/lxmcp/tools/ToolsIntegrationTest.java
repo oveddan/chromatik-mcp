@@ -131,7 +131,7 @@ class ToolsIntegrationTest {
             "list_available_effects", "list_available_modulators", "get_parameter",
             "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "list_modulations", "fire_trigger", "get_component_doc",
-            "get_frame",
+            "get_frame", "get_palette",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect"),
         names);
@@ -820,5 +820,52 @@ class ToolsIntegrationTest {
     McpSchema.TextContent mismatchText =
         assertInstanceOf(McpSchema.TextContent.class, mismatch.content().get(0));
     assertTrue(mismatchText.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void getPaletteDescribesActiveSwatchAndSavedSwatches() {
+    heronarts.lx.color.LXSwatch saved = lx.engine.palette.saveSwatch();
+    saved.label.setValue("Cool");
+    try {
+      Map<String, Object> payload = structured(call("get_palette", Map.of()));
+
+      Map<String, Object> activeSwatch = (Map<String, Object>) payload.get("activeSwatch");
+      assertEquals(lx.engine.palette.swatch.getCanonicalPath(), activeSwatch.get("path"));
+      List<Map<String, Object>> colors = (List<Map<String, Object>>) activeSwatch.get("colors");
+      assertEquals(lx.engine.palette.swatch.colors.size(), colors.size());
+      Map<String, Object> firstColor = colors.get(0);
+      assertNotNull(firstColor.get("path"));
+      assertNotNull(firstColor.get("mode"));
+      assertTrue(((String) firstColor.get("effectiveColor")).startsWith("0x"));
+      assertNotNull(firstColor.get("primaryPath"));
+      assertNotNull(firstColor.get("secondaryPath"));
+
+      List<Map<String, Object>> swatches = (List<Map<String, Object>>) payload.get("swatches");
+      Map<String, Object> savedEntry = swatches.stream()
+          .filter(s -> saved.getCanonicalPath().equals(s.get("path")))
+          .findFirst().orElseThrow(() -> new AssertionError("saved swatch not listed"));
+      assertEquals("Cool", savedEntry.get("label"));
+      assertEquals(saved.recall.getCanonicalPath(), savedEntry.get("recallPath"));
+      assertEquals(saved.autoCycleEligible.isOn(), savedEntry.get("autoCycleEligible"));
+
+      Map<String, Object> transition = (Map<String, Object>) payload.get("transition");
+      assertEquals(lx.engine.palette.transitionEnabled.isOn(), transition.get("enabled"));
+      assertEquals(lx.engine.palette.transitionTimeSecs.getValue(),
+          ((Number) transition.get("timeSecs")).doubleValue(), 1e-9);
+
+      Map<String, Object> autoCycle = (Map<String, Object>) payload.get("autoCycle");
+      assertEquals(lx.engine.palette.autoCycleEnabled.isOn(), autoCycle.get("enabled"));
+
+      // Recall via fire_trigger loads the saved swatch's colors onto the active swatch.
+      lx.engine.palette.transitionEnabled.setValue(false);
+      saved.colors.get(0).primary.setColor(0xff123456);
+      Map<String, Object> fired = structured(call("fire_trigger", Map.of("path", saved.recall.getCanonicalPath())));
+      assertEquals(Boolean.TRUE, fired.get("fired"));
+      assertEquals(0xff123456, lx.engine.palette.swatch.colors.get(0).getColor(),
+          "recall (not transitioning) loads the saved swatch's colors immediately");
+    } finally {
+      lx.engine.palette.removeSwatch(saved);
+    }
   }
 }
