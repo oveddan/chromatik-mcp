@@ -43,14 +43,13 @@ public final class ActivatePattern implements LxTool {
     if (!(args.get("path") instanceof String path)) {
       return Result.error(Result.INVALID_ARGUMENT, "Required string argument: path");
     }
-    LXPattern pattern = Channels.activatePattern(lx, path);
+    Channels.ActivationResult result = Channels.activatePattern(lx, path);
+    LXPattern pattern = result.pattern();
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("path", pattern.getCanonicalPath());
     payload.put("id", pattern.getId());
     payload.put("label", pattern.getLabel());
-    // With a transition blend, goPattern starts a transition — the pattern is pending,
-    // not yet active, so report the real engine state rather than assuming.
-    payload.put("active", pattern.getEngine().getActivePattern() == pattern);
+    payload.put("active", result.active());
     return Result.ok(payload);
   }
 }

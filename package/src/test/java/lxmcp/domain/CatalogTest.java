@@ -96,15 +96,15 @@ class CatalogTest {
 
   @Test
   void stalenessNullOrEmptyHashIsUnknown() {
-    assertEquals("unknown", Catalog.staleness(GradientPattern.class, null));
-    assertEquals("unknown", Catalog.staleness(GradientPattern.class, ""));
+    assertEquals(Catalog.Staleness.UNKNOWN, Catalog.staleness(GradientPattern.class, null));
+    assertEquals(Catalog.Staleness.UNKNOWN, Catalog.staleness(GradientPattern.class, ""));
   }
 
   @Test
   void stalenessMismatchedHashIsTrue() {
     // A hash that cannot match any real class bytes
-    Object result = Catalog.staleness(GradientPattern.class, "a".repeat(64));
-    assertEquals(Boolean.TRUE, result);
+    Catalog.Staleness result = Catalog.staleness(GradientPattern.class, "a".repeat(64));
+    assertEquals(Catalog.Staleness.STALE, result);
   }
 
   @Test
@@ -115,8 +115,8 @@ class CatalogTest {
     assertEquals(64, actualHash.length(), "SHA-256 hex is 64 chars");
     assertTrue(actualHash.matches("[0-9a-f]{64}"), "all lowercase hex");
 
-    Object result = Catalog.staleness(GradientPattern.class, actualHash);
-    assertEquals(Boolean.FALSE, result);
+    Catalog.Staleness result = Catalog.staleness(GradientPattern.class, actualHash);
+    assertEquals(Catalog.Staleness.FRESH, result);
   }
 
   @Test

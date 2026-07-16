@@ -84,7 +84,12 @@ public final class GetComponentDoc implements LxTool {
 
     Catalog.Frontmatter fm = entry.frontmatter();
     String recordedHash = fm.get("classBytesSha256");
-    Object stale = Catalog.staleness(clazz, recordedHash);
+    Catalog.Staleness staleness = Catalog.staleness(clazz, recordedHash);
+    Object stale = switch (staleness) {
+      case FRESH -> Boolean.FALSE;
+      case STALE -> Boolean.TRUE;
+      case UNKNOWN -> "unknown";
+    };
     String currentHash = Catalog.computeBytesHash(clazz);
 
     Map<String, Object> catalogMeta = new LinkedHashMap<>();

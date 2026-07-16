@@ -5,9 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import heronarts.lx.LX;
-import heronarts.lx.modulation.LXCompoundModulation;
 import heronarts.lx.modulation.LXParameterModulation;
-import heronarts.lx.modulation.LXTriggerModulation;
 
 import lxmcp.domain.Modulators;
 import lxmcp.domain.Resolve;
@@ -47,17 +45,7 @@ public final class RemoveModulation implements LxTool {
     }
     LXParameterModulation modulation =
         Resolve.component(lx, path, LXParameterModulation.class);
-    String kind;
-    if (modulation instanceof LXCompoundModulation compound) {
-      Modulators.removeModulation(lx, compound);
-      kind = "modulation";
-    } else if (modulation instanceof LXTriggerModulation trigger) {
-      Modulators.removeTrigger(lx, trigger);
-      kind = "trigger";
-    } else {
-      return Result.error(Result.INTERNAL,
-          "Unsupported modulation kind: " + modulation.getClass().getSimpleName());
-    }
+    String kind = Modulators.remove(lx, modulation);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("removed", path);
     payload.put("kind", kind);

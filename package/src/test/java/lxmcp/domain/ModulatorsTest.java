@@ -240,6 +240,21 @@ class ModulatorsTest extends HeadlessLxTest {
   }
 
   @Test
+  void setModulationRangeClampsOutOfRangeValuesInsteadOfThrowing() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    MacroKnobs knobs = (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    LXCompoundModulation modulation =
+        Modulators.wireModulation(lx, lx.engine.modulation, knobs.macro1, channel.fader);
+
+    // modulation.range is a CompoundParameter bounded to [-1, 1] and clamps silently
+    // (LXCompoundModulation.java:124-128) — 1.5 must not throw, and the applied value
+    // reads back clamped to 1.0.
+    Modulators.setModulationRange(lx, modulation, 1.5);
+    assertEquals(1.0, modulation.range.getValue(), 1e-9);
+  }
+
+  @Test
   void wireModulationDeviceScopedUndoes() {
     LX lx = newHeadlessLx();
     LXPattern pattern = newDevice(lx);

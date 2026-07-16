@@ -9,6 +9,7 @@ import heronarts.lx.LXDeviceComponent;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.modulation.LXCompoundModulation;
 import heronarts.lx.modulation.LXModulationEngine;
+import heronarts.lx.modulation.LXParameterModulation;
 import heronarts.lx.modulation.LXTriggerModulation;
 import heronarts.lx.modulator.LXModulator;
 import heronarts.lx.parameter.BooleanParameter;
@@ -147,7 +148,7 @@ public final class Modulators {
     }
     List<LXModulator> modulators = engine.modulators;
     int before = modulators.size();
-    lx.command.perform(new LXCommand.Modulation.AddModulator(engine, kind));
+    Commands.perform(lx, new LXCommand.Modulation.AddModulator(engine, kind));
     if (modulators.size() != before + 1) {
       throw new IllegalStateException("AddModulator did not add a " + kind.getName());
     }
@@ -189,13 +190,14 @@ public final class Modulators {
     return modulation;
   }
 
-  /** Apply an initial modulation depth so a fresh wiring has an immediate effect. */
+  /**
+   * Apply an initial modulation depth so a fresh wiring has an immediate effect.
+   * {@code modulation.range} is a {@code CompoundParameter} bounded to [-1, 1] and clamps
+   * silently, so an out-of-range {@code range} is not a failure — the caller reads back
+   * the applied (possibly clamped) value from the returned modulation.
+   */
   public static void setModulationRange(LX lx, LXCompoundModulation modulation, double range) {
     Commands.perform(lx, new LXCommand.Parameter.SetValue(modulation.range, range));
-    if (modulation.range.getValue() != range) {
-      throw new IllegalStateException("SetValue did not apply range " + range
-          + " to " + modulation.getCanonicalPath());
-    }
   }
 
   /**
@@ -232,7 +234,7 @@ public final class Modulators {
           "Not a removable modulator: " + modulator.getCanonicalPath()
               + " (parent is not a modulation engine)");
     }
-    lx.command.perform(new LXCommand.Modulation.RemoveModulator(engine, modulator));
+    Commands.perform(lx, new LXCommand.Modulation.RemoveModulator(engine, modulator));
     if (engine.modulators.contains(modulator)) {
       throw new IllegalStateException("RemoveModulator did not remove " + modulator.getCanonicalPath());
     }
@@ -241,6 +243,21 @@ public final class Modulators {
   /** Remove a trigger modulation; its engine rides along in {@code trigger.scope}. */
   public static void removeTrigger(LX lx, LXTriggerModulation trigger) {
     Commands.perform(lx, new LXCommand.Modulation.RemoveTrigger(trigger.scope, trigger));
+  }
+
+  /**
+   * Remove a modulation wiring of either kind, dispatching on its concrete subtype.
+   *
+   * @return "modulation" or "trigger", naming the kind removed
+   */
+  public static String remove(LX lx, LXParameterModulation modulation) {
+    if (modulation instanceof LXCompoundModulation compound) {
+      removeModulation(lx, compound);
+      return "modulation";
+    }
+    LXTriggerModulation trigger = (LXTriggerModulation) modulation;
+    removeTrigger(lx, trigger);
+    return "trigger";
   }
 
   private static void performWiring(LX lx, LXCommand command,

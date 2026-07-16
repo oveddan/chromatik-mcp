@@ -99,18 +99,16 @@ public final class Channels {
    * @param patternClass optional first pattern class; null leaves the channel empty
    */
   public static LXChannel addChannel(LX lx, Class<? extends LXPattern> patternClass) {
-    List<LXAbstractChannel> before = new ArrayList<>(lx.engine.mixer.channels);
+    List<LXAbstractChannel> channels = lx.engine.mixer.channels;
+    int before = channels.size();
     LXCommand.Mixer.AddChannel cmd = (patternClass != null)
         ? new LXCommand.Mixer.AddChannel(patternClass)
         : new LXCommand.Mixer.AddChannel();
     Commands.perform(lx, cmd);
-    // Find the newly added channel — it may not be at the end when groups shift indices.
-    for (LXAbstractChannel ch : lx.engine.mixer.channels) {
-      if (!before.contains(ch) && ch instanceof LXChannel channel) {
-        return channel;
-      }
+    if (channels.size() != before + 1 || !(channels.get(before) instanceof LXChannel channel)) {
+      throw new IllegalStateException("AddChannel did not add a new LXChannel");
     }
-    throw new IllegalStateException("AddChannel did not add a new LXChannel");
+    return channel;
   }
 
   /**
@@ -165,11 +163,18 @@ public final class Channels {
   }
 
   /**
+   * The result of activating a pattern: {@code active} reports whether it landed
+   * immediately. With a transition blend configured, {@code GoPattern} starts a
+   * transition — the pattern is pending, not yet active, until it lands.
+   */
+  public record ActivationResult(LXPattern pattern, boolean active) {}
+
+  /**
    * Activate a pattern (GoPattern — only valid in PLAYLIST mode).
    *
    * @throws Resolve.ResolveException TYPE_MISMATCH when the channel is in BLEND mode.
    */
-  public static LXPattern activatePattern(LX lx, String path) {
+  public static ActivationResult activatePattern(LX lx, String path) {
     LXPattern pattern = Resolve.component(lx, path, LXPattern.class);
     LXPatternEngine engine = pattern.getEngine();
     if (!engine.isPlaylist()) {
@@ -179,7 +184,7 @@ public final class Channels {
               + "compositeLevel (0-1) parameters");
     }
     Commands.perform(lx, new LXCommand.Channel.GoPattern(engine, pattern));
-    return pattern;
+    return new ActivationResult(pattern, pattern.getEngine().getActivePattern() == pattern);
   }
 
   /**

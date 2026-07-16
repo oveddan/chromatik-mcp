@@ -104,7 +104,8 @@ public final class Catalog {
       try {
         String content = Files.readString(overlay, StandardCharsets.UTF_8);
         return parseEntry(content, "overlay");
-      } catch (IOException ignored) {
+      } catch (IOException e) {
+        LX.error(e, "Unreadable catalog overlay file: " + overlay);
         // Unreadable overlay falls through to tier 2
       }
     }
@@ -116,7 +117,9 @@ public final class Catalog {
         String content = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         return parseEntry(content, "class-jar");
       }
-    } catch (IOException ignored) {}
+    } catch (IOException e) {
+      LX.error(e, "Unreadable catalog class-jar resource: catalog/" + filename);
+    }
 
     return null;
   }
@@ -126,18 +129,21 @@ public final class Catalog {
     return locateEntry(clazz) != null;
   }
 
+  /** Staleness of a catalog entry relative to the current class bytecode. */
+  public enum Staleness { FRESH, STALE, UNKNOWN }
+
   /**
    * Staleness of a catalog entry relative to the current class bytecode.
    *
-   * @return {@code false} (bytecode identical — entry is trustworthy),
-   *         {@code true} (bytecode differs — regenerate), or
-   *         {@code "unknown"} (no recorded hash, or bytecode unreadable).
+   * @return {@link Staleness#FRESH} (bytecode identical — entry is trustworthy),
+   *         {@link Staleness#STALE} (bytecode differs — regenerate), or
+   *         {@link Staleness#UNKNOWN} (no recorded hash, or bytecode unreadable).
    */
-  public static Object staleness(Class<?> clazz, String recordedHash) {
-    if (recordedHash == null || recordedHash.isEmpty()) return "unknown";
+  public static Staleness staleness(Class<?> clazz, String recordedHash) {
+    if (recordedHash == null || recordedHash.isEmpty()) return Staleness.UNKNOWN;
     String current = computeBytesHash(clazz);
-    if (current == null) return "unknown";
-    return !current.equals(recordedHash);
+    if (current == null) return Staleness.UNKNOWN;
+    return current.equals(recordedHash) ? Staleness.FRESH : Staleness.STALE;
   }
 
   /**
