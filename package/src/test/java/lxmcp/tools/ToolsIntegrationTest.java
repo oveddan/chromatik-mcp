@@ -173,12 +173,13 @@ class ToolsIntegrationTest {
             "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
             "get_component_doc",
-            "get_frame", "get_palette", "get_views",
+            "get_frame", "get_palette", "get_views", "add_view", "remove_view",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect"),
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
         "wire_trigger", "remove_modulation", "remove_modulator", "fire_trigger",
+        "add_view", "remove_view",
         "add_channel", "remove_channel", "add_pattern", "remove_pattern",
         "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect");
     for (McpSchema.Tool tool : tools.tools()) {
@@ -1116,6 +1117,104 @@ class ToolsIntegrationTest {
 
     // assertions on shape only — "assignments" is exercised for content in ViewsTest
     assertNotNull(payload.get("assignments"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void addViewOverMcpComposesAViewAndWarnsOnNoMatch() {
+    int before = lx.structure.views.views.size();
+
+    // GridModel's root carries the "grid" tag but has no descendant submodels — a tag
+    // selector never matches a fixture on it (LXView selectors only match descendants),
+    // so this is the warning path.
+    Map<String, Object> matching = structured(call("add_view",
+        Map.of("label", "All Grid", "selector", "grid")));
+    String matchingPath = (String) matching.get("path");
+    try {
+      assertEquals(before + 1, lx.structure.views.views.size());
+      heronarts.lx.structure.view.LXViewDefinition added =
+          lx.structure.views.views.get(lx.structure.views.views.size() - 1);
+      assertEquals(Resolve.canonicalPath(added), matchingPath);
+      assertEquals("All Grid", matching.get("label"));
+      assertEquals("grid", matching.get("selector"));
+      assertEquals("relative", matching.get("normalization"), "default normalization");
+      assertEquals("global", matching.get("orientation"), "default orientation");
+      assertNotNull(matching.get("cuePath"));
+      assertEquals(0, ((Number) matching.get("numFixtures")).intValue());
+      assertEquals("selector matched no fixtures — check modelTags from get_views",
+          matching.get("warning"));
+    } finally {
+      structured(call("remove_view", Map.of("path", matchingPath)));
+    }
+
+    Map<String, Object> withEnums = structured(call("add_view", Map.of(
+        "label", "Absolute Group", "selector", "grid",
+        "normalization", "absolute", "orientation", "group")));
+    try {
+      assertEquals("absolute", withEnums.get("normalization"));
+      assertEquals("group", withEnums.get("orientation"));
+    } finally {
+      structured(call("remove_view", Map.of("path", withEnums.get("path"))));
+    }
+    assertEquals(before, lx.structure.views.views.size());
+  }
+
+  @Test
+  void addViewRejectsAnUnknownEnumValue() {
+    // The SDK rejects non-enum values against inputSchema before the handler runs (see
+    // getFrameBadViewIsInvalidArgument) — with its own message, not our invalid_argument
+    // wire code, so this pins the SDK-side rejection rather than the handler's own check.
+    McpSchema.CallToolResult result = call("add_view", Map.of(
+        "label", "Bad", "selector", "grid", "normalization", "sideways"));
+    assertEquals(Boolean.TRUE, result.isError());
+  }
+
+  @Test
+  void removeViewOverMcpRemovesItAndDeviceViewMappingRoundTripsByLabel() {
+    Map<String, Object> added = structured(
+        call("add_view", Map.of("label", "Removable", "selector", "grid")));
+    String viewPath = (String) added.get("path");
+
+    // set_parameter maps the pattern's view by the created view's label, not its index.
+    var pattern = channel.patterns.get(0);
+    try {
+      Map<String, Object> mapped = structured(call("set_parameter",
+          Map.of("path", pattern.view.getCanonicalPath(), "value", "Removable")));
+      assertEquals("Removable", mapped.get("formatted"));
+      assertEquals(viewPath, Resolve.canonicalPath(pattern.view.getObject()));
+    } finally {
+      Map<String, Object> removed = structured(call("remove_view", Map.of("path", viewPath)));
+      assertEquals(viewPath, removed.get("removed"));
+      assertEquals("view", removed.get("kind"));
+      // Leave the shared fixture pattern back on Default for later tests.
+      structured(call("set_parameter", Map.of("path", pattern.view.getCanonicalPath(), "value", 0)));
+    }
+
+    McpSchema.CallToolResult stale = call("get_parameter", Map.of("path", viewPath));
+    assertEquals(Boolean.TRUE, stale.isError());
+  }
+
+  @Test
+  void setParameterAcceptsAnOptionNameForADiscreteParameter() {
+    Map<String, Object> added = structured(
+        call("add_view", Map.of("label", "Named", "selector", "grid")));
+    try {
+      Map<String, Object> result = structured(call("set_parameter",
+          Map.of("path", channel.view.getCanonicalPath(), "value", "Named")));
+      assertEquals("Named", result.get("formatted"));
+      assertEquals(Resolve.canonicalPath(channel.view.getObject()), added.get("path"));
+
+      McpSchema.CallToolResult unknown = call("set_parameter",
+          Map.of("path", channel.view.getCanonicalPath(), "value", "NotAView"));
+      assertEquals(Boolean.TRUE, unknown.isError());
+      McpSchema.TextContent text =
+          assertInstanceOf(McpSchema.TextContent.class, unknown.content().get(0));
+      assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    } finally {
+      // Reset so later tests aren't affected by this channel's view mapping.
+      structured(call("set_parameter", Map.of("path", channel.view.getCanonicalPath(), "value", 0)));
+      structured(call("remove_view", Map.of("path", added.get("path"))));
+    }
   }
 
   @Test

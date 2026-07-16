@@ -1,6 +1,8 @@
 package lxmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -13,6 +15,7 @@ import heronarts.lx.LX;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.LXModel;
 import heronarts.lx.model.LXPoint;
+import heronarts.lx.model.LXView;
 import heronarts.lx.pattern.color.SolidPattern;
 import heronarts.lx.structure.view.LXViewDefinition;
 
@@ -103,6 +106,74 @@ class ViewsTest {
         .anyMatch(a -> a.viewPath().equals(Resolve.canonicalPath(view))
             && a.devicePath().equals(channel.getCanonicalPath()));
     assertTrue(found, "assignments: " + snapshot.assignments());
+  }
+
+  @Test
+  void addViewComposesAndReportsLiveMatchFeedback() {
+    LX lx = newTaggedLx();
+
+    Views.ViewInfo info = Views.addView(
+        lx, "Cubes", "cube", LXView.Normalization.ABSOLUTE, LXView.Orientation.GROUP);
+
+    assertEquals(1, lx.structure.views.views.size());
+    LXViewDefinition view = lx.structure.views.views.get(0);
+    assertEquals(Resolve.canonicalPath(view), info.path());
+    assertEquals("Cubes", info.label());
+    assertEquals("cube", info.selector());
+    assertEquals("absolute", info.normalization());
+    assertEquals("group", info.orientation());
+    assertEquals(2, info.numFixtures(), "selector 'cube' matches both tagged submodels");
+  }
+
+  @Test
+  void addViewWithANonMatchingSelectorReportsZeroFixtures() {
+    LX lx = newTaggedLx();
+
+    Views.ViewInfo info = Views.addView(
+        lx, "Nope", "no-such-tag", LXView.Normalization.RELATIVE, LXView.Orientation.GLOBAL);
+
+    assertEquals(0, info.numFixtures());
+    assertEquals(0, info.numGroups());
+  }
+
+  @Test
+  void removeViewRemovesItFromTheEngine() {
+    LX lx = newTaggedLx();
+    LXViewDefinition view = lx.structure.views.addView();
+    view.selector.setValue("cube");
+
+    Views.removeView(lx, view);
+
+    assertTrue(lx.structure.views.views.isEmpty());
+  }
+
+  @Test
+  void removeViewReassignsADeviceSelectorToWhateverNowOccupiesTheOldIndex() {
+    LX lx = newTaggedLx();
+    LXViewDefinition first = lx.structure.views.addView();
+    first.label.setValue("First");
+    LXViewDefinition second = lx.structure.views.addView();
+    second.label.setValue("Second");
+
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.view.setValue(second);
+    assertSame(second, channel.view.getObject());
+
+    // Removing "First" shifts "Second" down a slot. LXViewEngine.updateSelectors()
+    // explicitly restores each selector by object identity when the previously-selected
+    // view is still in the list, so a device that had selected the still-alive "Second"
+    // keeps its selection across the reindex...
+    Views.removeView(lx, first);
+    assertSame(second, channel.view.getObject(), "surviving view keeps its selection");
+
+    // ...but there is no such restore for the view that was actually removed: its
+    // selector's stored *index* is only clamped into the shrunk range (setOptions ->
+    // setRange), so a device selecting it silently reassigns to whatever now sits at that
+    // index, rather than resetting to Default.
+    LXChannel other = lx.engine.mixer.addChannel();
+    other.view.setValue(second);
+    Views.removeView(lx, second);
+    assertNull(other.view.getObject(), "Second was the last view left, so its index now maps to Default");
   }
 
   @Test

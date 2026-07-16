@@ -157,7 +157,7 @@ public final class Parameters {
     } else if (parameter instanceof BooleanParameter b) {
       Commands.perform(lx, new LXCommand.Parameter.SetNormalized(b, requireBoolean(parameter, value)));
     } else if (parameter instanceof DiscreteParameter d) {
-      Commands.perform(lx, new LXCommand.Parameter.SetValue(d, requireInt(d, value)));
+      Commands.perform(lx, new LXCommand.Parameter.SetValue(d, requireDiscreteIndex(d, value)));
     } else if (parameter instanceof AggregateParameter a) {
       // No command sets a packed aggregate double sanely (colors: SetColor covers only
       // hue+saturation; MIDI filters bit-unpack the raw double into six subparameters);
@@ -231,7 +231,13 @@ public final class Parameters {
     throw mismatch(p, "expects a boolean value");
   }
 
-  private static int requireInt(DiscreteParameter p, Object value) {
+  /**
+   * Discrete/selector parameters accept either an in-range integer index or (when the
+   * parameter has {@link DiscreteParameter#getOptions()}) an option name string — e.g. a
+   * device's view selector accepts the target view's label, so callers don't have to look
+   * up its numeric index first.
+   */
+  private static int requireDiscreteIndex(DiscreteParameter p, Object value) {
     if (value instanceof Number n) {
       double d = n.doubleValue();
       if (d != Math.rint(d)) {
@@ -244,7 +250,27 @@ public final class Parameters {
       }
       return (int) d;
     }
-    throw mismatch(p, "expects an integer value");
+    if (value instanceof String s) {
+      String[] options = p.getOptions();
+      if (options == null) {
+        throw mismatch(p, "has no named options — expects an integer value");
+      }
+      List<Integer> matches = new ArrayList<>();
+      for (int i = 0; i < options.length; ++i) {
+        if (options[i].equals(s)) {
+          matches.add(i);
+        }
+      }
+      if (matches.size() == 1) {
+        return matches.get(0);
+      }
+      String validOptions = String.join(", ", options);
+      throw mismatch(p, matches.isEmpty()
+          ? "has no option named '" + s + "' — valid options: " + validOptions
+          : "has " + matches.size() + " options named '" + s + "' — ambiguous, valid "
+              + "options: " + validOptions);
+    }
+    throw mismatch(p, "expects an integer value or an option name string");
   }
 
   private static double requireNumber(LXParameter p, Object value) {

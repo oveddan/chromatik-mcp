@@ -20,6 +20,7 @@ import heronarts.lx.modulation.LXCompoundModulation;
 import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.modulator.MacroTriggers;
 import heronarts.lx.pattern.color.GradientPattern;
+import heronarts.lx.structure.view.LXViewDefinition;
 
 class ParametersTest {
 
@@ -379,6 +380,50 @@ class ParametersTest {
 
     lx.command.undo();
     assertEquals(before, channel.crossfadeGroup.getValuei());
+  }
+
+  @Test
+  void setDiscreteParameterByOptionNameSelectsTheMatchingIndex() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXViewDefinition view = lx.structure.views.addView();
+    view.label.setValue("Cubes");
+
+    Parameters.ParameterInfo after =
+        Parameters.set(lx, channel.view.getCanonicalPath(), "Cubes");
+    assertSame(view, channel.view.getObject());
+    assertEquals(channel.view.getValuei(), after.value());
+
+    lx.command.undo();
+    assertNull(channel.view.getObject(), "undo restores Default");
+  }
+
+  @Test
+  void setDiscreteParameterByOptionNameRejectsUnknownOrAmbiguousNames() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    lx.structure.views.addView().label.setValue("Cubes");
+
+    Resolve.ResolveException unknown = assertThrows(Resolve.ResolveException.class,
+        () -> Parameters.set(lx, channel.view.getCanonicalPath(), "NoSuchView"));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, unknown.failure);
+    assertTrue(unknown.getMessage().contains("NoSuchView"), unknown.getMessage());
+
+    lx.structure.views.addView().label.setValue("Cubes");
+    Resolve.ResolveException ambiguous = assertThrows(Resolve.ResolveException.class,
+        () -> Parameters.set(lx, channel.view.getCanonicalPath(), "Cubes"));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ambiguous.failure);
+    assertTrue(ambiguous.getMessage().contains("ambiguous"), ambiguous.getMessage());
+  }
+
+  @Test
+  void setDiscreteParameterByStringRejectsWhenThereAreNoNamedOptions() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> Parameters.set(lx, channel.crossfadeGroup.getCanonicalPath(), "1"));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
   }
 
   @Test

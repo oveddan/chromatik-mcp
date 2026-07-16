@@ -13,6 +13,7 @@ import heronarts.lx.mixer.LXAbstractChannel;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXMasterBus;
 import heronarts.lx.model.LXModel;
+import heronarts.lx.model.LXView;
 import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.structure.view.LXViewDefinition;
 
@@ -83,6 +84,43 @@ public final class Views {
     if (selected != null) {
       assignments.add(new AssignmentInfo(Resolve.canonicalPath(selected), channel.getCanonicalPath(),
           channel.getLabel()));
+    }
+  }
+
+  /**
+   * Compose a new named model subset. LXViewEngine has no LXCommand for view lifecycle —
+   * this and {@link #removeView} are direct engine edits, not undoable (same category as
+   * swatch recall — see docs/tool-conventions.md). Call on the engine thread.
+   */
+  public static ViewInfo addView(LX lx, String label, String selector,
+      LXView.Normalization normalization, LXView.Orientation orientation) {
+    LXViewDefinition view = lx.structure.views.addView();
+    view.label.setValue(label);
+    view.selector.setValue(selector);
+    view.normalization.setValue(normalization);
+    view.orientation.setValue(orientation);
+    return describeView(view);
+  }
+
+  /**
+   * Remove a view. Not undoable (see {@link #addView}).
+   *
+   * <p>Devices selecting a <em>surviving</em> view are unaffected: {@code
+   * LXViewEngine.removeView} calls {@code updateSelectors()}, which rebuilds every
+   * selector's objects/options and then explicitly restores each selector's selection by
+   * object identity when the previously-selected view is still in the list. But a device
+   * whose 'view' selector pointed at the <em>removed</em> view is <strong>not</strong> reset
+   * to Default: since that view is no longer in the list, the identity-restore is skipped,
+   * and the selector's stored *index* is only clamped into the shrunk range ({@code
+   * DiscreteParameter.setOptions} -> {@code setRange}) — so it silently reassigns to
+   * whatever view (or Default) now occupies that index, which is usually a different view,
+   * not necessarily Default. Callers should re-check device 'view' assignments (get_views'
+   * assignments) after removing a view rather than assume they reset.
+   */
+  public static void removeView(LX lx, LXViewDefinition view) {
+    lx.structure.views.removeView(view);
+    if (lx.structure.views.views.contains(view)) {
+      throw new IllegalStateException("removeView did not remove the view");
     }
   }
 

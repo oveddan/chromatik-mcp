@@ -18,8 +18,11 @@ public final class SetParameter implements LxTool {
   @Override
   public String description() {
     return "Set a parameter by its canonical LX path (e.g. /lx/mixer/channel/1/fader). "
-        + "The value's type must match the parameter: a number for numeric/bounded, an "
-        + "in-range integer for discrete/enum, a boolean for toggles, a string for text. "
+        + "The value's type must match the parameter: a number for numeric/bounded, a "
+        + "boolean for toggles, a string for text. Discrete/selector parameters accept "
+        + "either the in-range integer value or an option name string (e.g. a device's "
+        + "'view' selector accepts the target view's label) — an unknown or ambiguous "
+        + "option name is rejected with the valid options listed. "
         + "Aggregate parameters (color, MIDI filter) are set via their component paths "
         + "(e.g. .../hue, .../saturation, .../brightness); momentary triggers fire via "
         + "fire_trigger. Undoable in Chromatik with Cmd-Z. On a parameter with live modulations "
