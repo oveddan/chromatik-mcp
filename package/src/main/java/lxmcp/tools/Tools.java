@@ -41,9 +41,11 @@ public final class Tools {
 
   private Tools() {}
 
-  public static List<McpServerFeatures.SyncToolSpecification> specifications(LX lx, EngineExecutor executor) {
+  public static List<McpServerFeatures.SyncToolSpecification> specifications(
+      LX lx, EngineExecutor executor, GetStatus getStatus) {
     return List.of(
             new GetProjectInfo(),
+            getStatus,
             new ListChannels(),
             new ListAvailable(ListAvailable.Kind.PATTERNS),
             new ListAvailable(ListAvailable.Kind.EFFECTS),

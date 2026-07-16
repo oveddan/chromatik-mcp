@@ -32,9 +32,11 @@ import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 
+import lxmcp.ServerStatus;
 import lxmcp.domain.Registry;
 import lxmcp.domain.Resolve;
 import lxmcp.engine.EngineExecutor;
+import lxmcp.mcp.ConnectionTracker;
 import lxmcp.mcp.EmbeddedMcpServer;
 
 /**
@@ -58,6 +60,7 @@ class ToolsIntegrationTest {
   private static LX lx;
   private static LXChannel channel;
   private static EmbeddedMcpServer server;
+  private static ServerStatus status;
   private static McpSyncClient client;
   private static final AtomicBoolean draining = new AtomicBoolean(true);
   private static Thread drainer;
@@ -84,8 +87,14 @@ class ToolsIntegrationTest {
     }, "test-engine-drainer");
     drainer.start();
 
-    server = EmbeddedMcpServer.start("LX-MCP", "0.0.1-test", 0,
-        Tools.specifications(lx, new EngineExecutor(lx)), Tools.INSTRUCTIONS);
+    status = new ServerStatus();
+    ConnectionTracker connectionTracker = new ConnectionTracker();
+    GetStatus getStatus = new GetStatus(
+        status, () -> connectionTracker.snapshot(System.currentTimeMillis()));
+    server = EmbeddedMcpServer.start("LX-MCP", "0.0.1-test", 0, "127.0.0.1",
+        Tools.specifications(lx, new EngineExecutor(lx), getStatus), Tools.INSTRUCTIONS,
+        connectionTracker);
+    status.initialize("127.0.0.1", server.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
     HttpClientStreamableHttpTransport transport =
         HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
             .endpoint(EmbeddedMcpServer.ENDPOINT)
@@ -127,7 +136,7 @@ class ToolsIntegrationTest {
     McpSchema.ListToolsResult tools = client.listTools();
     Set<String> names = tools.tools().stream().map(McpSchema.Tool::name).collect(Collectors.toSet());
     assertEquals(
-        Set.of("get_project_info", "list_channels", "list_available_patterns",
+        Set.of("get_project_info", "get_status", "list_channels", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
             "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "list_modulations", "fire_trigger", "get_component_doc",
@@ -532,6 +541,23 @@ class ToolsIntegrationTest {
     assertFalse(result.content().isEmpty(), "success also carries a text mirror");
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith("{"), "text mirror is the serialized JSON payload");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void getStatusReportsServerAndConnectionState() {
+    Map<String, Object> payload = structured(call("get_status", Map.of()));
+    assertEquals("127.0.0.1", payload.get("host"));
+    assertEquals(server.port(), ((Number) payload.get("port")).intValue());
+    assertEquals("http://127.0.0.1:" + server.port() + EmbeddedMcpServer.ENDPOINT, payload.get("url"));
+    assertNotNull(payload.get("startedAt"));
+    assertNotNull(payload.get("uptimeSeconds"));
+
+    Map<String, Object> connection = (Map<String, Object>) payload.get("connection");
+    assertNotNull(connection, "connection state is reported");
+    // This test's own call is itself MCP activity, so the server sees an open stream.
+    assertEquals(Boolean.TRUE, connection.get("connected"));
+    assertNotNull(connection.get("activeStreams"));
   }
 
   @Test

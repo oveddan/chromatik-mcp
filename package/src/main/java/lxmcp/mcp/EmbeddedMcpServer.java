@@ -6,6 +6,8 @@ import org.apache.catalina.Context;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Wrapper;
 import org.apache.catalina.startup.Tomcat;
+import org.apache.tomcat.util.descriptor.web.FilterDef;
+import org.apache.tomcat.util.descriptor.web.FilterMap;
 
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
@@ -33,16 +35,19 @@ public final class EmbeddedMcpServer {
   private final Tomcat tomcat;
   private final McpSyncServer server;
   private final int port;
+  private final ConnectionTracker connectionTracker;
 
-  private EmbeddedMcpServer(Tomcat tomcat, McpSyncServer server, int port) {
+  private EmbeddedMcpServer(
+      Tomcat tomcat, McpSyncServer server, int port, ConnectionTracker connectionTracker) {
     this.tomcat = tomcat;
     this.server = server;
     this.port = port;
+    this.connectionTracker = connectionTracker;
   }
 
   /** Start with no tools registered — {@code tools/list} works and returns an empty list. */
   public static EmbeddedMcpServer start(String serverName, String version, int requestedPort) {
-    return start(serverName, version, requestedPort, List.of(), null);
+    return start(serverName, version, requestedPort, "127.0.0.1", List.of(), null);
   }
 
   /**
@@ -60,7 +65,7 @@ public final class EmbeddedMcpServer {
       String version,
       int requestedPort,
       List<McpServerFeatures.SyncToolSpecification> tools) {
-    return start(serverName, version, requestedPort, tools, null);
+    return start(serverName, version, requestedPort, "127.0.0.1", tools, null);
   }
 
   /**
@@ -74,6 +79,41 @@ public final class EmbeddedMcpServer {
       int requestedPort,
       List<McpServerFeatures.SyncToolSpecification> tools,
       String instructions) {
+    return start(serverName, version, requestedPort, "127.0.0.1", tools, instructions);
+  }
+
+  /**
+   * Start the server, binding {@code host} instead of the loopback-only default. Callers
+   * outside tests should think hard before passing anything but a loopback address — see
+   * the security comment at the connector below. Constructs its own {@link
+   * ConnectionTracker}; use the overload taking one explicitly to observe it before
+   * {@code start()} returns.
+   */
+  public static EmbeddedMcpServer start(
+      String serverName,
+      String version,
+      int requestedPort,
+      String host,
+      List<McpServerFeatures.SyncToolSpecification> tools,
+      String instructions) {
+    return start(serverName, version, requestedPort, host, tools, instructions, new ConnectionTracker());
+  }
+
+  /**
+   * Same as the five-arg {@code host} overload, but takes the {@link ConnectionTracker}
+   * to register as the request filter instead of constructing one internally. Lets a
+   * caller (the plugin) hold the tracker before {@code start()} returns, so a {@code
+   * get_status} supplier can close over the tracker directly rather than over this
+   * server's own field — see the "supplier NPE window" note in {@code LxMcpPlugin}.
+   */
+  public static EmbeddedMcpServer start(
+      String serverName,
+      String version,
+      int requestedPort,
+      String host,
+      List<McpServerFeatures.SyncToolSpecification> tools,
+      String instructions,
+      ConnectionTracker connectionTracker) {
     // The SDK resolves its JSON mapper + schema validator via ServiceLoader on the
     // thread-context classloader, eagerly at builder time. Inside Chromatik this jar
     // lives in a child classloader (LXClassLoader) that is never the TCCL, so without
@@ -84,7 +124,8 @@ public final class EmbeddedMcpServer {
     ClassLoader prior = thread.getContextClassLoader();
     thread.setContextClassLoader(EmbeddedMcpServer.class.getClassLoader());
     try {
-      return startWithContextClassLoader(serverName, version, requestedPort, tools, instructions);
+      return startWithContextClassLoader(
+          serverName, version, requestedPort, host, tools, instructions, connectionTracker);
     } finally {
       thread.setContextClassLoader(prior);
     }
@@ -94,8 +135,10 @@ public final class EmbeddedMcpServer {
       String serverName,
       String version,
       int requestedPort,
+      String host,
       List<McpServerFeatures.SyncToolSpecification> tools,
-      String instructions) {
+      String instructions,
+      ConnectionTracker connectionTracker) {
     HttpServletStreamableServerTransportProvider transport =
         HttpServletStreamableServerTransportProvider.builder()
             .mcpEndpoint(ENDPOINT)
@@ -124,12 +167,23 @@ public final class EmbeddedMcpServer {
     context.addChild(wrapper);
     context.addServletMappingDecoded("/*", "mcp");
 
-    // Loopback only: status.json discovery is inherently local, and the tool surface
-    // mutates a live show — never an unauthenticated listener on the LAN. (Touching
+    FilterDef filterDef = new FilterDef();
+    filterDef.setFilterName("connection-tracker");
+    filterDef.setFilter(connectionTracker);
+    filterDef.setAsyncSupported("true");
+    context.addFilterDef(filterDef);
+    FilterMap filterMap = new FilterMap();
+    filterMap.setFilterName("connection-tracker");
+    filterMap.addURLPattern("/*");
+    context.addFilterMap(filterMap);
+
+    // Loopback by default: status.json discovery is inherently local, and the tool
+    // surface mutates a live show — an unauthenticated listener should never reach the
+    // LAN without an explicit, logged opt-in (see ConfigFile / LxMcpPlugin). Touching
     // the connector before start also makes setPort(0) yield an ephemeral bind. No
     // async timeout is set: the SDK servlet disables it via setTimeout(0), so the
-    // EngineExecutor call timeout is the only bound on a blocked tool call.)
-    tomcat.getConnector().setProperty("address", "127.0.0.1");
+    // EngineExecutor call timeout is the only bound on a blocked tool call.
+    tomcat.getConnector().setProperty("address", host);
 
     try {
       tomcat.start();
@@ -137,13 +191,44 @@ public final class EmbeddedMcpServer {
       throw new IllegalStateException("Failed to start embedded MCP server", e);
     }
 
+    // Tomcat's StandardService swallows connector bind failures (logs and continues;
+    // start() returns normally), so a fixed port already in use, or a host address this
+    // machine can't bind, silently yields an unbound connector rather than an exception.
+    // getLocalPort() == -1 is that failure's only signal — surface it as a real error
+    // rather than reporting "listening on port -1" as healthy.
     int boundPort = tomcat.getConnector().getLocalPort();
-    return new EmbeddedMcpServer(tomcat, server, boundPort);
+    if (boundPort == -1) {
+      // Tomcat is still "started" from its own point of view even though the connector
+      // never bound — leaving it running here would leak it (a caller that retries
+      // start() on a different port stacks up orphaned Tomcat instances). Best-effort
+      // cleanup; a failure here must not mask the original bind failure being reported.
+      try {
+        server.closeGracefully();
+      } catch (RuntimeException ignored) {
+        // best-effort
+      }
+      try {
+        tomcat.stop();
+        tomcat.destroy();
+      } catch (LifecycleException | RuntimeException ignored) {
+        // best-effort
+      }
+      throw new IllegalStateException(
+          "Embedded MCP server failed to bind host=" + host + " port=" + requestedPort
+              + " — the port is likely already in use, or the host address is unassignable "
+              + "on this machine.");
+    }
+    return new EmbeddedMcpServer(tomcat, server, boundPort, connectionTracker);
   }
 
   /** The actual TCP port the server bound to. */
   public int port() {
     return this.port;
+  }
+
+  /** Observed client-activity state (open streams, last activity). */
+  public ConnectionTracker connectionTracker() {
+    return this.connectionTracker;
   }
 
   /**
