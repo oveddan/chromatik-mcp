@@ -27,7 +27,10 @@ public final class ListChannels implements LxTool {
         + "blend mode). In playlist mode 'enabled' only affects auto-cycle eligibility — it does "
         + "not hide the active pattern. The per-pattern 'contributing' field applies the correct "
         + "rule for the channel's mode. A contributing pattern is still invisible if its channel is disabled "
-        + "or its fader is 0, or if engine output is off (see get_project_info).";
+        + "or its fader is 0, or if engine output is off (see get_project_info). "
+        + "Patterns can host their own effect chains — each pattern entry carries its own "
+        + "effects list (e.g. a Gradient Mask living inside a pattern rather than on the "
+        + "channel).";
   }
 
   @Override
@@ -94,6 +97,7 @@ public final class ListChannels implements LxTool {
         entry.put("compositeLevel", pattern.compositeLevel());
       }
       entry.put("contributing", pattern.contributing());
+      entry.put("effects", effects(pattern.effects()));
       result.add(entry);
     }
     return result;

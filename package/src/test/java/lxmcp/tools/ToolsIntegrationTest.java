@@ -561,6 +561,55 @@ class ToolsIntegrationTest {
 
   @Test
   @SuppressWarnings("unchecked")
+  void listChannelsIncludesEffectsHostedOnAPattern() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      String patternPath = (String) structured(call("add_pattern", Map.of(
+          "channel", channelPath, "type", GradientPattern.class.getName()))).get("path");
+
+      // Assert empty effects list before adding effect
+      Map<String, Object> beforeAddEffectPayload = structured(call("list_channels", Map.of()));
+      List<Map<String, Object>> beforeAddEffectChannels = (List<Map<String, Object>>) beforeAddEffectPayload.get("channels");
+      Map<String, Object> beforeAddEffectChannelEntry = beforeAddEffectChannels.stream()
+          .filter(c -> channelPath.equals(c.get("path")))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("channel not found in list_channels"));
+      List<Map<String, Object>> beforeAddEffectPatterns = (List<Map<String, Object>>) beforeAddEffectChannelEntry.get("patterns");
+      Map<String, Object> beforeAddEffectPatternEntry = beforeAddEffectPatterns.stream()
+          .filter(p -> patternPath.equals(p.get("path")))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("pattern not found in list_channels"));
+      List<Map<String, Object>> beforeAddEffectEffects = (List<Map<String, Object>>) beforeAddEffectPatternEntry.get("effects");
+      assertEquals(0, beforeAddEffectEffects.size(), "pattern should have empty effects list before add_effect");
+
+      Map<String, Object> effect = structured(call("add_effect", Map.of(
+          "container", patternPath, "type", BlurEffect.class.getName())));
+      String effectPath = (String) effect.get("path");
+
+      Map<String, Object> payload = structured(call("list_channels", Map.of()));
+      List<Map<String, Object>> channels = (List<Map<String, Object>>) payload.get("channels");
+      Map<String, Object> channelEntry = channels.stream()
+          .filter(c -> channelPath.equals(c.get("path")))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("channel not found in list_channels"));
+      List<Map<String, Object>> patterns = (List<Map<String, Object>>) channelEntry.get("patterns");
+      Map<String, Object> patternEntry = patterns.stream()
+          .filter(p -> patternPath.equals(p.get("path")))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("pattern not found in list_channels"));
+
+      List<Map<String, Object>> patternEffects = (List<Map<String, Object>>) patternEntry.get("effects");
+      assertEquals(1, patternEffects.size());
+      assertEquals(effectPath, patternEffects.get(0).get("path"));
+      assertEquals(BlurEffect.class.getName(), patternEffects.get(0).get("class"));
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
   void listChannelsBlendModeEmitsCompositeLevelAndContributing() {
     Map<String, Object> ch = structured(call("add_channel", Map.of()));
     String channelPath = (String) ch.get("path");

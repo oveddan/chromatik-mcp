@@ -138,4 +138,24 @@ class ChannelsTest {
     assertFalse(mixer.master().effects().isEmpty(), "master effect should be listed");
     assertTrue(mixer.master().path().startsWith("/lx"), "master path should be canonical");
   }
+
+  @Test
+  void effectsAreListedOnPattern() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    GradientPattern pattern = new GradientPattern(lx);
+    channel.addPattern(pattern);
+
+    Channels.addEffect(lx, pattern.getCanonicalPath(), BlurEffect.class);
+
+    Channels.ChannelInfo info = Channels.list(lx).channels().get(channel.getIndex());
+    Channels.PatternInfo patternInfo = findByPath(info, pattern);
+
+    assertFalse(patternInfo.effects().isEmpty(), "pattern effect should be listed");
+    assertEquals(1, patternInfo.effects().size());
+    Channels.EffectInfo effectInfo = patternInfo.effects().get(0);
+    assertEquals(BlurEffect.class.getName(), effectInfo.className());
+    assertSame(pattern.getEffects().get(pattern.getEffects().size() - 1), LXPath.get(lx, effectInfo.path()),
+        "pattern effect path must round-trip through LXPath");
+  }
 }

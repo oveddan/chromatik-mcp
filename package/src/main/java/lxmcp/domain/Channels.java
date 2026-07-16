@@ -32,7 +32,7 @@ public final class Channels {
    * mode it is {@code enabled && compositeLevel > 0}.
    */
   public record PatternInfo(String path, int id, String label, String className, boolean active,
-      boolean enabled, double compositeLevel, boolean contributing) {}
+      boolean enabled, double compositeLevel, boolean contributing, List<EffectInfo> effects) {}
 
   public record EffectInfo(String path, int id, String label, String className, boolean enabled) {}
 
@@ -64,7 +64,7 @@ public final class Channels {
         master.getId(),
         master.getLabel(),
         master.fader.getValue(),
-        effects(master)));
+        effects(master.getEffects())));
   }
 
   // ── Channel mutations ────────────────────────────────────────────────────────
@@ -288,7 +288,8 @@ public final class Channels {
             isActive,
             patternEnabled,
             compositeLevel,
-            contributing));
+            contributing,
+            effects(pattern.getEffects())));
       }
     }
     LXGroup group = channel.getGroup();
@@ -303,19 +304,19 @@ public final class Channels {
         (group == null) ? null : group.getCanonicalPath(),
         patternMode,
         patterns,
-        effects(channel));
+        effects(channel.getEffects()));
   }
 
-  private static List<EffectInfo> effects(LXBus bus) {
-    List<EffectInfo> effects = new ArrayList<>();
-    for (LXEffect effect : bus.effects) {
-      effects.add(new EffectInfo(
+  private static List<EffectInfo> effects(List<LXEffect> effects) {
+    List<EffectInfo> result = new ArrayList<>();
+    for (LXEffect effect : effects) {
+      result.add(new EffectInfo(
           effect.getCanonicalPath(),
           effect.getId(),
           effect.getLabel(),
           effect.getClass().getName(),
           effect.enabled.isOn()));
     }
-    return effects;
+    return result;
   }
 }
