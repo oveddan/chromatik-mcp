@@ -39,6 +39,36 @@ Restart once more if Chromatik asks. On startup the plugin:
   must run on the same machine; there is no authentication layer
 - writes the discovery file `~/.lx-mcp/status.json`
 
+To also see a live status indicator in the Chromatik UI, enable **LX-MCP UI** as well
+(see [step 5](#5-optional-enable-the-chromatik-ui-status-section)).
+
+### Configuring the port and host
+
+By default the server binds an **ephemeral port** on **127.0.0.1** (loopback-only, safe,
+zero-config). To pin a fixed port or change the bind host, create
+`~/.lx-mcp/config.json`:
+
+```json
+{
+  "port": 7000,
+  "host": "127.0.0.1"
+}
+```
+
+- `port` — `0` (the default) picks an ephemeral port each startup; any other value pins
+  a fixed port. **If that port is already in use, the plugin fails at startup** (LX marks
+  it errored and surfaces the failure via its error dialog) rather than silently falling
+  back to another port.
+- `host` — defaults to `127.0.0.1`. A malformed or missing `config.json` silently falls
+  back to the defaults; a config that fails to parse never takes the server down.
+
+**SECURITY WARNING**: setting `host` to anything other than `localhost`, `::1`, or a
+`127.0.0.0/8` address binds the MCP server to a network-reachable interface. This server
+is **unauthenticated** — anyone who can reach that address has full control of a live
+show (arbitrary parameter mutation, project load/save, etc.). Only do this on a trusted
+network, and only if you understand the exposure. The plugin logs a loud warning on
+startup whenever a non-loopback host is configured.
+
 ## 3. Discover the port
 
 `~/.lx-mcp/status.json` is the discovery handshake:
@@ -47,16 +77,26 @@ Restart once more if Chromatik asks. On startup the plugin:
 {
   "pid": 12345,
   "port": 51234,
+  "host": "127.0.0.1",
+  "url": "http://127.0.0.1:51234/mcp",
   "projectPath": "/Users/you/Chromatik/Projects/MyShow.lxp",
-  "lxVersion": "1.2.1"
+  "lxVersion": "1.2.1",
+  "connected": false,
+  "lastActivityAt": null
 }
 ```
 
-- The MCP endpoint is `http://127.0.0.1:<port>/mcp` (streamable HTTP).
-- **Check `pid` liveness before trusting the file** — it is written once at plugin
-  startup and not yet cleaned up on exit, so a stale file from a previous run can point
-  at a dead port. If two Chromatik instances run at once, the last one wins the file.
+- The MCP endpoint is `url` (equivalently `http://<host>:<port>/mcp`, streamable HTTP).
+- **Check `pid` liveness before trusting the file** — a clean exit (quitting Chromatik,
+  disabling the plugin) rewrites the file with `connected: false` first, but a crashed or
+  force-killed session leaves whatever was last written, which can point at a dead port.
+  If two Chromatik instances run at once, the last one wins the file.
 - `projectPath` is the project open at startup (`null` if none).
+- `connected` and `lastActivityAt` track live client activity and are rewritten whenever
+  the connection state flips (an MCP client connects or its stream/window of recent
+  activity expires); `lastActivityAt` is an ISO-8601 timestamp, or `null` if no client
+  has ever been active. The `get_status` tool reports the same state live, without
+  re-reading the file.
 
 ## 4. Connect an MCP client
 
@@ -74,6 +114,22 @@ claude mcp add --transport http lx "http://127.0.0.1:$(jq -r .port ~/.lx-mcp/sta
 
 Verify the connection by calling `get_project_info` — it should report the LX version,
 channel count, and OSC ports of the running instance.
+
+## 5. (Optional) Enable the Chromatik UI status section
+
+The jar also bundles a second, Chromatik-only plugin, **LX-MCP UI**, that adds a small
+"LX-MCP" section to the left pane's **Global** tab: a connected/disconnected indicator, the
+server URL, and time since the last client activity.
+
+Enable it the same way as the core plugin — **Preferences → Plugins → LX-MCP UI** —
+alongside (not instead of) **LX-MCP**. The UI plugin reads state from the core plugin and
+does nothing on its own; if the core plugin isn't enabled, LX-MCP UI logs a message and
+skips adding the section rather than erroring.
+
+This split exists because the UI plugin depends on Chromatik's studio/UI classes, which
+aren't present in a pure-core headless LX run (e.g. `scripts/verify-load.sh`, CI). Only
+the core **LX-MCP** plugin is required to run the MCP server headlessly; **LX-MCP UI** is
+a visual convenience for interactive Chromatik sessions.
 
 ## Troubleshooting
 

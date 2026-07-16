@@ -22,6 +22,14 @@ public class LxMcpPlugin implements LXPlugin {
   private static final String SERVER_NAME = "LX-MCP";
   private static final String SERVER_VERSION = "0.0.1";
 
+  // LXPlugin instances are singletons per LX instance, and LXStudio runs
+  // onUIReady() for every plugin only after every plugin's initialize() has
+  // returned — so LxMcpUiPlugin.onUIReady() is guaranteed to observe the
+  // status set below, never a stale null from a race. JVM-wide (not per-LX):
+  // two LX instances in one JVM would cross-wire this field, but Chromatik
+  // never runs more than one LX per process, so that's an acceptable limit.
+  private static volatile ServerStatus currentStatus;
+
   private LX lx;
   private ServerStatus status;
   private EmbeddedMcpServer server;
@@ -58,6 +66,11 @@ public class LxMcpPlugin implements LXPlugin {
         connectionTracker);
     long startedAtMs = System.currentTimeMillis();
     this.status.initialize(config.host(), this.server.port(), startedAtMs, EmbeddedMcpServer.ENDPOINT);
+    // Only published for the UI plugin to find once fully initialized — if start()
+    // above had thrown (e.g. port already in use, which PR-A made fatal), publishing
+    // this earlier would let LxMcpUiPlugin's null check pass and build a section over
+    // an uninitialized ServerStatus ("http://null:0null", a grey dot that looks healthy).
+    currentStatus = this.status;
 
     writeStatusFile(false, null);
 
@@ -105,6 +118,7 @@ public class LxMcpPlugin implements LXPlugin {
       this.lx.engine.removeLoopTask(this.loopTask);
     }
     this.loopTask = null;
+    currentStatus = null;
     if (this.server != null) {
       // Best-effort: leave the discovery file honest (connected=false) rather than
       // stale from the last-observed state. Must never throw out of dispose() over a
@@ -121,5 +135,10 @@ public class LxMcpPlugin implements LXPlugin {
       this.server.stop();
       this.server = null;
     }
+  }
+
+  /** {@code null} until {@link #initialize} has run; the UI plugin checks for this. */
+  public static ServerStatus status() {
+    return currentStatus;
   }
 }

@@ -29,6 +29,18 @@
             <version>${lx.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>com.heronarts</groupId>
+            <artifactId>glx</artifactId>
+            <version>${lx.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.heronarts</groupId>
+            <artifactId>glxstudio</artifactId>
+            <version>${lx.version}</version>
+            <scope>provided</scope>
+        </dependency>
 
         <!-- Official Java MCP SDK: convenience bundle (core + Jackson 3). Provides
              both the server (HttpServletStreamableServerTransportProvider, McpServer)
