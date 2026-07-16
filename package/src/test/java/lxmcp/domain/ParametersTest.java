@@ -135,6 +135,68 @@ class ParametersTest {
   }
 
   @Test
+  void listForPaletteIncludesSingletonAndArrayChildren() {
+    LX lx = newHeadlessLx();
+
+    Parameters.ComponentParameters before = Parameters.listFor(lx, lx.engine.palette.getCanonicalPath());
+    Parameters.ChildInfo swatchChild = before.children().stream()
+        .filter(c -> "swatch".equals(c.key()))
+        .findFirst().orElseThrow(() -> new AssertionError("singleton swatch child not listed"));
+    assertEquals(lx.engine.palette.swatch.getCanonicalPath(), swatchChild.path());
+    assertEquals(lx.engine.palette.swatch.getClass().getName(), swatchChild.className());
+
+    lx.engine.palette.saveSwatch();
+    Parameters.ComponentParameters after = Parameters.listFor(lx, lx.engine.palette.getCanonicalPath());
+    Parameters.ChildInfo swatchesEntry = after.children().stream()
+        .filter(c -> "swatches".equals(c.key()))
+        .findFirst().orElseThrow(() -> new AssertionError("saved swatch array child not listed"));
+    assertSame(lx.engine.palette.swatches.get(0), Resolve.component(lx, swatchesEntry.path()),
+        "array child path round-trips via LXPath.get");
+  }
+
+  @Test
+  void listForPatternIncludesEffectChild() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    GradientPattern pattern = new GradientPattern(lx);
+    channel.addPattern(pattern);
+    heronarts.lx.effect.BlurEffect effect = new heronarts.lx.effect.BlurEffect(lx);
+    pattern.addEffect(effect);
+
+    Parameters.ComponentParameters info = Parameters.listFor(lx, pattern.getCanonicalPath());
+    Parameters.ChildInfo effectChild = info.children().stream()
+        .filter(c -> "effect".equals(c.key()))
+        .findFirst().orElseThrow(() -> new AssertionError("effect child not listed"));
+    assertEquals(effect.getCanonicalPath(), effectChild.path());
+    assertEquals(effect.getClass().getName(), effectChild.className());
+  }
+
+  @Test
+  void listForLeafComponentReturnsEmptyChildren() {
+    LX lx = newHeadlessLx();
+    // A bare modulator registers no child components or arrays — a leaf in the tree.
+    MacroKnobs knobs =
+        (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+
+    Parameters.ComponentParameters info = Parameters.listFor(lx, knobs.getCanonicalPath());
+    assertNotNull(info.children());
+    assertTrue(info.children().isEmpty(), "a leaf component has no children");
+  }
+
+  @Test
+  void deduplicatesChildrenByCanonicalPath() {
+    LX lx = newHeadlessLx();
+    // Tempo registers named modulators in both children and childArrays with the same path.
+    Parameters.ComponentParameters info = Parameters.listFor(lx, lx.engine.tempo.getCanonicalPath());
+
+    java.util.Set<String> seenPaths = new java.util.HashSet<>();
+    for (Parameters.ChildInfo child : info.children()) {
+      assertTrue(seenPaths.add(child.path()),
+          "Canonical path " + child.path() + " appears multiple times in children");
+    }
+  }
+
+  @Test
   void listForBogusPathIsNotFound() {
     LX lx = newHeadlessLx();
     assertEquals(Resolve.Failure.NOT_FOUND,

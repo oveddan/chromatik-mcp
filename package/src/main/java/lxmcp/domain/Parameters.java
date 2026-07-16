@@ -1,6 +1,10 @@
 package lxmcp.domain;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import heronarts.lx.LX;
@@ -51,12 +55,16 @@ public final class Parameters {
     return describe(Resolve.parameter(lx, path));
   }
 
+  /** A direct child component: {@code key} is its {@code children}/{@code childArrays} key. */
+  public record ChildInfo(String key, String path, String label, String className) {}
+
   /**
-   * A component's identity plus a snapshot of every parameter it directly owns (no child
-   * component recursion — children are discoverable via list_channels / list_modulations).
+   * A component's identity plus a snapshot of every parameter it directly owns, and its
+   * direct child components (one shallow level — no recursion, no grandchildren, no child
+   * parameters). Use a child's own path with {@code list_parameters} to walk further.
    */
-  public record ComponentParameters(
-      String path, int id, String label, String className, List<ParameterInfo> parameters) {}
+  public record ComponentParameters(String path, int id, String label, String className,
+      List<ParameterInfo> parameters, List<ChildInfo> children) {}
 
   /**
    * List every parameter directly on the component at {@code path}. Call on the engine
@@ -90,7 +98,34 @@ public final class Parameters {
         component.getId(),
         component.getLabel(),
         component.getClass().getName(),
-        parameters);
+        parameters,
+        describeChildren(component));
+  }
+
+  private static List<ChildInfo> describeChildren(LXComponent component) {
+    List<ChildInfo> children = new ArrayList<>();
+    Set<String> seenPaths = new HashSet<>();
+    for (Map.Entry<String, LXComponent> entry : component.children.entrySet()) {
+      ChildInfo child = describeChild(entry.getKey(), entry.getValue());
+      children.add(child);
+      seenPaths.add(child.path());
+    }
+    for (Map.Entry<String, List<? extends LXComponent>> entry : component.childArrays.entrySet()) {
+      String key = entry.getKey();
+      for (LXComponent child : entry.getValue()) {
+        ChildInfo childInfo = describeChild(key, child);
+        if (!seenPaths.contains(childInfo.path())) {
+          children.add(childInfo);
+          seenPaths.add(childInfo.path());
+        }
+      }
+    }
+    return children;
+  }
+
+  private static ChildInfo describeChild(String key, LXComponent child) {
+    return new ChildInfo(
+        key, child.getCanonicalPath(), child.getLabel(), child.getClass().getName());
   }
 
   /**

@@ -22,7 +22,10 @@ public final class ListParameters implements LxTool {
         + "effect, modulator, or engine component like the output engine) — names, types, "
         + "ranges, current values, and each parameter's own canonical path for "
         + "get_parameter/set_parameter. Use this instead of guessing parameter names. Parameters "
-        + "with live modulations additionally carry baseValue and modulated=true (value is the effective reading).";
+        + "with live modulations additionally carry baseValue and modulated=true (value is the "
+        + "effective reading). Also lists the component's child components (a pattern's effects, "
+        + "the palette's swatches, a channel's patterns) with their canonical paths — use it to "
+        + "walk the component tree instead of guessing paths.";
   }
 
   @Override
@@ -89,6 +92,16 @@ public final class ListParameters implements LxTool {
       parameters.add(entry);
     }
     payload.put("parameters", parameters);
+    List<Map<String, Object>> children = new ArrayList<>();
+    for (Parameters.ChildInfo c : info.children()) {
+      Map<String, Object> entry = new LinkedHashMap<>();
+      entry.put("key", c.key());
+      entry.put("path", c.path());
+      entry.put("label", c.label());
+      entry.put("class", c.className());
+      children.add(entry);
+    }
+    payload.put("children", children);
     return Result.ok(payload);
   }
 }

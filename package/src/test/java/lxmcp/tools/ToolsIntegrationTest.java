@@ -815,6 +815,21 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  void listParametersDescribesChannelChildPatterns() {
+    Map<String, Object> payload =
+        structured(call("list_parameters", Map.of("path", channel.getCanonicalPath())));
+
+    List<Map<String, Object>> children = (List<Map<String, Object>>) payload.get("children");
+    assertFalse(children.isEmpty());
+    Map<String, Object> patternChild = children.stream()
+        .filter(c -> "pattern".equals(c.get("key")))
+        .findFirst().orElseThrow(() -> new AssertionError("channel's pattern child not listed"));
+    assertEquals(channel.getActivePattern().getCanonicalPath(), patternChild.get("path"));
+    assertEquals(channel.getActivePattern().getClass().getName(), patternChild.get("class"));
+  }
+
+  @Test
   void listParametersUnknownPathIsNotFound() {
     McpSchema.CallToolResult result =
         call("list_parameters", Map.of("path", "/lx/nope/nothing"));
