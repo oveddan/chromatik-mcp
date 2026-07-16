@@ -13,8 +13,8 @@ import java.time.Instant;
  * server's port. This is the only filesystem touchpoint of the plugin (alongside the
  * read-only {@link ConfigFile}).
  *
- * <p>Shape: {@code {pid, port, host, url, projectPath, lxVersion, connected,
- * lastActivityAt}}.
+ * <p>Shape: {@code {pid, port, host, url, projectPath, lxVersion, serverVersion, buildTime,
+ * connected, lastActivityAt}}.
  *
  * <p>Writes are strictly ordered — the initial write from {@code initialize()} always
  * precedes any rewrite from the plugin's loop task on connection-state changes — so
@@ -63,6 +63,8 @@ public final class StatusFile {
         + "  \"url\": " + jsonStringOrNull(url) + ",\n"
         + "  \"projectPath\": " + jsonStringOrNull(projectPath) + ",\n"
         + "  \"lxVersion\": " + jsonStringOrNull(lxVersion) + ",\n"
+        + "  \"serverVersion\": " + jsonStringOrNull(BuildInfo.version()) + ",\n"
+        + "  \"buildTime\": " + jsonStringOrNull(BuildInfo.buildTime()) + ",\n"
         + "  \"connected\": " + connected + ",\n"
         + "  \"lastActivityAt\": " + jsonStringOrNull(lastActivityAt) + "\n"
         + "}\n";

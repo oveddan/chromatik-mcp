@@ -9,6 +9,7 @@ import heronarts.lx.LX;
 
 import lxmcp.ConnectionSnapshot;
 import lxmcp.ServerStatus;
+import lxmcp.mcp.BuildInfo;
 
 /**
  * Reports the embedded MCP server's own bind address, uptime, and live connection state
@@ -34,10 +35,12 @@ public final class GetStatus implements LxTool {
   @Override
   public String description() {
     return "The embedded MCP server's own state: bind host/port/url, when it started, "
-        + "uptime, and live connection info (whether a client is currently connected, open "
-        + "SSE stream count, last activity time). A successful call proves "
-        + "the LX engine loop is draining tasks, since this handler runs on the engine "
-        + "thread like every other tool.";
+        + "uptime, live connection info (whether a client is currently connected, open "
+        + "SSE stream count, last activity time), and the identity of the running server "
+        + "CODE (name, jar version, build time, LX version) — compare these against a "
+        + "freshly-installed jar to detect a stale process that needs a Chromatik restart. "
+        + "A successful call also proves the LX engine loop is draining tasks, since this "
+        + "handler runs on the engine thread like every other tool.";
   }
 
   @Override
@@ -56,6 +59,10 @@ public final class GetStatus implements LxTool {
     ConnectionSnapshot snap = this.snapshot.get();
 
     Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("serverName", "LX-MCP");
+    payload.put("serverVersion", BuildInfo.version());
+    payload.put("buildTime", BuildInfo.buildTime());
+    payload.put("lxVersion", LX.VERSION);
     payload.put("host", this.status.host());
     payload.put("port", this.status.port());
     payload.put("url", this.status.url());

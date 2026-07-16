@@ -10,6 +10,7 @@ import heronarts.lx.LXPlugin;
 import heronarts.lx.LXRegistry;
 
 import lxmcp.engine.EngineExecutor;
+import lxmcp.mcp.BuildInfo;
 import lxmcp.mcp.ConfigFile;
 import lxmcp.mcp.ConnectionTracker;
 import lxmcp.mcp.EmbeddedMcpServer;
@@ -22,7 +23,6 @@ public class LxMcpPlugin implements LXPlugin {
 
   private static final String PREFIX = "[LX-MCP] ";
   private static final String SERVER_NAME = "LX-MCP";
-  private static final String SERVER_VERSION = "0.0.1";
 
   // Referenced by fully-qualified name, never `LxMcpUiPlugin.class` — this class must stay
   // free of any compile-time coupling to the `ui` package (LxMcpUiPlugin already imports
@@ -70,7 +70,7 @@ public class LxMcpPlugin implements LXPlugin {
     // pushError (user-facing) + marks the plugin as errored. Swallowing here
     // would leave the plugin looking healthy while the server is down.
     this.server = EmbeddedMcpServer.start(
-        SERVER_NAME, SERVER_VERSION, config.port(), config.host(),
+        SERVER_NAME, BuildInfo.version(), config.port(), config.host(),
         Tools.specifications(lx, new EngineExecutor(lx), getStatus), Tools.INSTRUCTIONS,
         connectionTracker);
     long startedAtMs = System.currentTimeMillis();

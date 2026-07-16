@@ -602,6 +602,12 @@ class ToolsIntegrationTest {
   @SuppressWarnings("unchecked")
   void getStatusReportsServerAndConnectionState() {
     Map<String, Object> payload = structured(call("get_status", Map.of()));
+    assertEquals("LX-MCP", payload.get("serverName"));
+    assertEquals(lxmcp.mcp.BuildInfo.version(), payload.get("serverVersion"));
+    assertEquals(lxmcp.mcp.BuildInfo.buildTime(), payload.get("buildTime"));
+    assertFalse(((String) payload.get("serverVersion")).isBlank());
+    assertFalse(((String) payload.get("buildTime")).isBlank());
+    assertNotNull(payload.get("lxVersion"));
     assertEquals("127.0.0.1", payload.get("host"));
     assertEquals(server.port(), ((Number) payload.get("port")).intValue());
     assertEquals("http://127.0.0.1:" + server.port() + EmbeddedMcpServer.ENDPOINT, payload.get("url"));

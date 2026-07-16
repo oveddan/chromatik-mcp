@@ -50,6 +50,8 @@ class StatusFileTest {
     assertEquals("http://127.0.0.1:7000/mcp", json.get("url").getAsString());
     assertEquals("/tmp/project.lxp", json.get("projectPath").getAsString());
     assertEquals("1.2.1", json.get("lxVersion").getAsString());
+    assertEquals(BuildInfo.version(), json.get("serverVersion").getAsString());
+    assertEquals(BuildInfo.buildTime(), json.get("buildTime").getAsString());
     assertTrue(json.get("connected").getAsBoolean());
     assertEquals(java.time.Instant.ofEpochMilli(123_456_789L).toString(),
         json.get("lastActivityAt").getAsString());
