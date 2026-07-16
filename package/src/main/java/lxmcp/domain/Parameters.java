@@ -94,7 +94,7 @@ public final class Parameters {
         .map(Parameters::describe)
         .collect(Collectors.toList());
     return new ComponentParameters(
-        component.getCanonicalPath(),
+        Resolve.canonicalPath(component),
         component.getId(),
         component.getLabel(),
         component.getClass().getName(),
@@ -125,7 +125,7 @@ public final class Parameters {
 
   private static ChildInfo describeChild(String key, LXComponent child) {
     return new ChildInfo(
-        key, child.getCanonicalPath(), child.getLabel(), child.getClass().getName());
+        key, Resolve.canonicalPath(child), child.getLabel(), child.getClass().getName());
   }
 
   /**
@@ -256,7 +256,7 @@ public final class Parameters {
 
   private static Resolve.ResolveException mismatch(LXParameter p, String detail) {
     return new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
-        p.getCanonicalPath() + " (" + p.getClass().getSimpleName() + ") " + detail);
+        Resolve.canonicalPath(p) + " (" + p.getClass().getSimpleName() + ") " + detail);
   }
 
   static ParameterInfo describe(LXParameter parameter) {
@@ -320,7 +320,7 @@ public final class Parameters {
       }
     }
     return new ParameterInfo(
-        parameter.getCanonicalPath(),
+        Resolve.canonicalPath(parameter),
         parameter.getLabel(),
         parameter.getDescription(),
         parameter.getClass().getSimpleName(),

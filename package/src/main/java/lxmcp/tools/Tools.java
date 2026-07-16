@@ -42,7 +42,9 @@ public final class Tools {
           + "swatch via fire_trigger on its recallPath. A parameter with live modulations "
           + "reports its effective value plus baseValue; set_parameter moves the base. A new "
           + "wire_modulator wiring needs depth: pass its range argument or set rangePath "
-          + "afterwards.";
+          + "afterwards. Views are named model subsets (see get_views); a device's view "
+          + "selector clips its rendering to that subset, and 'Default' inherits the view "
+          + "from the parent device/channel instead.";
 
   private Tools() {}
 
@@ -76,7 +78,8 @@ public final class Tools {
             new MovePattern(),
             new AddEffect(),
             new RemoveEffect(),
-            new MoveEffect())
+            new MoveEffect(),
+            new GetViews())
         .stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();

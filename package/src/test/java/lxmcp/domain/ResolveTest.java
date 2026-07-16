@@ -172,4 +172,24 @@ class ResolveTest {
     assertEquals(Resolve.Failure.NOT_FOUND, e.failure);
     assertEquals("custom message", e.getMessage());
   }
+
+  @Test
+  void resolvesIntoTheStructureTree() {
+    LX lx = newHeadlessLx();
+    var view = lx.structure.views.addView();
+
+    assertSame(lx.structure, Resolve.component(lx, "/lx/structure"));
+    assertSame(lx.structure.views, Resolve.component(lx, "/lx/structure/views"));
+    assertSame(view, Resolve.component(lx, "/lx/structure/views/view/1"));
+    assertSame(view.selector, Resolve.parameter(lx, "/lx/structure/views/view/1/selector"));
+  }
+
+  @Test
+  void badStructurePathsAreNotFound() {
+    LX lx = newHeadlessLx();
+    assertEquals(Resolve.Failure.NOT_FOUND,
+        failureOf(() -> Resolve.component(lx, "/lx/structure/views/view/1")));
+    assertEquals(Resolve.Failure.NOT_FOUND,
+        failureOf(() -> Resolve.component(lx, "/lx/structure/nope")));
+  }
 }

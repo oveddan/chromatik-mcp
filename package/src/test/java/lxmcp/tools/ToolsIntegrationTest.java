@@ -59,6 +59,7 @@ class ToolsIntegrationTest {
 
   private static LX lx;
   private static LXChannel channel;
+  private static heronarts.lx.structure.view.LXViewDefinition view;
   private static EmbeddedMcpServer server;
   private static ServerStatus status;
   private static McpSyncClient client;
@@ -73,6 +74,12 @@ class ToolsIntegrationTest {
     lx = new LX(new GridModel(8, 8).reindexPoints());
     channel = lx.engine.mixer.addChannel();
     channel.addPattern(new GradientPattern(lx));
+    // GridModel's root carries the "grid" tag (LXModel.Tag.GRID) but has no submodel
+    // children, so a "grid" selector round-trips through the resolver/get_views wire shape
+    // without matching any fixtures (LXView selectors only ever match descendant submodels).
+    view = lx.structure.views.addView();
+    view.label.setValue("Whole Grid");
+    view.selector.setValue("grid");
 
     drainer = new Thread(() -> {
       while (draining.get()) {
@@ -166,7 +173,7 @@ class ToolsIntegrationTest {
             "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
             "get_component_doc",
-            "get_frame", "get_palette",
+            "get_frame", "get_palette", "get_views",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect"),
         names);
@@ -1083,6 +1090,52 @@ class ToolsIntegrationTest {
     McpSchema.TextContent mismatchText =
         assertInstanceOf(McpSchema.TextContent.class, mismatch.content().get(0));
     assertTrue(mismatchText.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void getViewsDescribesViewsAndModelTags() {
+    Map<String, Object> payload = structured(call("get_views", Map.of()));
+
+    List<Map<String, Object>> views = (List<Map<String, Object>>) payload.get("views");
+    Map<String, Object> viewEntry = views.stream()
+        .filter(v -> Resolve.canonicalPath(view).equals(v.get("path")))
+        .findFirst().orElseThrow(() -> new AssertionError("fixture view not listed"));
+    assertEquals("Whole Grid", viewEntry.get("label"));
+    assertEquals("grid", viewEntry.get("selector"));
+    assertEquals(Boolean.TRUE, viewEntry.get("enabled"));
+    assertNotNull(viewEntry.get("cuePath"));
+    // GridModel(w, h) is a flat point list with no submodel children, so no tag selector
+    // can match a fixture on it — live selector-match feedback (numFixtures > 0 for a
+    // selector that matches submodels) is covered against a tagged fixture in ViewsTest.
+    assertEquals(0, ((Number) viewEntry.get("numFixtures")).intValue());
+
+    List<Map<String, Object>> modelTags = (List<Map<String, Object>>) payload.get("modelTags");
+    assertTrue(modelTags.stream().anyMatch(t -> "grid".equals(t.get("tag"))),
+        "modelTags: " + modelTags);
+
+    // assertions on shape only — "assignments" is exercised for content in ViewsTest
+    assertNotNull(payload.get("assignments"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listParametersResolvesIntoTheStructureViewTree() {
+    String viewPath = Resolve.canonicalPath(view);
+    Map<String, Object> payload = structured(call("list_parameters", Map.of("path", viewPath)));
+    assertEquals(viewPath, payload.get("path"));
+    List<Map<String, Object>> parameters = (List<Map<String, Object>>) payload.get("parameters");
+    assertTrue(parameters.stream().anyMatch(p -> "selector".equals(paramKey(p))),
+        "parameters: " + parameters);
+
+    Map<String, Object> selector = structured(
+        call("get_parameter", Map.of("path", Resolve.canonicalPath(view.selector))));
+    assertEquals("grid", selector.get("value"));
+  }
+
+  private static String paramKey(Map<String, Object> parameterEntry) {
+    String path = (String) parameterEntry.get("path");
+    return path.substring(path.lastIndexOf('/') + 1);
   }
 
   @Test
