@@ -1,0 +1,60 @@
+name: publish jar (rolling latest)
+
+# Every push to main touching package/ rebuilds the jar (full test gate) and
+# updates the rolling `latest` prerelease, so
+#   https://github.com/oveddan/lx-mcp/releases/download/latest/lx-mcp.jar
+# always serves the newest main build. Versioned releases are cut by pushing a
+# v* tag — see release.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "package/**"
+      - ".github/workflows/publish-jar.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: package
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      # Full gate — never publish a jar that didn't pass the suite
+      - name: mvn package
+        run: mvn -B package
+
+      - name: headless load gate
+        run: ./scripts/verify-load.sh
+
+      - name: Stage jar with stable name
+        id: jar
+        run: |
+          JAR=$(ls target/lx-mcp-*.jar | head -1)
+          echo "versioned=$(basename "$JAR")" >> "$GITHUB_OUTPUT"
+          cp "$JAR" target/lx-mcp.jar
+
+      - name: Update rolling `latest` prerelease
+        run: |
+          git tag -f latest
+          git push -f origin latest
+          gh release view latest >/dev/null 2>&1 || \
+            gh release create latest --prerelease --title "Latest build (main)" --notes "placeholder"
+          gh release upload latest target/lx-mcp.jar "target/${{ steps.jar.outputs.versioned }}" --clobber
+          gh release edit latest --prerelease --title "Latest build (main)" \
+            --notes "Rolling build of main — commit ${GITHUB_SHA}. Updated automatically on every push that touches package/. For a stable download URL use: https://github.com/${GITHUB_REPOSITORY}/releases/download/latest/lx-mcp.jar"

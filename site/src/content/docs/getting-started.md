@@ -10,9 +10,24 @@ point your MCP client at the port it publishes. No separate server process.
 ## Requirements
 
 - Chromatik with LX **1.2.1** (the pinned framework version in `lx.package`)
-- To build from source: Java **21** and Maven
+- To build from source (optional): Java **21** and Maven
 
-## 1. Build and install the jar
+## 1. Install the jar
+
+### Option A — download (no build tools needed)
+
+Download the latest jar into Chromatik's packages directory:
+
+```sh
+curl -L -o ~/Chromatik/Packages/lx-mcp.jar \
+  https://github.com/oveddan/lx-mcp/releases/download/latest/lx-mcp.jar
+```
+
+Every push to the repo's main branch republishes this jar after the full test suite
+passes. Versioned releases live on the
+[releases page](https://github.com/oveddan/lx-mcp/releases).
+
+### Option B — build from source
 
 ```sh
 git clone https://github.com/oveddan/lx-mcp.git
