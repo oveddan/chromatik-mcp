@@ -105,6 +105,30 @@ class EmbeddedMcpServerTest {
   }
 
   /**
+   * Quit-hang regression guard: LX's package hot-reload can orphan a live plugin (and
+   * its Tomcat) without disposing it — see the comment in {@code EmbeddedMcpServer.start}
+   * above the {@code setUtilityThreadsAsDaemon(true)} call. If any thread this server
+   * owns is non-daemon, an orphaned instance pins the JVM and Chromatik never exits.
+   * Tomcat's HTTP exec/poller/acceptor threads are already daemon by default; this
+   * guards the "Catalina-utility" scheduled-executor threads specifically.
+   */
+  @Test
+  void utilityThreadsAreDaemon() {
+    EmbeddedMcpServer server = EmbeddedMcpServer.start("LX-MCP", "0.0.1-test", 0);
+    try {
+      for (Thread thread : Thread.getAllStackTraces().keySet()) {
+        if (thread.getName().startsWith("Catalina-utility")) {
+          assertTrue(thread.isDaemon(),
+              "Catalina-utility thread must be daemon so an orphaned server can't pin "
+                  + "the JVM at quit: " + thread.getName());
+        }
+      }
+    } finally {
+      server.stop();
+    }
+  }
+
+  /**
    * PR-2 deliverable: the server advertises the tools capability, so a connected client's
    * {@code tools/list} succeeds. With no tools registered it returns an empty list (the
    * first real tool lands in PR-3). This is the over-the-wire proof of the capability.

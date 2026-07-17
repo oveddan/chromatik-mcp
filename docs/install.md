@@ -131,6 +131,15 @@ aren't present in a pure-core headless LX run (e.g. `scripts/verify-load.sh`, CI
 the core **LX-MCP** plugin is required to run the MCP server headlessly; **LX-MCP UI** is
 a visual convenience for interactive Chromatik sessions.
 
+## Reinstalling while Chromatik is running
+
+Overwriting the jar (e.g. `mvn install -Pinstall`) while Chromatik is running triggers
+LX's package hot-reload watcher, which orphans the live MCP server instead of restarting
+it — the **old** server keeps answering on the same port, still running the code from
+before the reinstall. Compare `get_status`'s `buildTime` against the freshly built jar's
+timestamp to spot this; a mismatch means you're talking to the orphan. **Restart
+Chromatik after every reinstall** to actually pick up the new jar.
+
 ## Troubleshooting
 
 - **No status.json** — the plugin isn't enabled or Chromatik hasn't restarted since

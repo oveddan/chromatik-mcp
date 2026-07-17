@@ -5,6 +5,7 @@ import java.util.List;
 import org.apache.catalina.Context;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Wrapper;
+import org.apache.catalina.core.StandardServer;
 import org.apache.catalina.startup.Tomcat;
 import org.apache.tomcat.util.descriptor.web.FilterDef;
 import org.apache.tomcat.util.descriptor.web.FilterMap;
@@ -170,6 +171,18 @@ public final class EmbeddedMcpServer {
     // async timeout is set: the SDK servlet disables it via setTimeout(0), so the
     // EngineExecutor call timeout is the only bound on a blocked tool call.
     tomcat.getConnector().setProperty("address", host);
+
+    // LX's package watch-service hot-reloads this jar if it's overwritten while
+    // Chromatik is running: it clears the plugin registry without disposing the live
+    // plugin instance, orphaning this Tomcat (LXRegistry.reloadContent(), LX source
+    // LXRegistry.java:723-731). disposePlugins() at quit only sees the new,
+    // never-initialized entries, so no thread this server owns may be non-daemon —
+    // an orphaned non-daemon thread pins the JVM and Chromatik hangs on quit forever.
+    // Tomcat's HTTP exec/poller/acceptor threads are already daemon by default; only
+    // the "Catalina-utility" scheduled-executor threads are not, unless told so here.
+    if (tomcat.getServer() instanceof StandardServer standardServer) {
+      standardServer.setUtilityThreadsAsDaemon(true);
+    }
 
     try {
       tomcat.start();
