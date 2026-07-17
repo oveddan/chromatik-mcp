@@ -1,9 +1,9 @@
 ---
 title: Getting started
-description: Install the lx-mcp jar into Chromatik and start the embedded MCP server.
+description: Install the chromatik-mcp jar into Chromatik and start the embedded MCP server.
 ---
 
-lx-mcp is a drop-in [Chromatik](https://chromatik.co/) (LX Studio) package: one jar
+chromatik-mcp is a drop-in [Chromatik](https://chromatik.co/) (LX Studio) package: one jar
 that embeds an MCP server inside the LX runtime. Install the jar, enable the plugin,
 point your MCP client at the port it publishes. No separate server process.
 
@@ -19,19 +19,19 @@ point your MCP client at the port it publishes. No separate server process.
 Download the latest jar into Chromatik's packages directory:
 
 ```sh
-curl -L --create-dirs -o ~/Chromatik/Packages/lx-mcp.jar \
-  https://github.com/oveddan/lx-mcp/releases/download/latest/lx-mcp.jar
+curl -L --create-dirs -o ~/Chromatik/Packages/chromatik-mcp.jar \
+  https://github.com/oveddan/chromatik-mcp/releases/download/latest/chromatik-mcp.jar
 ```
 
 Every push to main that touches the plugin code republishes this jar after the full
 test suite passes. Versioned releases live on the
-[releases page](https://github.com/oveddan/lx-mcp/releases).
+[releases page](https://github.com/oveddan/chromatik-mcp/releases).
 
 ### Option B — build from source
 
 ```sh
-git clone https://github.com/oveddan/lx-mcp.git
-cd lx-mcp/package
+git clone https://github.com/oveddan/chromatik-mcp.git
+cd chromatik-mcp/package
 mvn install -Pinstall
 ```
 
@@ -41,30 +41,30 @@ Chromatik discovers packages. (Without the profile, `mvn package` just builds it
 the consumer install flow.
 
 :::caution[Use one install method, not both]
-The download is named `lx-mcp.jar`; the Maven install produces
-`lx-mcp-<version>.jar`. If both sit in `~/Chromatik/Packages/`, Chromatik loads the
-plugin twice — and one copy is stale. Remove the other jar when switching methods.
+The download is named `chromatik-mcp.jar`; the Maven install produces
+`chromatik-mcp-<version>.jar`. If both sit in `~/Chromatik/Packages/`, Chromatik loads the
+plugin twice — and one copy is stale. Remove the other jar when switching methods —
+including any `lx-mcp*.jar` left over from before this project was renamed.
 :::
 
 ## 2. Enable the plugin in Chromatik
 
-Start (or restart) Chromatik, open **Preferences → Plugins**, and enable **LX-MCP**.
+Start (or restart) Chromatik, open **Preferences → Plugins**, and enable **Chromatik-MCP**.
 Restart once more if Chromatik asks. On startup the plugin:
 
 - starts the MCP server on an ephemeral port, bound to **127.0.0.1 only** — MCP clients
   must run on the same machine; there is no authentication layer
-- writes the discovery file `~/.lx-mcp/status.json`
+- writes the discovery file `~/.chromatik-mcp/status.json`
 
-For a live status indicator in the Chromatik UI (connected/disconnected, server URL,
-time since last activity), also enable **LX-MCP UI** in the same Plugins list — it adds
-a small section to the left pane's **Global** tab. Only the core **LX-MCP** plugin is
-required.
+Enabling **Chromatik-MCP** is the only checkbox — the bundled **Chromatik-MCP UI**
+plugin enables itself alongside it and adds a live status section (connected state,
+server URL, time since last activity) to the left pane's **Global** tab.
 
 ### Configuring the port and host
 
 By default the server binds an **ephemeral port** on **127.0.0.1** (loopback-only,
 safe, zero-config). To pin a fixed port or change the bind host, create
-`~/.lx-mcp/config.json`:
+`~/.chromatik-mcp/config.json`:
 
 ```json
 {
@@ -88,7 +88,7 @@ plugin logs a loud warning on startup whenever a non-loopback host is configured
 
 ## 3. Discover the port
 
-`~/.lx-mcp/status.json` is the discovery handshake:
+`~/.chromatik-mcp/status.json` is the discovery handshake:
 
 ```json
 {
@@ -121,10 +121,10 @@ report the LX version, channel count, and OSC ports of the running instance.
 ## Troubleshooting
 
 - **No status.json** — the plugin isn't enabled or Chromatik hasn't restarted since
-  install. Check Preferences → Plugins for LX-MCP.
+  install. Check Preferences → Plugins for Chromatik-MCP.
 - **Connection refused on the recorded port** — stale status.json (check the `pid`);
   restart Chromatik and re-read the file.
 - **Tools error with `internal` unexpectedly** — check Chromatik's log; tool failures
-  that LX swallows are logged there with the `[LX-MCP]` prefix.
+  that LX swallows are logged there with the `[Chromatik-MCP]` prefix.
 - **A non-fatal `ClassNotFoundException: jakarta.mail.Authenticator` at load** is a
   known cosmetic artifact of the shaded jar.

@@ -1,0 +1,188 @@
+/* Chromatik MCP theme — LED-art dark-first: near-black stage, neon accents,
+   display type for headings, mono for the machine-facing bits. */
+
+:root {
+  --sl-font: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --sl-font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* LED palette */
+  --led-magenta: #ff3fd8;
+  --led-violet: #8b5cf6;
+  --led-cyan: #22d3ee;
+  --led-amber: #ffb347;
+
+}
+
+/* Dark: the stage. Scoped to the resolved theme so light mode stays coherent
+   (Starlight stamps data-theme on load even in Auto). */
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #2d1157;
+  --sl-color-accent: #8b5cf6;
+  --sl-color-accent-high: #d0bcff;
+  --sl-color-bg: #08060f;
+  --sl-color-bg-nav: #0b0817;
+  --sl-color-bg-sidebar: #0b0817;
+  --sl-color-hairline: #241d3d;
+  --sl-color-hairline-light: #2c2450;
+  --chat-bubble-bg: #0b0817;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #ede9fe;
+  --sl-color-accent: #7c3aed;
+  --sl-color-accent-high: #4c1d95;
+  --chat-bubble-bg: #faf9ff;
+}
+
+/* ---------- type ---------- */
+
+h1, h2, h3, .site-title {
+  font-family: var(--sl-font);
+  letter-spacing: -0.02em;
+}
+
+/* ---------- splash hero ---------- */
+
+[data-has-hero] .hero h1 {
+  font-size: clamp(2.6rem, 7vw, 4.4rem);
+  /* light mode needs darker LED tones — neon on white is unreadable */
+  background: linear-gradient(100deg, #b45309 0%, #be185d 45%, #0e7490 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:root[data-theme='dark'] [data-has-hero] .hero h1 {
+  background: linear-gradient(100deg, var(--led-amber) 0%, var(--led-magenta) 45%, var(--led-cyan) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Center the hero (no image → no reason for the two-column layout) */
+[data-has-hero] .hero {
+  position: relative;
+  grid-template-columns: 1fr;
+  text-align: center;
+}
+[data-has-hero] .hero > .sl-flex {
+  align-items: center;
+}
+[data-has-hero] .hero .tagline {
+  margin-inline: auto;
+}
+[data-has-hero] .hero::before {
+  content: '';
+  position: absolute;
+  /* stay inside the hero box — negative viewport-width insets create a
+     horizontal scrollbar (no ancestor clips overflow-x) */
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(circle 2px, var(--led-violet) 99%, transparent),
+    radial-gradient(circle 1.5px, var(--led-cyan) 99%, transparent),
+    radial-gradient(circle 1.5px, var(--led-magenta) 99%, transparent);
+  background-size: 42px 42px, 68px 68px, 96px 96px;
+  background-position: 0 0, 21px 34px, 47px 13px;
+  opacity: 0.22;
+  -webkit-mask-image: radial-gradient(ellipse 70% 90% at 50% 20%, black 30%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 90% at 50% 20%, black 30%, transparent 75%);
+  animation: led-drift 22s linear infinite;
+}
+:root[data-theme='light'] [data-has-hero] .hero::before {
+  opacity: 0.35;
+}
+@keyframes led-drift {
+  to {
+    background-position: 0 -42px, 21px -34px, 47px -83px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-has-hero] .hero::before {
+    animation: none;
+  }
+}
+
+[data-has-hero] .hero .tagline {
+  max-width: 46rem;
+  font-size: var(--sl-text-lg);
+}
+
+/* ---------- chat demo block ---------- */
+
+.chat-demo {
+  max-width: 44rem;
+  margin: 3rem auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+.chat-line {
+  border: 1px solid var(--sl-color-hairline-light);
+  border-radius: 0.75rem;
+  padding: 0.85rem 1.1rem;
+  position: relative;
+  background: var(--chat-bubble-bg, var(--sl-color-bg-nav));
+  text-align: left;
+}
+.chat-line p {
+  margin: 0;
+}
+.chat-line.human {
+  align-self: flex-end;
+  max-width: 85%;
+  border-color: color-mix(in srgb, var(--led-amber) 45%, transparent);
+  box-shadow: 0 0 24px -12px var(--led-amber);
+}
+.chat-line.agent {
+  align-self: flex-start;
+  max-width: 92%;
+  border-color: color-mix(in srgb, var(--led-cyan) 40%, transparent);
+  box-shadow: 0 0 24px -12px var(--led-cyan);
+}
+.chat-who {
+  display: block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 0.35rem;
+  color: var(--sl-color-accent-high);
+}
+.chat-line.human .chat-who { color: var(--led-amber); }
+.chat-line.agent .chat-who { color: var(--led-cyan); }
+.chat-caption {
+  text-align: center;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+  margin-top: 0.4rem;
+}
+
+/* ---------- cards ---------- */
+
+.card {
+  border-radius: 0.75rem;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.card:hover {
+  border-color: color-mix(in srgb, var(--led-violet) 55%, transparent);
+  box-shadow: 0 0 32px -14px var(--led-violet);
+}
+.card .title {
+  font-family: var(--sl-font);
+}
+
+/* ---------- content polish ---------- */
+
+.sl-markdown-content code:not(:where(pre *)) {
+  border: 1px solid var(--sl-color-hairline-light);
+  border-radius: 0.35rem;
+  padding: 0.1rem 0.35rem;
+}
+
+.sl-markdown-content pre {
+  border: 1px solid var(--sl-color-hairline-light);
+  border-radius: 0.65rem;
+}

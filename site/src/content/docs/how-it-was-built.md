@@ -1,14 +1,14 @@
 ---
 title: How it was built
-description: lx-mcp was built by a fleet of coding agents running a formalized dev loop — small PRs, objective gates, fresh-context review.
+description: chromatik-mcp was built by a fleet of coding agents running a formalized dev loop — small PRs, objective gates, fresh-context review.
 ---
 
-lx-mcp is itself a product of the workflow it enables: it was built almost entirely by
+chromatik-mcp is itself a product of the workflow it enables: it was built almost entirely by
 coding agents (Claude Code) running a formalized loop, with a human reading every diff
 before merge. Agents built the tool that lets agents drive light art.
 
 This page is a condensed account; the full engineering writeup lives in
-[`docs/loop-engineering.md`](https://github.com/oveddan/lx-mcp/blob/main/docs/loop-engineering.md).
+[`docs/loop-engineering.md`](https://github.com/oveddan/chromatik-mcp/blob/main/docs/loop-engineering.md).
 
 ## The dev loop
 

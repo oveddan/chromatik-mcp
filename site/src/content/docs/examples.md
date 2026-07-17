@@ -3,7 +3,7 @@ title: Usage examples
 description: Concrete agent flows — understanding a project, building show structure, chaining effects, macro mapping, multi-agent patterns.
 ---
 
-What an MCP-connected agent can do with lx-mcp, as concrete tool-call flows. Each
+What an MCP-connected agent can do with chromatik-mcp, as concrete tool-call flows. Each
 example is a goal, the call sequence, and the wrinkles the tool descriptions warn
 about. Everything mutating is undoable in Chromatik with Cmd-Z unless noted.
 

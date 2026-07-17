@@ -3,21 +3,28 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://lx-mcp.vercel.app',
+  site: 'https://chromatik-mcp.vercel.app',
   integrations: [
     starlight({
-      title: 'lx-mcp',
+      title: 'Chromatik MCP',
       description:
-        'A drop-in LX/Chromatik package for AI-driven show composition over MCP.',
+        'AI-accelerated light-show composition and performance for Chromatik, over MCP.',
+      customCss: [
+        '@fontsource/space-grotesk/500.css',
+        '@fontsource/space-grotesk/700.css',
+        '@fontsource/ibm-plex-mono/400.css',
+        '@fontsource/ibm-plex-mono/600.css',
+        './src/styles/custom.css',
+      ],
       social: [
         {
           icon: 'github',
           label: 'GitHub',
-          href: 'https://github.com/oveddan/lx-mcp',
+          href: 'https://github.com/oveddan/chromatik-mcp',
         },
       ],
       editLink: {
-        baseUrl: 'https://github.com/oveddan/lx-mcp/edit/main/site/',
+        baseUrl: 'https://github.com/oveddan/chromatik-mcp/edit/main/site/',
       },
       sidebar: [
         { label: 'Getting started', slug: 'getting-started' },

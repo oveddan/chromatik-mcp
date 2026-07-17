@@ -47,7 +47,7 @@ what the algorithm does with them.
 
 ## Filesystem touchpoints
 
-Exactly two, both under `~/.lx-mcp/`:
+Exactly two, both under `~/.chromatik-mcp/`:
 
 - **`status.json`** — written on startup for endpoint discovery: `{pid, port, host,
   url, projectPath, lxVersion, serverVersion, buildTime, connected, lastActivityAt}`.
