@@ -2,7 +2,7 @@
 
 A drop-in LX/Chromatik package for AI-driven show composition over MCP.
 
-**Status**: the v1 tool surface is working end-to-end — discovery, parameters, modulation wiring, channels/patterns/effect chains, palette, model views, render previews, OSC addressing, and a generated semantic catalog of what each component does. MIDI mapping is the remaining slice. See [docs/build-plan.md](docs/build-plan.md) for the roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
+**Status**: the v1 tool surface is working end-to-end — discovery, parameters, tempo, modulation wiring, channels/patterns/effect chains, mixer performance controls (crossfader, cue/aux), palette (read-write), snapshots, model views, render previews, OSC addressing, and a generated semantic catalog of what each component does. MIDI mapping is the remaining slice. See [docs/build-plan.md](docs/build-plan.md) for the roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
 
 ## Quick start
 
@@ -23,13 +23,15 @@ Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`),
 | tool | what it returns |
 |---|---|
 | `get_status` | server identity + liveness: `serverVersion`, `buildTime` (detect a stale process after installing a new jar), uptime, connection state |
-| `get_project_info` | LX version, project file, channel count, OSC engine state, and the **output** object (`/lx/output/enabled` — the "Live" toggle pixels won't reach fixtures without) |
-| `list_channels` | the mixer: channels (with `patternMode` playlist/blend and per-pattern `contributing`), master, and every effect chain — including **pattern-hosted effects** |
+| `get_project_info` | LX version, project file, channel count, OSC engine state, the **output** object (`/lx/output/enabled` — the "Live" toggle pixels won't reach fixtures without — plus brightness and gamma), and **engine globals** (`speed` playback-rate multiplier, `framesPerSecond`) |
+| `get_tempo` | the engine clock: bpm, clock source (internal / MIDI-synced / OSC-driven), beats-per-bar, launch quantization (why `fire_trigger` sometimes answers `pending: true`), tap/nudge paths, live beat position, and a beat-pulse path usable as a `wire_trigger` source |
+| `list_channels` | the mixer: channels (with `patternMode` playlist/blend and per-pattern `contributing`), master, and every effect chain — including **pattern-hosted effects**. Each channel carries a `controls` block (crossfade group, blend mode, auto-mute, cue/aux, pattern auto-cycle + transition settings) and the top-level `mixer` object holds the **crossfader** (0 = full A, 1 = full B) and cue/aux preview buses — all with settable paths |
 | `list_parameters` | every parameter on a component **plus its child components** (a pattern's effects, the palette's swatches) — walk the tree instead of guessing paths |
 | `list_available_patterns` / `_effects` / `_modulators` | instantiable classes from the LX registry (modulators carry `global`/`device` flags — where they may be added) |
 | `list_modulations` | one modulation engine's live modulators and wirings — global side panel by default, or a device's own chain via `scope` |
 | `get_parameter` | one parameter: value, type, range, options, units, and its **OSC address**. Parameters with live modulations report the effective `value` plus the knob's `baseValue` and `modulated: true` |
-| `get_palette` | the global color system: active swatch colors (mode + effective color), saved swatches with `recallPath` (fire to recall, honors the transition time), auto-cycle state |
+| `get_palette` | the global color system: active swatch colors (mode + effective color), saved swatches with `recallPath` (fire to recall, honors the transition time), auto-cycle state. Mutations: see the palette & snapshots section |
+| `list_snapshots` | saved snapshots (whole-look captures) plus the snapshot engine's recall-scoping and transition settings, all with settable paths |
 | `get_views` | model views (see below) |
 | `get_frame` | a PNG render of the current output (`include_image`/`grid`/`width` control token cost) — visual feedback without screen access |
 | `get_component_doc` | what a pattern/effect/modulator *does* — generated behavior docs from the [semantic catalog](docs/catalog-format.md), with a bytecode-hash `stale` flag so the answer is honest when code has changed. `list_available_*` entries carry `documented` flags |
@@ -70,6 +72,21 @@ wire_modulator {source: <bank>/macro1, target: <fader path>} → undoable mappin
 set_parameter {path: <bank>/macro1, value: 0.75}             → turn the knob
 ```
 
+### Palette & snapshots: colors and whole looks
+
+The palette is read-write: beyond setting an individual color's `.../hue` / `.../saturation` / `.../brightness` via `set_parameter`, swatches themselves can be managed. Snapshots capture the *entire* current state — mixer, patterns, effects, modulation — as a recallable look.
+
+| tool | what it does |
+|---|---|
+| `save_swatch` | capture the active swatch's current colors as a new saved swatch (returns its path) |
+| `set_swatch {path}` | apply a saved swatch onto the active colors — same effect as firing its `recallPath` (including the transition fade), but undoable |
+| `remove_swatch {path}` / `move_swatch {path, index}` | manage the saved-swatch list |
+| `add_color` / `remove_color` | add/remove a color slot on a swatch (active swatch by default); a swatch always keeps at least one color |
+| `add_snapshot {label?}` | capture the current mixer/pattern/effect/modulation state as a snapshot |
+| `recall_snapshot {path, immediate?}` | restore a snapshot — fades over the engine's transition time unless `immediate`. What a recall touches is governed by the engine's recall-scoping toggles (see `list_snapshots`). Caution (LX behavior): Cmd-Z after a recall does not restore the previous parameter values |
+| `update_snapshot {path}` | recapture the current state into an existing snapshot |
+| `remove_snapshot {path}` | delete a snapshot |
+
 ### Model views: spatial composition
 
 Views are named subsets of the model ("Cube Interior", "Faces Exterior"), defined by a tag selector; every channel, pattern, and effect has a `view` parameter that clips its rendering to one — `Default` inherits from the parent (effect → pattern → channel → whole model). This is how one project paints different geometry with different content — or applies an effect to only part of the model.
@@ -93,7 +110,7 @@ Parameter payloads carry the address an OSC controller must send to. For most pa
 
 ## Architecture
 
-The jar embeds an HTTP MCP server (official Java MCP SDK, streamable-HTTP on embedded Tomcat) inside the LX runtime as an `LXPlugin`. Any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, custom orchestrators — connects to it directly and calls tools that mutate LX state in-process. No separate Node server, no `.lxp` file editing, no file watcher. Mutations route through `LXCommand`, so every change gets undo for free (exceptions — swatch recall, trigger fires — are called out in their tool descriptions), and are serialized onto the LX engine thread. The filesystem touchpoints are `~/.lx-mcp/status.json` (written on startup for endpoint discovery) and the optional `~/.lx-mcp/config.json` (fixed port / bind host). Default bind is `127.0.0.1` only; there is no authentication layer, so non-loopback binds are at your own risk (a startup warning says as much).
+The jar embeds an HTTP MCP server (official Java MCP SDK, streamable-HTTP on embedded Tomcat) inside the LX runtime as an `LXPlugin`. Any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, custom orchestrators — connects to it directly and calls tools that mutate LX state in-process. No separate Node server, no `.lxp` file editing, no file watcher. Mutations route through `LXCommand`, so every change gets undo for free (exceptions — swatch recall, trigger fires, snapshot recall (an LX quirk: the undo entry captures post-recall values) — are called out in their tool descriptions), and are serialized onto the LX engine thread. The filesystem touchpoints are `~/.lx-mcp/status.json` (written on startup for endpoint discovery) and the optional `~/.lx-mcp/config.json` (fixed port / bind host). Default bind is `127.0.0.1` only; there is no authentication layer, so non-loopback binds are at your own risk (a startup warning says as much).
 
 ```
 tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutation with undo)

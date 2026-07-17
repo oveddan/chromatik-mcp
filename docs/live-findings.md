@@ -21,6 +21,19 @@ into slices when related items accumulate; lines deleted when their fix merges.
 
 (none)
 
+## Merged (2026-07-17 — PR-9 gap-sweep fan-out, planned slices rather than live findings)
+
+- get_tempo + engine globals (#55); snapshots (#59); palette mutation (#57); mixer
+  performance surface in list_channels (#58).
+- view lifecycle now undoable via LXCommand.Structure.AddView/RemoveView (#56) —
+  closes the round-3 "not undoable" caveat below. The remove_view index-clamp trap
+  remains (undo restores the view definition, not stale device assignments).
+- Deliberately skipped: channel group/ungroup tools — LXCommand.Mixer.GroupSelectedChannels
+  reads UI selection state, not an explicit channel list. Revisit if LX grows an
+  explicit-list command.
+- Known LX quirk (documented + pinned by test, not fixable server-side): undo after
+  recall_snapshot is a no-op for plain parameters (LX captures undo state post-mutation).
+
 ## Merged (2026-07-16 round 3)
 
 - views write surface: add_view/remove_view + set_parameter by option name (#48).

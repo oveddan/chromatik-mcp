@@ -191,6 +191,13 @@ Planned in detail now that the spike findings are in. Each PR stays independentl
 
 - **PR-6** — Install docs for multiple agentic platforms + multi-agent usage examples + README rewrite + **license decision** (currently TBD; must land before this publicity step). Bump the MCP SDK to GA here if it has been released by then.
 
+- **PR-9 fan-out** — surface unexposed LX functionality (gap sweep 2026-07-17: lx-mcp uses 12 of ~110 `LXCommand` classes; these slices close the highest-value gaps, all parallel-safe). All five merged 2026-07-17:
+  - **PR-9a** (#55) — tempo + engine globals: `get_tempo` read tool (bpm, clock source INTERNAL/MIDI/OSC, beats-per-bar, launch quantization, tap/nudge paths, beat trigger source); `get_project_info` gains engine `speed`/`framesPerSecond` and output `brightness`/`gamma` paths. Plain parameters — discoverability, not new mutation.
+  - **PR-9b** (#59) — snapshots: `list_snapshots` / `add_snapshot` / `recall_snapshot` (transitioned or immediate) / `update_snapshot` / `remove_snapshot` via `LXCommand.Snapshots.*`. Known LX quirk (pinned by test): undo of a recall is a no-op for plain parameters — LX builds the per-view undo entry after mutating the value.
+  - **PR-9c** (#57) — palette mutation: `save_swatch` / `set_swatch` / `remove_swatch` / `move_swatch` / `add_color` / `remove_color` via `LXCommand.Palette.*` (palette was read-only).
+  - **PR-9d** (#58) — mixer performance surface: `list_channels` gains crossfader + A/B crossfade groups, cue/aux, per-channel blend mode, auto-mute, pattern auto-cycle/transition settings (paths included). Grouping tools skipped: `LXCommand.Mixer.GroupSelectedChannels` sources channels from UI selection state, not an explicit list.
+  - **PR-9e** (#56) — view lifecycle undoability: `add_view`/`remove_view` now route through `LXCommand.Structure.AddView`/`RemoveView` (they exist — corrects the "no command exists for view lifecycle" assumption from the original views slices). Undo of remove restores the view definition but not stale device assignments..
+
 **Phase 2 (post-MVP, not in the current PR list):**
 
 These are scoped and feasibility-checked in [`loop-engineering.md` → Future explorations](loop-engineering.md#future-explorations); pick them up from there.
