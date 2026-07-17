@@ -1,8 +1,10 @@
 package lxmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,7 @@ import lxmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXPath;
+import heronarts.lx.color.LXDynamicColor;
 import heronarts.lx.color.LXSwatch;
 
 class PalettesTest extends HeadlessLxTest {
@@ -104,5 +107,121 @@ class PalettesTest extends HeadlessLxTest {
     Palettes.PaletteInfo info = Palettes.info(lx);
     assertEquals(String.format("0x%08x", 0xff0000ff), info.activeSwatch().colors().get(0).effectiveColor());
     assertEquals(0xff0000ff, lx.engine.palette.swatch.colors.get(0).getColor());
+  }
+
+  // ---- swatch mutations: do -> undo -> assert restored ----
+
+  @Test
+  void saveSwatchAppendsASwatchAndUndoRemovesIt() {
+    LX lx = newHeadlessLx();
+    int before = lx.engine.palette.swatches.size();
+
+    LXSwatch saved = Palettes.saveSwatch(lx);
+
+    assertEquals(before + 1, lx.engine.palette.swatches.size());
+    assertSame(saved, lx.engine.palette.swatches.get(before));
+
+    lx.command.undo();
+
+    assertEquals(before, lx.engine.palette.swatches.size(), "undo removes the saved swatch");
+    assertFalse(lx.engine.palette.swatches.contains(saved));
+  }
+
+  @Test
+  void setSwatchAppliesSavedColorsAndUndoRestoresThePreviousActiveColors() {
+    LX lx = newHeadlessLx();
+    assertEquals(false, lx.engine.palette.transitionEnabled.isOn());
+
+    LXSwatch saved = lx.engine.palette.saveSwatch();
+    saved.colors.get(0).primary.setColor(0xff00ff00);
+    int original = lx.engine.palette.swatch.colors.get(0).getColor();
+
+    Palettes.setSwatch(lx, saved);
+
+    assertEquals(0xff00ff00, lx.engine.palette.swatch.colors.get(0).getColor());
+
+    lx.command.undo();
+
+    assertEquals(original, lx.engine.palette.swatch.colors.get(0).getColor(),
+        "undo restores the active swatch's prior colors");
+  }
+
+  @Test
+  void removeSwatchDeletesItAndUndoRestoresIt() {
+    LX lx = newHeadlessLx();
+    LXSwatch saved = lx.engine.palette.saveSwatch();
+    int before = lx.engine.palette.swatches.size();
+
+    Palettes.removeSwatch(lx, saved);
+
+    assertEquals(before - 1, lx.engine.palette.swatches.size());
+    assertFalse(lx.engine.palette.swatches.contains(saved));
+
+    lx.command.undo();
+
+    assertEquals(before, lx.engine.palette.swatches.size(), "undo restores the removed swatch");
+  }
+
+  @Test
+  void moveSwatchReindexesAndUndoRestoresTheOriginalOrder() {
+    LX lx = newHeadlessLx();
+    LXSwatch first = lx.engine.palette.saveSwatch();
+    LXSwatch second = lx.engine.palette.saveSwatch();
+    assertEquals(0, first.getIndex());
+    assertEquals(1, second.getIndex());
+
+    Palettes.moveSwatch(lx, first, 1);
+
+    assertEquals(1, first.getIndex());
+    assertEquals(0, second.getIndex());
+
+    lx.command.undo();
+
+    assertEquals(0, first.getIndex(), "undo restores the original order");
+    assertEquals(1, second.getIndex());
+  }
+
+  @Test
+  void addColorAppendsAColorAndUndoRemovesIt() {
+    LX lx = newHeadlessLx();
+    LXSwatch swatch = lx.engine.palette.swatch;
+    int before = swatch.colors.size();
+
+    LXDynamicColor added = Palettes.addColor(lx, swatch);
+
+    assertEquals(before + 1, swatch.colors.size());
+    assertSame(added, swatch.colors.get(before));
+
+    lx.command.undo();
+
+    assertEquals(before, swatch.colors.size(), "undo removes the added color");
+  }
+
+  @Test
+  void removeColorRemovesTheLastColorAndUndoRestoresIt() {
+    LX lx = newHeadlessLx();
+    LXSwatch swatch = lx.engine.palette.swatch;
+    Palettes.addColor(lx, swatch);
+    int before = swatch.colors.size();
+    String lastPath = swatch.colors.get(before - 1).getCanonicalPath();
+
+    String removedPath = Palettes.removeColor(lx, swatch);
+
+    assertEquals(lastPath, removedPath);
+    assertEquals(before - 1, swatch.colors.size());
+
+    lx.command.undo();
+
+    assertEquals(before, swatch.colors.size(), "undo restores the removed color");
+  }
+
+  @Test
+  void removeColorRejectsASwatchWithOnlyOneColor() {
+    LX lx = newHeadlessLx();
+    LXSwatch swatch = lx.engine.palette.swatch;
+    assertEquals(1, swatch.colors.size());
+
+    assertThrows(Resolve.ResolveException.class, () -> Palettes.removeColor(lx, swatch));
+    assertEquals(1, swatch.colors.size(), "the guard rejects before performing any command");
   }
 }

@@ -21,6 +21,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXPath;
+import heronarts.lx.color.LXDynamicColor;
+import heronarts.lx.color.LXSwatch;
 import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
@@ -176,13 +179,17 @@ class ToolsIntegrationTest {
             "get_frame", "get_palette", "get_views", "add_view", "remove_view",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
-            "get_tempo"),
+            "get_tempo",
+            "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
+            "remove_color"),
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
         "wire_trigger", "remove_modulation", "remove_modulator", "fire_trigger",
         "add_view", "remove_view",
         "add_channel", "remove_channel", "add_pattern", "remove_pattern",
-        "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect");
+        "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
+        "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
+        "remove_color");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
       assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),
@@ -1326,5 +1333,115 @@ class ToolsIntegrationTest {
     assertEquals(lx.engine.tempo.getTriggerSource().getCanonicalPath(), payload.get("triggerSourcePath"));
     assertNotNull(payload.get("beatCount"));
     assertNotNull(payload.get("periodMs"));
+  }
+
+  @Test
+  void saveSwatchSetSwatchAndRemoveSwatchFlowOverMcp() {
+    Map<String, Object> saved = structured(call("save_swatch", Map.of()));
+    String path = (String) saved.get("path");
+    assertNotNull(path);
+    assertNotNull(saved.get("recallPath"));
+    LXSwatch swatch = (LXSwatch) LXPath.get(lx, path);
+    try {
+      lx.engine.palette.transitionEnabled.setValue(false);
+      swatch.colors.get(0).primary.setColor(0xff445566);
+
+      Map<String, Object> applied = structured(call("set_swatch", Map.of("path", path)));
+      assertEquals(path, applied.get("applied"));
+      assertEquals(lx.engine.palette.swatch.getCanonicalPath(), applied.get("activeSwatch"));
+      assertEquals(0xff445566, lx.engine.palette.swatch.colors.get(0).getColor(),
+          "set_swatch applied the saved colors onto the active swatch");
+
+      lx.command.undo();
+      assertNotEquals(0xff445566, lx.engine.palette.swatch.colors.get(0).getColor(),
+          "undo restores the active swatch's prior colors");
+    } finally {
+      Map<String, Object> removed = structured(call("remove_swatch", Map.of("path", path)));
+      assertEquals(path, removed.get("removed"));
+      assertFalse(lx.engine.palette.swatches.contains(swatch));
+    }
+  }
+
+  @Test
+  void moveSwatchReordersTheSavedSwatchList() {
+    int before = lx.engine.palette.swatches.size();
+    Map<String, Object> first = structured(call("save_swatch", Map.of()));
+    Map<String, Object> second = structured(call("save_swatch", Map.of()));
+    LXSwatch firstSwatch = (LXSwatch) LXPath.get(lx, (String) first.get("path"));
+    LXSwatch secondSwatch = (LXSwatch) LXPath.get(lx, (String) second.get("path"));
+    try {
+      assertEquals(before, firstSwatch.getIndex());
+      assertEquals(before + 1, secondSwatch.getIndex());
+
+      Map<String, Object> moved = structured(
+          call("move_swatch", Map.of("path", firstSwatch.getCanonicalPath(), "index", before + 1)));
+      assertEquals(before + 1, ((Number) moved.get("index")).intValue());
+      assertEquals(before + 1, firstSwatch.getIndex());
+      assertEquals(before, secondSwatch.getIndex());
+
+      lx.command.undo();
+      assertEquals(before, firstSwatch.getIndex(), "undo restores the original order");
+    } finally {
+      lx.engine.palette.removeSwatch(firstSwatch);
+      lx.engine.palette.removeSwatch(secondSwatch);
+    }
+  }
+
+  @Test
+  void moveSwatchOutOfRangeIsInvalidArgument() {
+    Map<String, Object> saved = structured(call("save_swatch", Map.of()));
+    LXSwatch swatch = (LXSwatch) LXPath.get(lx, (String) saved.get("path"));
+    try {
+      McpSchema.CallToolResult result = call("move_swatch",
+          Map.of("path", swatch.getCanonicalPath(), "index", 99));
+      assertEquals(Boolean.TRUE, result.isError());
+    } finally {
+      lx.engine.palette.removeSwatch(swatch);
+    }
+  }
+
+  @Test
+  void addColorThenRemoveColorOnTheActiveSwatchOverMcp() {
+    int before = lx.engine.palette.swatch.colors.size();
+
+    Map<String, Object> added = structured(call("add_color", Map.of()));
+    assertEquals(lx.engine.palette.swatch.getCanonicalPath(), added.get("swatch"));
+    assertEquals(before + 1, lx.engine.palette.swatch.colors.size());
+    assertNotNull(added.get("primaryPath"));
+
+    lx.command.undo();
+    assertEquals(before, lx.engine.palette.swatch.colors.size(), "undo removes the added color");
+
+    LXDynamicColor readded = addColorViaTool();
+    String readdedPath = readded.getCanonicalPath();
+
+    Map<String, Object> removed = structured(call("remove_color", Map.of()));
+    assertEquals(readdedPath, removed.get("removed"));
+    assertEquals(before, lx.engine.palette.swatch.colors.size());
+
+    lx.command.undo();
+    assertEquals(before + 1, lx.engine.palette.swatch.colors.size(), "undo restores the removed color");
+    lx.command.undo();
+    assertEquals(before, lx.engine.palette.swatch.colors.size(), "clean up the leftover add");
+  }
+
+  private LXDynamicColor addColorViaTool() {
+    Map<String, Object> added = structured(call("add_color", Map.of()));
+    return (LXDynamicColor) LXPath.get(lx, (String) added.get("path"));
+  }
+
+  @Test
+  void removeColorRejectsTheLastColorInASwatch() {
+    Map<String, Object> saved = structured(call("save_swatch", Map.of()));
+    LXSwatch swatch = (LXSwatch) LXPath.get(lx, (String) saved.get("path"));
+    try {
+      assertEquals(1, swatch.colors.size());
+      McpSchema.CallToolResult result = call("remove_color",
+          Map.of("swatch", swatch.getCanonicalPath()));
+      assertEquals(Boolean.TRUE, result.isError());
+      assertEquals(1, swatch.colors.size());
+    } finally {
+      lx.engine.palette.removeSwatch(swatch);
+    }
   }
 }
