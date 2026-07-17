@@ -1,0 +1,118 @@
+---
+title: Connect your AI client
+description: Step-by-step MCP setup for Claude Code, Claude Desktop, Cursor, VS Code, Codex, and any streamable-HTTP client.
+---
+
+lx-mcp speaks **streamable HTTP** — any MCP client that supports it can connect. The
+endpoint is `http://127.0.0.1:<port>/mcp`, where `<port>` comes from
+`~/.lx-mcp/status.json` (written by the plugin on Chromatik startup).
+
+:::note[The port is ephemeral by default]
+Unless you pin a fixed port in `~/.lx-mcp/config.json` (see
+[Getting started](/getting-started/#configuring-the-port-and-host)), the port
+changes each time Chromatik restarts — re-read `status.json` and update your client
+config after a restart. Pinning a port (e.g. `{"port": 7000}`) makes every config
+below stable.
+:::
+
+Read the current port any time:
+
+```sh
+jq -r .port ~/.lx-mcp/status.json     # port only
+jq -r .url  ~/.lx-mcp/status.json     # full endpoint URL
+```
+
+## Claude Code
+
+One command, using `jq` to read the live port:
+
+```sh
+claude mcp add --transport http lx "http://127.0.0.1:$(jq -r .port ~/.lx-mcp/status.json)/mcp"
+```
+
+Add `--scope user` to make the server available in every project, or run it from your
+show's working directory for a project-local connection. Verify with `/mcp` inside
+Claude Code — the `lx` server should list its tools.
+
+## Claude Desktop
+
+1. Open **Settings → Connectors → Add custom connector**.
+2. Name it `lx` and paste the endpoint URL from `status.json`, e.g.
+   `http://127.0.0.1:51234/mcp`.
+3. Save. The lx tools appear in the tools menu of a new conversation.
+
+## Cursor
+
+Add to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` in your project:
+
+```json
+{
+  "mcpServers": {
+    "lx": {
+      "url": "http://127.0.0.1:7000/mcp"
+    }
+  }
+}
+```
+
+Then enable the server under **Settings → MCP**. Use a pinned port here — Cursor's
+config is static JSON.
+
+## VS Code (GitHub Copilot)
+
+Add to `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "lx": {
+      "type": "http",
+      "url": "http://127.0.0.1:7000/mcp"
+    }
+  }
+}
+```
+
+VS Code prompts to start the server connection; tools show up in Copilot Chat's agent
+mode tool picker.
+
+## Codex
+
+Add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.lx]
+url = "http://127.0.0.1:7000/mcp"
+```
+
+## Other tools
+
+Any MCP client that supports streamable HTTP: point it at
+
+```
+http://127.0.0.1:<port>/mcp
+```
+
+There is no authentication and no SSE-only legacy endpoint — the single `/mcp` URL is
+the whole surface.
+
+## First prompts to try
+
+Once connected, ask your agent:
+
+- *"Call get_project_info and tell me what's loaded."*
+- *"List the channels and describe the current show structure."*
+- *"Add a channel with a gradient pattern and make it slowly breathe using an LFO on its fader."*
+- *"Grab a frame render and describe what the output looks like right now."*
+
+## Troubleshooting
+
+- **Client can't connect** — is Chromatik running with the LX-MCP plugin enabled? Does
+  `~/.lx-mcp/status.json` exist, and is its `pid` a live process?
+- **Worked yesterday, refused today** — Chromatik restarted and the ephemeral port
+  moved. Re-read `status.json`, or pin a port in `~/.lx-mcp/config.json`.
+- **Tools listed but calls fail** — check Chromatik's log for `[LX-MCP]` entries;
+  failures LX swallows internally are logged there.
+- **Connecting from another machine** — requires a non-loopback `host` in
+  `config.json`. The server is unauthenticated; understand the exposure first (see the
+  security warning in [Getting started](/getting-started/)).

@@ -7,6 +7,11 @@ server/node_modules/
 server/dist/
 server/*.tsbuildinfo
 
+# Docs site (Astro Starlight)
+site/node_modules/
+site/dist/
+site/.astro/
+
 # Editors
 .idea/
 .vscode/
@@ -15,6 +20,12 @@ server/*.tsbuildinfo
 
 # Logs
 *.log
+
+# Agent worktrees (parallel PR fan-out; never commit)
+.claude/worktrees/
+
+# Content drafts for social posts (Dan posts manually)
+drafts/
 
 # lx-mcp-catalog machine-local checkout paths
 .claude/skills/lx-mcp-catalog/sources.local.json

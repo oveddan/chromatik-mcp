@@ -1,0 +1,62 @@
+---
+title: lx-mcp
+description: A drop-in LX/Chromatik package for AI-driven show composition over MCP.
+template: splash
+hero:
+  tagline: Give AI agents hands and eyes inside a live lighting engine. One jar drops into Chromatik and embeds an MCP server in the LX runtime — no separate process, no project-file editing.
+  actions:
+    - text: Get started
+      link: /getting-started/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/oveddan/lx-mcp
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+{/* TODO: embed demo video here once recorded — Claude Code driving a live Chromatik show. */}
+
+## Talk to your lighting rig
+
+Connect Claude Code, Claude Desktop, Cursor, or any MCP client to a running
+[Chromatik](https://chromatik.co/) instance and compose a show in natural language:
+build channels and pattern playlists, chain effects, wire LFOs and macro knobs,
+manage the color palette, capture snapshots — all live, all undoable with Cmd-Z.
+
+```sh
+cd package && mvn install -Pinstall
+# enable LX-MCP in Chromatik Preferences → Plugins, restart, then:
+claude mcp add --transport http lx "http://127.0.0.1:$(jq -r .port ~/.lx-mcp/status.json)/mcp"
+```
+
+<CardGrid stagger>
+  <Card title="The agent can see" icon="seti:image">
+    `get_frame` returns a render of the current output — a compact color summary
+    or a full PNG the model literally looks at. Agents iterate against what the
+    show actually looks like, not what they hope it looks like.
+  </Card>
+  <Card title="It knows what patterns do" icon="open-book">
+    A generated semantic catalog (`get_component_doc`) describes each
+    pattern/effect/modulator's actual behavior — color modes, parameter
+    interactions — with a staleness flag keyed to bytecode hashes.
+  </Card>
+  <Card title="Every change is undoable" icon="random">
+    Mutations route through LX's own `LXCommand` system, so each agent edit is
+    one Cmd-Z step at the console. A human can always unwind an agent's session.
+  </Card>
+  <Card title="~29 tools, live state" icon="setting">
+    Discovery, parameters, tempo, channels/patterns/effects, modulation wiring,
+    palette, snapshots, spatial views, OSC addressing — running in-process
+    against the live engine, safe for concurrent agents.
+  </Card>
+</CardGrid>
+
+## Part of a bigger pattern
+
+lx-mcp does for LX/Chromatik what
+[TouchDesigner MCP](https://github.com/8beeeaaat/touchdesigner-mcp) does for
+TouchDesigner: embed the agent interface inside the creative tool's runtime, so
+AI collaborators manipulate live state instead of editing project files. Agentic
+workflows for artists, not just programmers.
