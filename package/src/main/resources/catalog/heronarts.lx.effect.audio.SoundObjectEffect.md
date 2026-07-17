@@ -7,19 +7,29 @@ sourceSha256: c20b3fd26909eb9e302719a94bbab19ddcb2c07e1562bab15d3508f9e2ea28c4
 classBytesSha256: 907d7c214a9e5d43973ce895bc674bd78a55db7d2af7ccf4aac90c0e72bb74f1
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
-generatedAt: 2026-07-09T00:00:00Z
-generator: lx-mcp-catalog/1 (claude-sonnet-4-6)
+generatedAt: 2026-07-17T00:00:00Z
+generator: lx-mcp-catalog/2 (claude-sonnet-5)
 tags: audio-reactive, masking, spatial, utility
 ---
 
 ## Summary
 
-SoundObjectEffect applies a spatially-positioned audio mask onto the incoming color buffer each frame by delegating to the same engine used by SoundObjectPattern. The engine generates a per-point brightness field centered on a virtual sound object whose size and luminosity are driven by an audio signal and optional modulation input; that field is then composited against the existing buffer using one of several blend functions (multiply, spotlight, highlight, add, or lerp). A CUE mode bypasses the blend and replaces the buffer outright with the raw mask, useful for tweaking placement before going live.
+SoundObjectEffect reuses the sound-object rendering engine shared with the matching pattern to build a per-point brightness field around a tracked sound object, then composites that field onto the existing buffer rather than generating its own colors.
+
+- Size and brightness are driven continuously by a selected audio signal plus an optional modulation input, and the result is composited onto the buffer using one of several blend behaviors (see Parameter interactions).
+- A momentary cue control bypasses the blend and writes the raw mask straight to the buffer, for tuning placement without affecting live output.
 
 ## Parameter interactions
 
-The base size and base brightness establish a floor for the sound object when the signal is silent; signal-to-size and signal-to-brightness scale how aggressively the audio drives those dimensions upward. A separate modulation input can independently push size and brightness via its own scaling knobs, layering LFO or envelope influence on top of the audio signal. Shape controls (shapeMode1, shapeMode2, and shapeLerp) determine whether the falloff is spherical (orb), box-shaped (Chebyshev distance), axis-aligned slab, or a blend of any two, and positionMode selects which coordinate the object tracks. Mask depth scales the overall blend alpha so the effect can be dialed in gradually, while the mask mode enum determines whether the sound object illuminates, attenuates, or additively brightens the underlying content.
+- A base size and brightness floor the object when the driving signal is quiet; signal-to-size and signal-to-brightness amounts scale how far the audio pushes those up, continuously. The modulation input drives size/brightness independently of the audio signal, for LFO/envelope layering on top of the audio response.
+- The object's outline can be rendered as a spherical falloff, a box-shaped (Chebyshev-distance) falloff, or a falloff along a single axis; two independent shape choices can be continuously cross-blended, and a separate control picks how the object's spatial position is computed within the model.
+- A contrast-style control sets how much of the object's size fades gradually to zero versus staying solid core.
+- Scope controls sample signal history at a delay proportional to each point's distance from the object, trading a flat brightness field for radiating temporal echoes outward from the object.
+- The blend depth scales overall mask opacity; the blend mode picks whether the mask darkens existing content (multiplicative), only brightens it (screen-like), boosts only where the mask and existing content already overlap (spotlight-style), or replaces/adds onto it outright.
 
 ## Usage tips
 
-Use this effect on a channel that already has content rendered — it sculpts what is there rather than generating its own colors. Multiply mode darkens everything outside the sound object radius and is the most dramatic; spotlight and highlight preserve more of the background content while still emphasizing the object's footprint. Pair with an audio modulation source on the signal input for reactive pulsing. The scope parameters let you tune temporal smoothing of the signal, which prevents jitter on fast transients.
+- Requires existing rendered content beneath it — otherwise only the cue view or the additive/replace blend modes show anything.
+- The multiplicative blend mode is most dramatic, darkening everything outside the object; the screen/spotlight-style modes preserve more of the background.
+- Use the cue control to preview/position the mask before raising blend depth for live blending.
+- The object selector picks which detected sound object drives the effect when multiple exist.
