@@ -16,7 +16,7 @@ every main-branch push that passes the full test suite; versioned releases are o
 [releases page](https://github.com/oveddan/lx-mcp/releases):
 
 ```sh
-curl -L -o ~/Chromatik/Packages/lx-mcp.jar \
+curl -L --create-dirs -o ~/Chromatik/Packages/lx-mcp.jar \
   https://github.com/oveddan/lx-mcp/releases/download/latest/lx-mcp.jar
 ```
 
@@ -27,6 +27,12 @@ git clone git@github.com:oveddan/lx-mcp.git
 cd lx-mcp/package
 mvn install -Pinstall
 ```
+
+**Use one install method, not both.** The download is named `lx-mcp.jar`; the Maven
+install produces `lx-mcp-<version>.jar`. If both sit in `~/Chromatik/Packages/`,
+Chromatik loads the plugin twice (and one copy is stale — the classic "I installed
+the new jar but nothing changed" trap; `get_status`'s `buildTime` exposes it).
+Remove the other jar when switching methods.
 
 The `install` profile copies the shaded jar into `~/Chromatik/Packages/`, where Chromatik
 discovers packages. (Without the profile, `mvn package` just builds it under `target/`.)

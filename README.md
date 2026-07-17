@@ -8,7 +8,7 @@ A drop-in LX/Chromatik package for AI-driven show composition over MCP.
 
 ```sh
 # download the latest CI-built jar (or: cd package && mvn install -Pinstall)
-curl -L -o ~/Chromatik/Packages/lx-mcp.jar \
+curl -L --create-dirs -o ~/Chromatik/Packages/lx-mcp.jar \
   https://github.com/oveddan/lx-mcp/releases/download/latest/lx-mcp.jar
 # then: enable LX-MCP in Chromatik Preferences → Plugins, restart, and connect:
 claude mcp add --transport http lx "http://127.0.0.1:$(jq -r .port ~/.lx-mcp/status.json)/mcp"

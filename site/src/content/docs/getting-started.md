@@ -19,12 +19,12 @@ point your MCP client at the port it publishes. No separate server process.
 Download the latest jar into Chromatik's packages directory:
 
 ```sh
-curl -L -o ~/Chromatik/Packages/lx-mcp.jar \
+curl -L --create-dirs -o ~/Chromatik/Packages/lx-mcp.jar \
   https://github.com/oveddan/lx-mcp/releases/download/latest/lx-mcp.jar
 ```
 
-Every push to the repo's main branch republishes this jar after the full test suite
-passes. Versioned releases live on the
+Every push to main that touches the plugin code republishes this jar after the full
+test suite passes. Versioned releases live on the
 [releases page](https://github.com/oveddan/lx-mcp/releases).
 
 ### Option B — build from source
@@ -39,6 +39,12 @@ The `install` profile copies the shaded jar into `~/Chromatik/Packages/`, where
 Chromatik discovers packages. (Without the profile, `mvn package` just builds it under
 `target/`.) The `install` profile skips tests — they're the developer gate, not part of
 the consumer install flow.
+
+:::caution[Use one install method, not both]
+The download is named `lx-mcp.jar`; the Maven install produces
+`lx-mcp-<version>.jar`. If both sit in `~/Chromatik/Packages/`, Chromatik loads the
+plugin twice — and one copy is stale. Remove the other jar when switching methods.
+:::
 
 ## 2. Enable the plugin in Chromatik
 

@@ -16,6 +16,12 @@ on:
 permissions:
   contents: write
 
+# Overlapping runs race on the shared `latest` release — an older run's upload
+# could land last and publish a stale jar. One at a time, newest wins.
+concurrency:
+  group: publish-latest
+  cancel-in-progress: true
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -43,18 +49,19 @@ jobs:
         run: ./scripts/verify-load.sh
 
       - name: Stage jar with stable name
-        id: jar
-        run: |
-          JAR=$(ls target/lx-mcp-*.jar | head -1)
-          echo "versioned=$(basename "$JAR")" >> "$GITHUB_OUTPUT"
-          cp "$JAR" target/lx-mcp.jar
+        run: cp "$(ls target/lx-mcp-*.jar | head -1)" target/lx-mcp.jar
 
+      # Only the stable-named jar rides the rolling release — versioned asset
+      # names would pile up across pom version bumps (--clobber only replaces
+      # same-named assets). Versioned jars belong to tagged releases.
+      # Assets upload BEFORE the tag moves, so a failed upload leaves the tag
+      # pointing at the commit whose jar is actually being served.
       - name: Update rolling `latest` prerelease
         run: |
-          git tag -f latest
-          git push -f origin latest
           gh release view latest >/dev/null 2>&1 || \
             gh release create latest --prerelease --title "Latest build (main)" --notes "placeholder"
-          gh release upload latest target/lx-mcp.jar "target/${{ steps.jar.outputs.versioned }}" --clobber
+          gh release upload latest target/lx-mcp.jar --clobber
+          git tag -f latest
+          git push -f origin latest
           gh release edit latest --prerelease --title "Latest build (main)" \
             --notes "Rolling build of main — commit ${GITHUB_SHA}. Updated automatically on every push that touches package/. For a stable download URL use: https://github.com/${GITHUB_REPOSITORY}/releases/download/latest/lx-mcp.jar"

@@ -26,7 +26,7 @@ build channels and pattern playlists, chain effects, wire LFOs and macro knobs,
 manage the color palette, capture snapshots — all live, all undoable with Cmd-Z.
 
 ```sh
-curl -L -o ~/Chromatik/Packages/lx-mcp.jar \
+curl -L --create-dirs -o ~/Chromatik/Packages/lx-mcp.jar \
   https://github.com/oveddan/lx-mcp/releases/download/latest/lx-mcp.jar
 # enable LX-MCP in Chromatik Preferences → Plugins, restart, then:
 claude mcp add --transport http lx "http://127.0.0.1:$(jq -r .port ~/.lx-mcp/status.json)/mcp"

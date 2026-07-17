@@ -6,8 +6,6 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-JAR="target/lx-mcp-0.0.1-SNAPSHOT.jar"
-
 # Resolve a real JDK now. The macOS /usr/bin/java stub resolves the runtime via
 # the user's home, so overriding user.home below would break it — point at a
 # concrete JDK instead. Try, in order: $JAVA_HOME, /usr/libexec/java_home,
@@ -36,6 +34,14 @@ fi
 # Build the plugin jar and compile the headless harness (src/test, not shipped).
 echo "==> mvn package + test-compile"
 mvn -q -B package test-compile
+
+# Version-agnostic: the shaded jar is the only lx-mcp-*.jar (shade keeps the
+# unshaded copy as original-*.jar, which the glob doesn't match).
+JAR="$(ls target/lx-mcp-*.jar 2>/dev/null | head -1)"
+if [[ -z "$JAR" ]]; then
+  echo "FAIL: no target/lx-mcp-*.jar after mvn package" >&2
+  exit 1
+fi
 
 # Resolve ONLY LX + its transitive deps — the faithful Chromatik app classpath.
 # Resolving from this project's pom (even with includeScope=provided) emits the
