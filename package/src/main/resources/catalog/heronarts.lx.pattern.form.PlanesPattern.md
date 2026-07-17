@@ -7,19 +7,28 @@ sourceSha256: db135379cbdfd619838bcabf992f01b7ed73e7017bac3d4c8eaf99e554ba6079
 classBytesSha256: 6ae2ae9e2b4c3096f2d3ba660eca9d328db177589587c38ba28b6942c71daec2
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
-generatedAt: 2026-07-09T00:00:00Z
-generator: lx-mcp-catalog/1 (claude-sonnet-4-6)
+generatedAt: 2026-07-17T00:00:00Z
+generator: lx-mcp-catalog/2 (claude-sonnet-5)
 tags: geometric, masking, motion, generative
 ---
 
 ## Summary
 
-PlanesPattern renders up to eight independently configurable luminous planes simultaneously additive-composited onto a black background. Each plane is a thin slab through 3D space defined by its axis orientation (X, Y, Z, free-form Ax+By+Cz+D, or one of two radial modes), position along that axis, and half-width; pixels within the slab receive a brightness contribution that falls off to zero across a contrast-controlled edge. The entire coordinate space shares a global yaw/pitch/roll rotation matrix, so all active planes rotate together, while individual planes also carry per-plane tilt and spin angles that modify their orientation around a pivot point within the slab.
+Renders up to 8 independently configured luminous planes (slabs) through 3D space, additive-composited onto black.
+
+- Each plane's shape is set by axis mode (X/Y/Z/Free/R-center/R-origin), position, half-width, and edge contrast; pixels inside the slab get brightness falling off to zero at the contrast-controlled edge.
+- All active planes share one global yaw/pitch/roll rotation of the coordinate space; each plane also carries its own tilt and spin rotation around its own pivot.
+- Free and radial (R-center, R-origin) axis modes bypass tilt/spin and specify the plane directly via coefficients or a radius.
 
 ## Parameter interactions
 
-Position and width are the primary per-plane shape parameters — position sweeps the slab through the model and width controls how thick it is; contrast then determines how hard or soft the edge of each slab appears. The tilt and tiltPosition parameters rotate the slab around a secondary axis within its plane, which creates angled slices rather than axis-aligned cuts; spin and spinPosition add a third rotation around a perpendicular axis, enabling arbitrarily oriented planes. Min/max range parameters on both position and width allow LFO-attached modulation to be bounded to a useful region of the model. In free and radial modes the plane's coefficients are specified directly, bypassing the rotation-based controls.
+- Position, width, and contrast act CONTINUOUSLY and are natural LFO targets: position sweeps the slab, width sets thickness, contrast controls edge hardness.
+- Tilt/tiltPosition and spin/spinPosition rotate the slab around two secondary in-plane axes (angled slices, not axis-aligned cuts); only meaningful for X/Y/Z axis modes.
+- Position/width min/max range parameters bound where an LFO-driven sweep can reach, confining a full-range modulator to a useful region.
+- R-center produces an expanding/contracting sphere shell around the model center; R-origin a shell around the model's origin — neither is a flat plane.
 
 ## Usage tips
 
-PlanesPattern excels as a reveal or beam pattern when animated with LFOs attached to position — a single Y-axis plane sweeping slowly upward creates a clean horizontal wash that looks effective on tall structural elements. Multiple planes at different positions and speeds produce a comb or scan effect. The radial modes (R-center and R-origin) create expanding/contracting sphere and origin-centered shells rather than planar slabs. Keep brightness levels on individual planes low when stacking all eight to avoid saturating highlights; the planes add together so total brightness scales with the count of active planes.
+- A single Y-axis plane swept slowly via an LFO on position makes a clean horizontal reveal/wash; several planes at staggered positions/speeds produce a comb effect.
+- Keep per-plane level low when stacking many planes — brightness is additive and easily saturates.
+- Only plane 1's controls are exposed as remote controls by default; the other 7 require the full parameter tree.

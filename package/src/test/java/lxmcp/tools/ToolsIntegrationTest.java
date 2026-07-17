@@ -72,12 +72,29 @@ class ToolsIntegrationTest {
   private static final AtomicBoolean draining = new AtomicBoolean(true);
   private static Thread drainer;
 
+  /**
+   * Registered but never cataloged: the fixture for undocumented-class assertions.
+   * Every stock DEFAULT_* class now ships a catalog entry, so an undocumented state
+   * must come from a class that can never gain one.
+   */
+  public static class UndocumentedModulator extends heronarts.lx.modulator.LXModulator {
+    public UndocumentedModulator() {
+      super("Undocumented");
+    }
+
+    @Override
+    protected double computeValue(double deltaMs) {
+      return 0;
+    }
+  }
+
   @BeforeAll
   static void setUp() {
     // reindexPoints: the immutable-model LX constructor does not reindex (only
     // LXStructure.setStaticModel does), and LXPoint indices come from a JVM-global
     // counter — required for per-point readback (get_frame) to index buffers correctly.
     lx = new LX(new GridModel(8, 8).reindexPoints());
+    lx.registry.addModulator(UndocumentedModulator.class);
     channel = lx.engine.mixer.addChannel();
     channel.addPattern(new GradientPattern(lx));
     // GridModel's root carries the "grid" tag (LXModel.Tag.GRID) but has no submodel
@@ -1023,10 +1040,10 @@ class ToolsIntegrationTest {
 
   @Test
   void getComponentDocUndocumentedClass() {
-    // MacroKnobs is registered but has no catalog entry in the lx-mcp jar.
+    // UndocumentedModulator is registered but has no catalog entry anywhere.
     Map<String, Object> payload = structured(
-        call("get_component_doc", Map.of("class", MacroKnobs.class.getName())));
-    assertEquals(MacroKnobs.class.getName(), payload.get("class"));
+        call("get_component_doc", Map.of("class", UndocumentedModulator.class.getName())));
+    assertEquals(UndocumentedModulator.class.getName(), payload.get("class"));
     assertEquals(Boolean.FALSE, payload.get("documented"));
     // No error — undocumented is a valid, expected state.
     assertFalse(payload.containsKey("summary"), "no summary for undocumented class");
@@ -1073,8 +1090,13 @@ class ToolsIntegrationTest {
     Map<String, Object> knobs = modulators.stream()
         .filter(m -> MacroKnobs.class.getName().equals(m.get("class")))
         .findFirst().orElseThrow();
-    assertEquals(Boolean.FALSE, knobs.get("documented"),
-        "MacroKnobs has no catalog entry");
+    assertEquals(Boolean.TRUE, knobs.get("documented"),
+        "MacroKnobs ships a catalog entry");
+    Map<String, Object> undocumented = modulators.stream()
+        .filter(m -> UndocumentedModulator.class.getName().equals(m.get("class")))
+        .findFirst().orElseThrow();
+    assertEquals(Boolean.FALSE, undocumented.get("documented"),
+        "UndocumentedModulator has no catalog entry");
   }
 
   @Test

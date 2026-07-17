@@ -7,19 +7,27 @@ sourceSha256: 1564847e34c33a1ebe99e2d7061a75dbb3c65caa23e7ac1acd40b28d47eebd3f
 classBytesSha256: bc704abc82e2c3d8eb0ba7ab2aead00ed4c45e7f5a583d33099b15357c3d5afa
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
-generatedAt: 2026-07-09T00:00:00Z
-generator: lx-mcp-catalog/1 (claude-sonnet-4-6)
+generatedAt: 2026-07-17T00:00:00Z
+generator: lx-mcp-catalog/2 (claude-sonnet-5)
 tags: color, hue, saturation, brightness, utility
 ---
 
 ## Summary
 
-HueSaturationEffect shifts each pixel's hue, saturation, and brightness by additive offsets in HSB color space, converting each incoming RGB value to HSB per-pixel, adding the configured deltas, clamping saturation and brightness to the 0–100 range, and converting back to RGB. Hue wraps naturally as degrees, so adding 180 degrees flips all colors to their complements. When the effect's blend amount is less than full, all three adjustments are linearly interpolated back toward the original HSB values before conversion, preserving smooth fade-in behavior.
+Adds fixed hue/saturation/brightness offsets to every pixel in HSB space.
+
+- Hue offset rotates all colors by a fixed number of degrees; wraps continuously, so a 180° offset yields exact complements.
+- Saturation and brightness offsets are added then clamped to their valid range, not scaled — pushing brightness to its floor makes hue and saturation offsets invisible regardless of their values.
+- The effect's enable amount CONTINUOUSLY cross-fades all three offsets back toward the original HSB values as amount drops below full, rather than snapping.
 
 ## Parameter interactions
 
-The three parameters are independent additive offsets: hue rotation has no effect on achromatic (zero-saturation) pixels since grey has no defined hue angle, and a brightness offset that drives pixels to 0 will make hue and saturation adjustments invisible regardless of their values. Saturation can be pushed negative to desaturate, which combined with a brightness boost produces a fade-to-white. Hue shift combined with reduced saturation shifts palette without washing out color completely — useful for subtle palette drift. Because conversion is per-pixel in HSB, pixels that were already at maximum saturation will not increase further when the saturation parameter is positive.
+- Hue shift has no visible effect on already-achromatic (zero-saturation) pixels, since grey carries no hue angle.
+- Negative saturation combined with a positive brightness offset produces a fade-to-white; negative saturation alone desaturates toward grey.
+- Pixels already at maximum saturation or brightness show no further change from a positive offset in that channel (clamped, not wrapped or overshot).
 
 ## Usage tips
 
-HueSaturationEffect is the go-to for palette recoloring without redesigning a pattern: applying a fixed hue offset rotates the entire palette uniformly, so a multicolor gradient becomes the same gradient offset by a fixed angle. Animating the hue offset with a slow LFO creates a living color cycle across any pattern. Negative saturation converts any colored pattern to greyscale when pushed fully negative, and combined with selective brightness boost produces a faded or bleached look. Chain after effects that produce high-contrast output to add color back in, or place before InvertEffect to invert a hue-shifted palette.
+- Use for palette recoloring without touching the source pattern: a fixed hue offset uniformly rotates any multicolor gradient.
+- Animate hue with a slow LFO for a continuous color-cycle on top of any pattern.
+- Push saturation fully negative to convert any pattern to greyscale in place.
