@@ -10,7 +10,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 
-import heronarts.lx.LX;
+import lxmcp.Log;
 
 /**
  * Reads {@code ~/.lx-mcp/config.json}, the second filesystem touchpoint alongside
@@ -18,7 +18,7 @@ import heronarts.lx.LX;
  * the MCP listener's port and bind host.
  *
  * <p>A config typo must never take the server down: any parse or validation failure logs
- * via {@link LX#error} and falls back to {@link #DEFAULTS} rather than propagating.
+ * via {@link Log#error} and falls back to {@link #DEFAULTS} rather than propagating.
  */
 public final class ConfigFile {
 
@@ -50,19 +50,19 @@ public final class ConfigFile {
     try {
       contents = Files.readString(file);
     } catch (IOException e) {
-      LX.error(e, "[LX-MCP] Failed to read " + file + " — using defaults");
+      Log.error(e, "Failed to read " + file + " — using defaults");
       return DEFAULTS;
     }
     JsonObject json;
     try {
       JsonElement parsed = JsonParser.parseString(contents);
       if (!parsed.isJsonObject()) {
-        LX.error("[LX-MCP] " + file + " is not a JSON object — using defaults");
+        Log.error(file + " is not a JSON object — using defaults");
         return DEFAULTS;
       }
       json = parsed.getAsJsonObject();
     } catch (JsonParseException e) {
-      LX.error(e, "[LX-MCP] Malformed JSON in " + file + " — using defaults");
+      Log.error(e, "Malformed JSON in " + file + " — using defaults");
       return DEFAULTS;
     }
 
@@ -70,17 +70,17 @@ public final class ConfigFile {
     if (json.has("port")) {
       JsonElement portElement = json.get("port");
       if (!portElement.isJsonPrimitive() || !portElement.getAsJsonPrimitive().isNumber()) {
-        LX.error("[LX-MCP] " + file + " has a non-numeric \"port\" — using defaults");
+        Log.error(file + " has a non-numeric \"port\" — using defaults");
         return DEFAULTS;
       }
       double portAsDouble = portElement.getAsDouble();
       port = portElement.getAsInt();
       if (portAsDouble != port) {
-        LX.error("[LX-MCP] " + file + " has a fractional \"port\" (" + portAsDouble + ") — using defaults");
+        Log.error(file + " has a fractional \"port\" (" + portAsDouble + ") — using defaults");
         return DEFAULTS;
       }
       if (port < 0 || port > 65535) {
-        LX.error("[LX-MCP] " + file + " has an out-of-range \"port\" (" + port + ") — using defaults");
+        Log.error(file + " has an out-of-range \"port\" (" + port + ") — using defaults");
         return DEFAULTS;
       }
     }
@@ -89,12 +89,12 @@ public final class ConfigFile {
     if (json.has("host")) {
       JsonElement hostElement = json.get("host");
       if (!hostElement.isJsonPrimitive() || !hostElement.getAsJsonPrimitive().isString()) {
-        LX.error("[LX-MCP] " + file + " has a non-string \"host\" — using defaults");
+        Log.error(file + " has a non-string \"host\" — using defaults");
         return DEFAULTS;
       }
       host = hostElement.getAsString();
       if (host.isBlank()) {
-        LX.error("[LX-MCP] " + file + " has a blank \"host\" — using defaults");
+        Log.error(file + " has a blank \"host\" — using defaults");
         return DEFAULTS;
       }
     }

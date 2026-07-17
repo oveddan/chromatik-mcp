@@ -21,7 +21,6 @@ import lxmcp.tools.Tools;
 @LXPlugin.Name("LX-MCP")
 public class LxMcpPlugin implements LXPlugin {
 
-  private static final String PREFIX = "[LX-MCP] ";
   private static final String SERVER_NAME = "LX-MCP";
 
   // Referenced by fully-qualified name, never `LxMcpUiPlugin.class` — this class must stay
@@ -44,10 +43,10 @@ public class LxMcpPlugin implements LXPlugin {
 
   @Override
   public void initialize(LX lx) {
-    LX.log(PREFIX + "plugin loaded");
+    Log.log("plugin loaded");
     ConfigFile.Config config = ConfigFile.load(ConfigFile.path());
     if (!config.isLoopback()) {
-      LX.error(PREFIX + "SECURITY WARNING: binding MCP server to non-loopback host '" + config.host()
+      Log.error("SECURITY WARNING: binding MCP server to non-loopback host '" + config.host()
           + "'. This server is UNAUTHENTICATED and can mutate a live show — anyone who can reach "
           + "this address has full control. Remove \"host\" from " + ConfigFile.path()
           + " to restore loopback-only.");
@@ -84,26 +83,28 @@ public class LxMcpPlugin implements LXPlugin {
     writeStatusFile(false, null);
 
     this.loopTask = deltaMs -> {
-      ConnectionSnapshot snapshot = connectionTracker.snapshot(System.currentTimeMillis());
+      long nowMs = System.currentTimeMillis();
+      boolean connected = connectionTracker.isConnected(nowMs);
+      long lastActivityMs = connectionTracker.lastActivityMs();
       boolean wasConnected = this.status.connected.isOn();
-      this.status.connected.setValue(snapshot.connected());
-      this.status.lastActivityMs.setValue(snapshot.lastActivityMs());
-      if (snapshot.connected() != wasConnected) {
-        LX.log(PREFIX + (snapshot.connected() ? "MCP client connected" : "MCP client disconnected"));
+      this.status.connected.setValue(connected);
+      this.status.lastActivityMs.setValue(lastActivityMs);
+      if (connected != wasConnected) {
+        Log.log(connected ? "MCP client connected" : "MCP client disconnected");
         // A disk-full/permissions blip writing status.json must never take down a live
         // show: LXEngine.run() catches Throwable from loop tasks and marks the engine
         // permanently failed, so an uncaught UncheckedIOException here would kill the
         // whole performance over a cosmetic discovery-file write.
         try {
-          writeStatusFile(snapshot.connected(), snapshot.lastActivityMs());
+          writeStatusFile(connected, lastActivityMs);
         } catch (UncheckedIOException e) {
-          LX.error(e, PREFIX + "Failed to rewrite " + StatusFile.path() + " on connection-state change");
+          Log.error(e, "Failed to rewrite " + StatusFile.path() + " on connection-state change");
         }
       }
     };
     lx.engine.addLoopTask(this.loopTask);
 
-    LX.log(PREFIX + "MCP server listening on " + this.status.url());
+    Log.log("MCP server listening on " + this.status.url());
   }
 
   /**
@@ -124,7 +125,7 @@ public class LxMcpPlugin implements LXPlugin {
       if (plugin.clazz.getName().equals(UI_PLUGIN_CLASS_NAME)) {
         if (!plugin.isEnabled()) {
           plugin.setEnabled(true);
-          LX.log(PREFIX + "auto-enabled LX-MCP UI companion plugin");
+          Log.log("auto-enabled LX-MCP UI companion plugin");
         }
         return;
       }
@@ -164,7 +165,7 @@ public class LxMcpPlugin implements LXPlugin {
         long lastActivityMs = (long) this.status.lastActivityMs.getValue();
         writeStatusFile(false, lastActivityMs == 0 ? null : lastActivityMs);
       } catch (UncheckedIOException e) {
-        LX.error(e, PREFIX + "Failed to rewrite " + StatusFile.path() + " on dispose");
+        Log.error(e, "Failed to rewrite " + StatusFile.path() + " on dispose");
       }
     }
     if (this.server != null) {

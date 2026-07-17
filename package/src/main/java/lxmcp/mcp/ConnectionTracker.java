@@ -39,6 +39,22 @@ public final class ConnectionTracker implements Filter {
     return new ConnectionSnapshot(streams, lastActivity, connected);
   }
 
+  /**
+   * Allocation-free equivalent of {@code snapshot(nowMs).connected()}, for the per-frame
+   * engine loop task — {@link #snapshot} allocates a record and is reserved for the
+   * on-demand {@code get_status} path.
+   */
+  public boolean isConnected(long nowMs) {
+    int streams = this.activeStreams.get();
+    long lastActivity = this.lastActivityMs.get();
+    return streams > 0 || (lastActivity != 0 && (nowMs - lastActivity) < CONNECTED_WINDOW_MS);
+  }
+
+  /** Allocation-free equivalent of {@code snapshot(nowMs).lastActivityMs()}. */
+  public long lastActivityMs() {
+    return this.lastActivityMs.get();
+  }
+
   @Override
   public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
       throws IOException, ServletException {

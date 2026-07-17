@@ -176,6 +176,17 @@ class ConnectionTrackerTest {
   }
 
   @Test
+  void isConnectedAndLastActivityMsMirrorSnapshot() throws IOException, ServletException {
+    ConnectionTracker tracker = new ConnectionTracker();
+    tracker.doFilter(fakeRequest("POST", Map.of()), fakeResponse(), noopChain());
+    long lastActivity = tracker.snapshot(System.currentTimeMillis()).lastActivityMs();
+
+    assertEquals(lastActivity, tracker.lastActivityMs());
+    assertTrue(tracker.isConnected(lastActivity + 59_000), "within the 60s window");
+    assertFalse(tracker.isConnected(lastActivity + 61_000), "past the 60s window");
+  }
+
+  @Test
   void activeStreamsAlwaysConnectedRegardlessOfWindow() throws IOException, ServletException {
     ConnectionTracker tracker = new ConnectionTracker();
     boolean[] asyncStarted = {false};

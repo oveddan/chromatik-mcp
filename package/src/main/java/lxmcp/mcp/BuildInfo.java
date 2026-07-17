@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
-import heronarts.lx.LX;
+import lxmcp.Log;
 
 /**
  * The version and build timestamp of the running plugin jar, read once from the
@@ -16,7 +16,7 @@ import heronarts.lx.LX;
  * other way to detect it's still talking to the stale process.
  *
  * <p>Mirrors {@link ConfigFile}'s defensive style: any read/parse failure logs via {@link
- * LX#error} and falls back to {@code "unknown"} rather than propagating — a missing or
+ * Log#error} and falls back to {@code "unknown"} rather than propagating — a missing or
  * malformed resource must never take the plugin down.
  */
 public final class BuildInfo {
@@ -44,12 +44,12 @@ public final class BuildInfo {
     Properties props = new Properties();
     try (InputStream in = BuildInfo.class.getResourceAsStream(resourcePath)) {
       if (in == null) {
-        LX.error("[LX-MCP] Missing classpath resource " + resourcePath + " — build identity unknown");
+        Log.error("Missing classpath resource " + resourcePath + " — build identity unknown");
         return new Info(UNKNOWN, UNKNOWN);
       }
       props.load(in);
     } catch (IOException | IllegalArgumentException e) {
-      LX.error(e, "[LX-MCP] Failed to read " + resourcePath + " — build identity unknown");
+      Log.error(e, "Failed to read " + resourcePath + " — build identity unknown");
       return new Info(UNKNOWN, UNKNOWN);
     }
     String version = props.getProperty("version");

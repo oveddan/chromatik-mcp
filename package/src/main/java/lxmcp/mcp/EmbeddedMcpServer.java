@@ -69,20 +69,6 @@ public final class EmbeddedMcpServer {
   }
 
   /**
-   * Start the server, additionally setting the MCP {@code instructions} string returned in
-   * the initialize result. {@code instructions} may be {@code null} to omit it. Plain
-   * {@code String} — this class stays LX-agnostic, so callers own the content.
-   */
-  public static EmbeddedMcpServer start(
-      String serverName,
-      String version,
-      int requestedPort,
-      List<McpServerFeatures.SyncToolSpecification> tools,
-      String instructions) {
-    return start(serverName, version, requestedPort, "127.0.0.1", tools, instructions);
-  }
-
-  /**
    * Start the server, binding {@code host} instead of the loopback-only default. Callers
    * outside tests should think hard before passing anything but a loopback address — see
    * the security comment at the connector below. Constructs its own {@link
