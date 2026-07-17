@@ -181,7 +181,9 @@ class ToolsIntegrationTest {
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
             "get_tempo",
             "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
-            "remove_color"),
+            "remove_color",
+            "list_snapshots", "add_snapshot", "recall_snapshot",
+            "update_snapshot", "remove_snapshot"),
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
         "wire_trigger", "remove_modulation", "remove_modulator", "fire_trigger",
@@ -189,7 +191,8 @@ class ToolsIntegrationTest {
         "add_channel", "remove_channel", "add_pattern", "remove_pattern",
         "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
         "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
-        "remove_color");
+        "remove_color",
+        "add_snapshot", "recall_snapshot", "update_snapshot", "remove_snapshot");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
       assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),
@@ -1482,5 +1485,85 @@ class ToolsIntegrationTest {
     } finally {
       lx.engine.palette.removeSwatch(swatch);
     }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listSnapshotsReportsEngineSettingsWithPaths() {
+    Map<String, Object> payload = structured(call("list_snapshots", Map.of()));
+    assertTrue(payload.get("snapshots") instanceof List);
+
+    List<Map<String, Object>> settings = (List<Map<String, Object>>) payload.get("settings");
+    assertEquals(8, settings.size());
+    Set<String> paths = settings.stream().map(s -> (String) s.get("path")).collect(Collectors.toSet());
+    assertEquals(Set.of(
+            lx.engine.snapshots.recallMixer.getCanonicalPath(),
+            lx.engine.snapshots.recallPattern.getCanonicalPath(),
+            lx.engine.snapshots.recallEffect.getCanonicalPath(),
+            lx.engine.snapshots.recallModulation.getCanonicalPath(),
+            lx.engine.snapshots.recallMaster.getCanonicalPath(),
+            lx.engine.snapshots.recallOutput.getCanonicalPath(),
+            lx.engine.snapshots.transitionEnabled.getCanonicalPath(),
+            lx.engine.snapshots.transitionTimeSecs.getCanonicalPath()),
+        paths);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void snapshotLifecycleOverMcp() {
+    int before = ((List<Object>) structured(call("list_snapshots", Map.of())).get("snapshots")).size();
+
+    channel.fader.setValue(0.7);
+    Map<String, Object> added = structured(call("add_snapshot", Map.of("label", "My Look")));
+    String path = (String) added.get("path");
+    try {
+      assertEquals("My Look", added.get("label"));
+      assertNotNull(added.get("id"));
+      assertNotNull(added.get("transitionTimeSecs"));
+
+      Map<String, Object> afterAdd = structured(call("list_snapshots", Map.of()));
+      List<Map<String, Object>> snapshots = (List<Map<String, Object>>) afterAdd.get("snapshots");
+      assertEquals(before + 1, snapshots.size());
+      assertEquals(path, snapshots.get(snapshots.size() - 1).get("path"));
+
+      // Recalling restores the captured fader value; immediate=true forces an instant
+      // apply even with transitions enabled, so the assertion holds synchronously.
+      channel.fader.setValue(0.2);
+      lx.engine.snapshots.transitionEnabled.setValue(true);
+      try {
+        Map<String, Object> recalled = structured(
+            call("recall_snapshot", Map.of("path", path, "immediate", true)));
+        assertEquals(path, recalled.get("recalled"));
+        assertEquals(Boolean.TRUE, recalled.get("immediate"));
+        assertEquals(0.7, channel.fader.getValue(), 1e-9);
+        assertTrue(lx.engine.snapshots.transitionEnabled.isOn(),
+            "immediate recall restores the engine's transition setting afterwards");
+      } finally {
+        lx.engine.snapshots.transitionEnabled.setValue(false);
+      }
+
+      // update_snapshot recaptures the current state.
+      channel.fader.setValue(0.3);
+      Map<String, Object> updated = structured(call("update_snapshot", Map.of("path", path)));
+      assertEquals(path, updated.get("updated"));
+
+      channel.fader.setValue(0.9);
+      structured(call("recall_snapshot", Map.of("path", path)));
+      assertEquals(0.3, channel.fader.getValue(), 1e-9);
+    } finally {
+      Map<String, Object> removed = structured(call("remove_snapshot", Map.of("path", path)));
+      assertEquals(path, removed.get("removed"));
+      assertEquals("snapshot", removed.get("kind"));
+      channel.fader.setValue(1.0);
+    }
+
+    Map<String, Object> afterRemove = structured(call("list_snapshots", Map.of()));
+    assertEquals(before, ((List<Object>) afterRemove.get("snapshots")).size());
+  }
+
+  @Test
+  void recallSnapshotUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result = call("recall_snapshot", Map.of("path", "/lx/snapshots/snapshot/99"));
+    assertEquals(Boolean.TRUE, result.isError());
   }
 }

@@ -50,7 +50,10 @@ public final class Tools {
           + "reports the engine tempo (bpm, clock source, beat position) and its "
           + "launchQuantization: with quantization set, a fire_trigger on a quantized "
           + "trigger (pattern/clip launch) may report pending:true instead of firing "
-          + "immediately, deferring to the next tempo boundary.";
+          + "immediately, deferring to the next tempo boundary. Snapshots (list_snapshots, "
+          + "add_snapshot, recall_snapshot) capture and recall whole-look state — mixer, "
+          + "pattern, effect, and modulation values together — with an optional fade "
+          + "controlled by the engine's transition settings.";
 
   private Tools() {}
 
@@ -94,7 +97,12 @@ public final class Tools {
             new GetViews(),
             new AddView(),
             new RemoveView(),
-            new GetTempo())
+            new GetTempo(),
+            new ListSnapshots(),
+            new AddSnapshot(),
+            new RecallSnapshot(),
+            new UpdateSnapshot(),
+            new RemoveSnapshot())
         .stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();
