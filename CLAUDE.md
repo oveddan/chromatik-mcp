@@ -6,7 +6,7 @@ Project context for AI assistants working in this repo. See [README.md](README.m
 
 A single Java package (`package/`) — drop-in LX jar (Maven). The jar embeds an HTTP MCP server inside the LX runtime, so AI clients (any MCP-speaking agentic platform — Claude Code, Claude Desktop, Cursor, Codex, custom orchestrators) connect to it directly and call tools that mutate LX state in-process. No separate Node server, no `.lxp` file editing, no file watcher.
 
-The only filesystem touchpoint is `~/.lx-mcp/status.json`, which the plugin writes on startup so clients can discover the HTTP port.
+The only filesystem touchpoint is `~/.chromatik-mcp/status.json`, which the plugin writes on startup so clients can discover the HTTP port.
 
 Reference LX source at `/Users/danoved/Source/LX/`. The scaffolding convention mirrors `/Users/danoved/Source/Apotheneum/` (Java 21, `com.heronarts:lx:1.2.1` as `provided`, `lx.package` JSON descriptor in `src/main/resources/` with Maven token filtering, install profile copies the jar to `~/Chromatik/Packages/`).
 
@@ -26,9 +26,9 @@ tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutati
                                     ──> read lx.engine.*         (read-only)
 ```
 
-- **Tool handlers** (`package/src/main/java/lxmcp/tools/*.java`): parse args, call a domain primitive, format the result. No `LXCommand` construction. No direct engine mutation.
-- **Domain primitives** (`package/src/main/java/lxmcp/domain/*.java`): the only place that knows how the mutation is actually applied. Each is one focused function.
-- **MCP plumbing** (`package/src/main/java/lxmcp/mcp/*.java`): server lifecycle, HTTP transport, status-file writing. Tool handlers and domain primitives never reach into MCP plumbing.
+- **Tool handlers** (`package/src/main/java/chromatikmcp/tools/*.java`): parse args, call a domain primitive, format the result. No `LXCommand` construction. No direct engine mutation.
+- **Domain primitives** (`package/src/main/java/chromatikmcp/domain/*.java`): the only place that knows how the mutation is actually applied. Each is one focused function.
+- **MCP plumbing** (`package/src/main/java/chromatikmcp/mcp/*.java`): server lifecycle, HTTP transport, status-file writing. Tool handlers and domain primitives never reach into MCP plumbing.
 
 ### Concrete example — "add a global modulator"
 
@@ -87,10 +87,10 @@ If three tools each need to "find the channel by id, then walk to a parameter, t
 
 ## Driving a live instance
 
-When an AI session connects to a running Chromatik (port from `~/.lx-mcp/status.json`, the one by-design filesystem touchpoint) to test or perform:
+When an AI session connects to a running Chromatik (port from `~/.chromatik-mcp/status.json`, the one by-design filesystem touchpoint) to test or perform:
 
 - **Never answer live-state questions from cached responses.** Re-query the API; a saved response file is only for parsing one large payload, not a source of truth minutes later.
-- **On connection failure, assume Chromatik restarted**: re-read `~/.lx-mcp/status.json`, re-initialize the MCP session, and re-list before reusing any held canonical paths (indices shift, state resets — e.g. `output/enabled` comes back off).
+- **On connection failure, assume Chromatik restarted**: re-read `~/.chromatik-mcp/status.json`, re-initialize the MCP session, and re-list before reusing any held canonical paths (indices shift, state resets — e.g. `output/enabled` comes back off).
 - **Consult `get_component_doc` before reasoning about a pattern/effect's behavior** — catalog entries exist for most stock LX effects/patterns and cover exactly the semantics (color modes, parameter interactions) that otherwise get guessed wrong.
 - **Reading LX source to answer a live question is a server-gap signal.** An end consumer can't do it. Work around it once, then file the gap (tool payload, description, or catalog entry) as a build-plan follow-up instead of leaving the knowledge in the session.
 

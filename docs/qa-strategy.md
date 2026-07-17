@@ -10,8 +10,8 @@ This is backed by executable proof, mirroring how PR-1a left `EmbeddedMcpServerT
 
 | Gate | Proves | Where |
 | --- | --- | --- |
-| domain-primitive suite | LX constructs + ticks with no GUI/GL context and no engine thread; each mutation test round-trips its `LXCommand` through undo (originally proved by a dedicated `HeadlessLxHarnessTest`, since retired) | `package/src/test/java/lxmcp/domain/` |
-| `EmbeddedMcpServerTest` (PR-1a) | the embedded HTTP MCP server is in-process testable | `package/src/test/java/lxmcp/mcp/EmbeddedMcpServerTest.java` |
+| domain-primitive suite | LX constructs + ticks with no GUI/GL context and no engine thread; each mutation test round-trips its `LXCommand` through undo (originally proved by a dedicated `HeadlessLxHarnessTest`, since retired) | `package/src/test/java/chromatikmcp/domain/` |
+| `EmbeddedMcpServerTest` (PR-1a) | the embedded HTTP MCP server is in-process testable | `package/src/test/java/chromatikmcp/mcp/EmbeddedMcpServerTest.java` |
 | `verify-load.sh` (PR-0) | the shaded jar loads inside real LX and `initialize()` runs | `package/scripts/verify-load.sh` |
 
 All three run on a clean runner via `.github/workflows/build.yml` (`mvn package` + the load gate).
@@ -40,7 +40,7 @@ LX lx = new LX(model);                 // no GUI, no GL, no preferences load
 lx.engine.run();                       // advance exactly one frame, on this thread
 ```
 
-`new LX(model)` performs no graphics initialization (`LX.java:435-521`). Because the engine thread is never started, the test owns timing: call `run()` once per frame you need. This is the seed every tool test builds on (shared as the `lxmcp.HeadlessLxTest` fixture).
+`new LX(model)` performs no graphics initialization (`LX.java:435-521`). Because the engine thread is never started, the test owns timing: call `run()` once per frame you need. This is the seed every tool test builds on (shared as the `chromatikmcp.HeadlessLxTest` fixture).
 
 > If a future change makes LX require a display/GL context, every domain test fails at construction. That is an **architecture-level escalation** (re-plan before continuing), not something a tool test should work around.
 

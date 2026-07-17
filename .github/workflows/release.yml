@@ -3,7 +3,7 @@ name: release (tagged)
 # Cut a versioned release: bump <version> in package/pom.xml, merge, then
 #   git tag v0.1.0 && git push origin v0.1.0
 # This builds the jar (full test gate) and creates a GitHub Release, making
-#   https://github.com/oveddan/lx-mcp/releases/latest/download/lx-mcp.jar
+#   https://github.com/oveddan/chromatik-mcp/releases/latest/download/chromatik-mcp.jar
 # serve the newest tagged release.
 
 on:
@@ -42,11 +42,11 @@ jobs:
       - name: Stage jar with stable name
         id: jar
         run: |
-          JAR=$(ls target/lx-mcp-*.jar | head -1)
+          JAR=$(ls target/chromatik-mcp-*.jar | head -1)
           echo "versioned=$(basename "$JAR")" >> "$GITHUB_OUTPUT"
-          cp "$JAR" target/lx-mcp.jar
+          cp "$JAR" target/chromatik-mcp.jar
 
       - name: Create versioned release
         run: |
           gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --generate-notes \
-            target/lx-mcp.jar "target/${{ steps.jar.outputs.versioned }}"
+            target/chromatik-mcp.jar "target/${{ steps.jar.outputs.versioned }}"

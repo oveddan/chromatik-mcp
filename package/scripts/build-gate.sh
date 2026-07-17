@@ -29,7 +29,7 @@ if [[ ! -f "$POM" ]]; then
   exit 2
 fi
 
-LOCK_DIR="/tmp/lx-mcp-build-gate.lock"
+LOCK_DIR="/tmp/chromatik-mcp-build-gate.lock"
 LOCK_HELD=0
 release_lock() { [[ "$LOCK_HELD" -eq 1 ]] && rm -rf "$LOCK_DIR"; }
 trap release_lock EXIT INT TERM

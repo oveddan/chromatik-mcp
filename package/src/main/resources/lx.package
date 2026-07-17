@@ -1,8 +1,8 @@
 {
-  name: "LX-MCP",
-  mediaDir: "LX-MCP",
-  author: "lx-mcp contributors",
-  url: "https://github.com/oveddan/lx-mcp",
+  name: "Chromatik-MCP",
+  mediaDir: "Chromatik-MCP",
+  author: "chromatik-mcp contributors",
+  url: "https://github.com/oveddan/chromatik-mcp",
 
   build: {
     name: "@project.name@",

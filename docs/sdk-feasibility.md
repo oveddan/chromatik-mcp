@@ -6,10 +6,10 @@ The official Java MCP SDK embeds cleanly inside the long-running LX JVM and serv
 over streamable-HTTP. This is verified two ways, both green in CI:
 
 1. **In-process embed test** — start the server on an ephemeral port, connect a real MCP
-   client, complete the `initialize` handshake, assert the server identifies as `LX-MCP`.
+   client, complete the `initialize` handshake, assert the server identifies as `Chromatik-MCP`.
    (`EmbeddedMcpServerTest`, runs under `mvn package`.)
 2. **Live load gate** — the shaded package jar, loaded by LX's own `LXClassLoader` in a
-   headless boot, starts the server: `[LX-MCP] MCP server listening on port <ephemeral>`.
+   headless boot, starts the server: `[Chromatik-MCP] MCP server listening on port <ephemeral>`.
    (`scripts/verify-build.sh --load`.)
 
 No architectural blocker. The one wrinkle (fat-jar slimming) is a PR-2 polish item, not a
@@ -25,15 +25,15 @@ gate failure. Proceed to PR-1b / PR-1c.
 | Container | Embedded **Tomcat** (`tomcat-embed-core` 11.0.2) — the SDK's own example pattern |
 | Owns main thread? | **No.** `Tomcat.start()` returns immediately; the listener runs on Tomcat threads |
 | In-process testable? | **Yes** — client + server in one JVM, ephemeral port, no external process |
-| Port discovery | `~/.lx-mcp/status.json` `{pid, port, projectPath, lxVersion}`, written on startup |
+| Port discovery | `~/.chromatik-mcp/status.json` `{pid, port, projectPath, lxVersion}`, written on startup |
 
 ## Embedding pattern
 
-The mutation lives in one composable primitive, [`EmbeddedMcpServer`](../package/src/main/java/lxmcp/mcp/EmbeddedMcpServer.java),
+The mutation lives in one composable primitive, [`EmbeddedMcpServer`](../package/src/main/java/chromatikmcp/mcp/EmbeddedMcpServer.java),
 kept LX-agnostic so it unit-tests in-process:
 
 ```java
-EmbeddedMcpServer server = EmbeddedMcpServer.start("LX-MCP", "0.0.1", 0); // 0 = ephemeral
+EmbeddedMcpServer server = EmbeddedMcpServer.start("Chromatik-MCP", "0.0.1", 0); // 0 = ephemeral
 int port = server.port();
 // ... server.stop() on teardown
 ```
@@ -41,7 +41,7 @@ int port = server.port();
 Internally: build the streamable-HTTP transport (`.mcpEndpoint("/mcp")`), wrap it in
 `McpServer.sync(transport).serverInfo(...).build()`, host the servlet on embedded Tomcat
 bound to port 0, and read back `getConnector().getLocalPort()`. The plugin
-([`LxMcpPlugin`](../package/src/main/java/lxmcp/LxMcpPlugin.java)) calls this from
+([`ChromatikMcpPlugin`](../package/src/main/java/chromatikmcp/ChromatikMcpPlugin.java)) calls this from
 `initialize(lx)` and writes the status file — nothing blocks LX startup.
 
 Client side (used by the embed test, and the shape any MCP platform uses):
@@ -50,7 +50,7 @@ Client side (used by the embed test, and the shape any MCP platform uses):
 var transport = HttpClientStreamableHttpTransport
     .builder("http://127.0.0.1:" + port).endpoint("/mcp").build();
 McpSyncClient client = McpClient.sync(transport).build();
-client.initialize();   // -> InitializeResult; serverInfo().name() == "LX-MCP"
+client.initialize();   // -> InitializeResult; serverInfo().name() == "Chromatik-MCP"
 ```
 
 ## Open questions — resolved
@@ -61,8 +61,8 @@ client.initialize();   // -> InitializeResult; serverInfo().name() == "LX-MCP"
 - **Embeddable in a long-running JVM without owning main?** Yes — confirmed live inside
   headless LX. Tomcat runs its own threads; `initialize()` returns immediately.
 - **Embedding shape?** The `EmbeddedMcpServer.start(...)` primitive above; ~40 lines.
-- **Port-discovery handshake?** Confirmed: `~/.lx-mcp/status.json` with
-  `{pid, port, projectPath, lxVersion}`, written by [`StatusFile`](../package/src/main/java/lxmcp/mcp/StatusFile.java).
+- **Port-discovery handshake?** Confirmed: `~/.chromatik-mcp/status.json` with
+  `{pid, port, projectPath, lxVersion}`, written by [`StatusFile`](../package/src/main/java/chromatikmcp/mcp/StatusFile.java).
 
 ## Packaging note (carry into PR-2, not a blocker)
 

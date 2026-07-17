@@ -22,7 +22,7 @@ it is cheap and safe.
   - `target`: symbolic — `lx-mcp` → `package/src/main/resources/catalog/` (ships in our
     jar; stock LX only), `repo` → the content repo's own `src/main/resources/catalog/`
     (docs ship inside *its* jar — preferred when you have write access), `overlay` →
-    `~/.lx-mcp/catalog/` (machine-local; for content you can read but not modify).
+    `~/.chromatik-mcp/catalog/` (machine-local; for content you can read but not modify).
 - `sources.local.json` (this directory, **git-ignored** — copy
   [`sources.local.example.json`](sources.local.example.json)): repo name → local
   checkout path on this machine. If a repo has no local mapping, clone it from `url`
@@ -32,7 +32,7 @@ it is cheap and safe.
 
 ## Pipeline
 
-1. **Class list.** Prefer *live*: read the port from `~/.lx-mcp/status.json` and call
+1. **Class list.** Prefer *live*: read the port from `~/.chromatik-mcp/status.json` and call
    `list_available_patterns` / `_effects` / `_modulators` — exact truth for the user's
    install. Offline fallback: parse the `DEFAULT_PATTERNS` / `DEFAULT_EFFECTS` /
    `DEFAULT_MODULATORS` arrays in `LXRegistry.java` (LX repo), plus a source scan of each

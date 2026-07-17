@@ -1,4 +1,4 @@
-# lx-mcp
+# chromatik-mcp
 
 A drop-in LX/Chromatik package for AI-driven show composition over MCP.
 
@@ -8,13 +8,13 @@ A drop-in LX/Chromatik package for AI-driven show composition over MCP.
 
 ```sh
 # download the latest CI-built jar (or: cd package && mvn install -Pinstall)
-curl -L --create-dirs -o ~/Chromatik/Packages/lx-mcp.jar \
-  https://github.com/oveddan/lx-mcp/releases/download/latest/lx-mcp.jar
-# then: enable LX-MCP in Chromatik Preferences → Plugins, restart, and connect:
-claude mcp add --transport http lx "http://127.0.0.1:$(jq -r .port ~/.lx-mcp/status.json)/mcp"
+curl -L --create-dirs -o ~/Chromatik/Packages/chromatik-mcp.jar \
+  https://github.com/oveddan/chromatik-mcp/releases/download/latest/chromatik-mcp.jar
+# then: enable Chromatik-MCP in Chromatik Preferences → Plugins, restart, and connect:
+claude mcp add --transport http chromatik "http://127.0.0.1:$(jq -r .port ~/.chromatik-mcp/status.json)/mcp"
 ```
 
-The plugin publishes its endpoint in `~/.lx-mcp/status.json` (`{pid, port, host, url, projectPath, lxVersion, serverVersion, buildTime, connected, lastActivityAt}`); the endpoint works with any streamable-HTTP MCP client. Enabling the **LX-MCP** plugin is the only checkbox — the UI status section (left pane, GLOBAL tab) enables itself. By default the server binds an ephemeral port on `127.0.0.1`; a fixed port or non-loopback bind (remote clients) can be configured in `~/.lx-mcp/config.json` (`{"port": 7770, "host": "0.0.0.0"}`) — **there is no authentication layer, so a non-loopback bind gives anyone on the network full control of the show**. Full walkthrough and troubleshooting: **[docs/install.md](docs/install.md)**. Concrete agent flows — building show structure, chaining effects, macro mapping, multi-agent patterns: **[docs/usage-examples.md](docs/usage-examples.md)**.
+The plugin publishes its endpoint in `~/.chromatik-mcp/status.json` (`{pid, port, host, url, projectPath, lxVersion, serverVersion, buildTime, connected, lastActivityAt}`); the endpoint works with any streamable-HTTP MCP client. Enabling the **Chromatik-MCP** plugin is the only checkbox — the UI status section (left pane, GLOBAL tab) enables itself. By default the server binds an ephemeral port on `127.0.0.1`; a fixed port or non-loopback bind (remote clients) can be configured in `~/.chromatik-mcp/config.json` (`{"port": 7770, "host": "0.0.0.0"}`) — **there is no authentication layer, so a non-loopback bind gives anyone on the network full control of the show**. Full walkthrough and troubleshooting: **[docs/install.md](docs/install.md)**. Concrete agent flows — building show structure, chaining effects, macro mapping, multi-agent patterns: **[docs/usage-examples.md](docs/usage-examples.md)**.
 
 ## Capabilities
 
@@ -112,7 +112,7 @@ Parameter payloads carry the address an OSC controller must send to. For most pa
 
 ## Architecture
 
-The jar embeds an HTTP MCP server (official Java MCP SDK, streamable-HTTP on embedded Tomcat) inside the LX runtime as an `LXPlugin`. Any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, custom orchestrators — connects to it directly and calls tools that mutate LX state in-process. No separate Node server, no `.lxp` file editing, no file watcher. Mutations route through `LXCommand`, so every change gets undo for free (exceptions — swatch recall, trigger fires, snapshot recall (an LX quirk: the undo entry captures post-recall values) — are called out in their tool descriptions), and are serialized onto the LX engine thread. The filesystem touchpoints are `~/.lx-mcp/status.json` (written on startup for endpoint discovery) and the optional `~/.lx-mcp/config.json` (fixed port / bind host). Default bind is `127.0.0.1` only; there is no authentication layer, so non-loopback binds are at your own risk (a startup warning says as much).
+The jar embeds an HTTP MCP server (official Java MCP SDK, streamable-HTTP on embedded Tomcat) inside the LX runtime as an `LXPlugin`. Any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, custom orchestrators — connects to it directly and calls tools that mutate LX state in-process. No separate Node server, no `.lxp` file editing, no file watcher. Mutations route through `LXCommand`, so every change gets undo for free (exceptions — swatch recall, trigger fires, snapshot recall (an LX quirk: the undo entry captures post-recall values) — are called out in their tool descriptions), and are serialized onto the LX engine thread. The filesystem touchpoints are `~/.chromatik-mcp/status.json` (written on startup for endpoint discovery) and the optional `~/.chromatik-mcp/config.json` (fixed port / bind host). Default bind is `127.0.0.1` only; there is no authentication layer, so non-loopback binds are at your own risk (a startup warning says as much).
 
 ```
 tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutation with undo)
@@ -122,4 +122,4 @@ tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutati
 
 ## License
 
-[MIT](LICENSE). Note the LX framework this plugin targets is separately licensed (free for non-commercial use — see [lx.studio/license](https://lx.studio/license)); this license covers only the lx-mcp code.
+[MIT](LICENSE). Note the LX framework this plugin targets is separately licensed (free for non-commercial use — see [lx.studio/license](https://lx.studio/license)); this license covers only the chromatik-mcp code.

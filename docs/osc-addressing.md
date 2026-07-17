@@ -1,4 +1,4 @@
-# OSC addressing in LX (and how lx-mcp exposes it)
+# OSC addressing in LX (and how chromatik-mcp exposes it)
 
 Distilled from LX source while building PR-5c. The short version: **a parameter's OSC
 address is usually its canonical path — except under modulators, where the segments are
@@ -44,7 +44,7 @@ Two hazards follow from label-based addressing:
 transmits on `transmitPort` (default **4040**) when `transmitActive` is on
 (LXOscEngine.java:62-63). Both are runtime parameters.
 
-## How lx-mcp surfaces this
+## How chromatik-mcp surfaces this
 
 - `get_parameter` / `set_parameter` payloads carry `oscAddress` (omitted when LX exposes
   none) alongside the canonical `path`.

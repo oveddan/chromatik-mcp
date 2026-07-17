@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Headless plugin-load gate: boot LX with no UI, confirm it discovers our jar
-# from the Packages dir and runs LxMcpPlugin.initialize(). Uses an isolated
+# from the Packages dir and runs ChromatikMcpPlugin.initialize(). Uses an isolated
 # user.home so it never touches the real ~/Chromatik or ~/LXStudio.
 set -euo pipefail
 
@@ -35,11 +35,11 @@ fi
 echo "==> mvn package + test-compile"
 mvn -q -B package test-compile
 
-# Version-agnostic: the shaded jar is the only lx-mcp-*.jar (shade keeps the
+# Version-agnostic: the shaded jar is the only chromatik-mcp-*.jar (shade keeps the
 # unshaded copy as original-*.jar, which the glob doesn't match).
-JAR="$(ls target/lx-mcp-*.jar 2>/dev/null | head -1)"
+JAR="$(ls target/chromatik-mcp-*.jar 2>/dev/null | head -1)"
 if [[ -z "$JAR" ]]; then
-  echo "FAIL: no target/lx-mcp-*.jar after mvn package" >&2
+  echo "FAIL: no target/chromatik-mcp-*.jar after mvn package" >&2
   exit 1
 fi
 
@@ -56,7 +56,7 @@ GATE_POM_DIR="$(mktemp -d)"
 cat > "$GATE_POM_DIR/pom.xml" <<EOF
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>co.lxmcp</groupId>
+  <groupId>co.chromatikmcp</groupId>
   <artifactId>load-gate-classpath</artifactId>
   <version>0</version>
   <packaging>pom</packaging>
@@ -86,7 +86,7 @@ echo "==> booting LX headless (isolated user.home=$FAKE_HOME)"
 # NOT on this classpath; LX must discover it from the Packages dir.
 "$JAVA_BIN" -Duser.home="$FAKE_HOME" \
   -cp "target/test-classes:$LX_CP" \
-  lxmcp.HeadlessLoadCheck >"$LOG" 2>&1 || true
+  chromatikmcp.HeadlessLoadCheck >"$LOG" 2>&1 || true
 
 echo "----- LX log -----"
 cat "$LOG"
@@ -94,17 +94,17 @@ echo "------------------"
 
 fail=0
 
-if grep -q "Package:LX-MCP" "$LOG"; then
-  echo "OK: package descriptor discovered (Package:LX-MCP)"
+if grep -q "Package:Chromatik-MCP" "$LOG"; then
+  echo "OK: package descriptor discovered (Package:Chromatik-MCP)"
 else
-  echo "FAIL: 'Package:LX-MCP' not found — jar not picked up" >&2
+  echo "FAIL: 'Package:Chromatik-MCP' not found — jar not picked up" >&2
   fail=1
 fi
 
-if grep -q "\[LX-MCP\] plugin loaded" "$LOG"; then
-  echo "OK: LxMcpPlugin.initialize() ran"
+if grep -q "\[Chromatik-MCP\] plugin loaded" "$LOG"; then
+  echo "OK: ChromatikMcpPlugin.initialize() ran"
 else
-  echo "FAIL: '[LX-MCP] plugin loaded' not found — initialize() not called" >&2
+  echo "FAIL: '[Chromatik-MCP] plugin loaded' not found — initialize() not called" >&2
   fail=1
 fi
 

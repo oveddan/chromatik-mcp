@@ -1,14 +1,14 @@
-# Loop engineering for lx-mcp
+# Loop engineering for chromatik-mcp
 
-How we use coding agents to build lx-mcp — the loop we actually run — plus the
+How we use coding agents to build chromatik-mcp — the loop we actually run — plus the
 self-improvement loops we've scoped but not yet built. This is the durable home for that
 process; the throwaway plan files under `~/.claude/plans/` are not.
 
 There are **two** loops in this project, and they should not be confused:
 
-1. **The dev loop** — how *we* build lx-mcp (implement → review → merge). Documented and
+1. **The dev loop** — how *we* build chromatik-mcp (implement → review → merge). Documented and
    in use today. See below.
-2. **The runtime loop** — how an *agent driving a finished lx-mcp* would self-correct a
+2. **The runtime loop** — how an *agent driving a finished chromatik-mcp* would self-correct a
    light show against a visual goal. Scoped and de-risked, not built. See
    [Future explorations](#future-explorations).
 
@@ -51,7 +51,7 @@ One PR per iteration, run by `/loop` or by hand. The pipeline:
 
 ### Why this passes the 4-condition test
 
-A loop only earns its cost when all four hold; lx-mcp clears them:
+A loop only earns its cost when all four hold; chromatik-mcp clears them:
 
 - **Repeats** — the PR-5 fan-out (`set_parameter`, channels/patterns/effects,
   modulators/routing, MIDI) is the same shape of work, many times.
@@ -68,9 +68,9 @@ These are what make "done" a fact, not an opinion. Never weaken them to make a l
 | Gate | Proves | Where |
 | --- | --- | --- |
 | `mvn package` | compiles + full JUnit suite green | `package/` |
-| domain-primitive suite | LX runs headless; each mutation test round-trips its `LXCommand` through undo | `package/src/test/java/lxmcp/domain/` |
+| domain-primitive suite | LX runs headless; each mutation test round-trips its `LXCommand` through undo | `package/src/test/java/chromatikmcp/domain/` |
 | do → undo → assert | the mutation used a *real* `LXCommand` (undo restores state) | per-tool tests, [`qa-strategy.md`](qa-strategy.md) |
-| `EmbeddedMcpServerTest` / `ToolsIntegrationTest` | tools answer over in-process streamable-HTTP | `package/src/test/java/lxmcp/` |
+| `EmbeddedMcpServerTest` / `ToolsIntegrationTest` | tools answer over in-process streamable-HTTP | `package/src/test/java/chromatikmcp/` |
 | `verify-load.sh` | the shaded jar loads inside real LX from a deployment-faithful classpath | `package/scripts/` |
 
 ### Failure modes to avoid

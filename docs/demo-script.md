@@ -60,7 +60,7 @@ the Chromatik UI — the handoff moment: agent builds, human performs.
 Hit **Cmd-Z a few times** in Chromatik — the agent's changes unwind step by step.
 Caption:
 
-> "Every agent edit is one undo step. github.com/oveddan/lx-mcp"
+> "Every agent edit is one undo step. github.com/oveddan/chromatik-mcp"
 
 ## Dry-run checklist (do this via MCP before recording)
 

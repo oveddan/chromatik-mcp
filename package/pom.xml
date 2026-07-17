@@ -2,8 +2,8 @@
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>co.lxmcp</groupId>
-    <artifactId>lx-mcp</artifactId>
+    <groupId>co.chromatikmcp</groupId>
+    <artifactId>chromatik-mcp</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>jar</packaging>
 
@@ -113,7 +113,7 @@
                                     <directory>src/main/resources</directory>
                                     <includes>
                                         <include>lx.package</include>
-                                        <include>lxmcp-build.properties</include>
+                                        <include>chromatikmcp-build.properties</include>
                                     </includes>
                                     <filtering>true</filtering>
                                 </resource>

@@ -5,12 +5,12 @@ into slices when related items accumulate; lines deleted when their fix merges.
 
 ## Queued
 
-- 2026-07-16 — **v2: auth token for non-loopback binds.** `~/.lx-mcp/config.json`
+- 2026-07-16 — **v2: auth token for non-loopback binds.** `~/.chromatik-mcp/config.json`
   already supports `host`/`port` (remote works today, with a security warning
-  logged at startup — LxMcpPlugin.java:42-47). V2: require a bearer token when
+  logged at startup — ChromatikMcpPlugin.java:42-47). V2: require a bearer token when
   the bind isn't loopback; refuse to start open otherwise. Deferred by user
   decision 2026-07-16.
-- 2026-07-16 — **mDNS/Bonjour advertisement** (`_lx-mcp._tcp`) for zero-config
+- 2026-07-16 — **mDNS/Bonjour advertisement** (`_chromatik-mcp._tcp`) for zero-config
   discovery across machines — no status.json read, no pinned host needed; a
   remote client just browses the LAN for the rig. Pairs with the auth-token
   item above (advertising an open unauthenticated server is worse than a

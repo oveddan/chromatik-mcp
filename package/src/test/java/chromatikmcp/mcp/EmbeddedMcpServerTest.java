@@ -1,0 +1,157 @@
+package chromatikmcp.mcp;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+
+import org.junit.jupiter.api.Test;
+
+import io.modelcontextprotocol.client.McpClient;
+import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
+import io.modelcontextprotocol.spec.McpSchema;
+
+/**
+ * The PR-1a go/no-go gate: start the embedded MCP server in-process on an ephemeral
+ * port, connect a real MCP client over streamable-HTTP, and complete the {@code
+ * initialize} handshake. Passing proves the official Java MCP SDK embeds inside a
+ * long-running JVM and serves MCP over HTTP — the core feasibility question.
+ */
+class EmbeddedMcpServerTest {
+
+  @Test
+  void initializeHandshakeReturnsServerInfo() {
+    EmbeddedMcpServer server = EmbeddedMcpServer.start("Chromatik-MCP", "0.0.1-test", 0);
+    assertTrue(server.port() > 0, "server should bind an ephemeral port");
+    try {
+      HttpClientStreamableHttpTransport transport =
+          HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
+              .endpoint(EmbeddedMcpServer.ENDPOINT)
+              .build();
+      McpSyncClient client = McpClient.sync(transport).build();
+      try {
+        McpSchema.InitializeResult result = client.initialize();
+        assertNotNull(result, "initialize() should return a result");
+        assertNotNull(result.serverInfo(), "initialize result should carry server info");
+        assertEquals("Chromatik-MCP", result.serverInfo().name());
+      } finally {
+        client.closeGracefully();
+      }
+    } finally {
+      server.stop();
+    }
+  }
+
+  @Test
+  void initializeHandshakeMarksConnectionTrackerConnected() {
+    EmbeddedMcpServer server = EmbeddedMcpServer.start("Chromatik-MCP", "0.0.1-test", 0);
+    try {
+      HttpClientStreamableHttpTransport transport =
+          HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
+              .endpoint(EmbeddedMcpServer.ENDPOINT)
+              .build();
+      McpSyncClient client = McpClient.sync(transport).build();
+      try {
+        client.initialize();
+        assertTrue(server.connectionTracker().snapshot(System.currentTimeMillis()).connected(),
+            "a real client's initialize POST counts as activity");
+      } finally {
+        client.closeGracefully();
+      }
+    } finally {
+      server.stop();
+    }
+  }
+
+  @Test
+  void explicitHostOverloadBindsLoopback() {
+    EmbeddedMcpServer server = EmbeddedMcpServer.start(
+        "Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1", List.of(), null);
+    try {
+      HttpClientStreamableHttpTransport transport =
+          HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
+              .endpoint(EmbeddedMcpServer.ENDPOINT)
+              .build();
+      McpSyncClient client = McpClient.sync(transport).build();
+      try {
+        McpSchema.InitializeResult result = client.initialize();
+        assertNotNull(result);
+      } finally {
+        client.closeGracefully();
+      }
+    } finally {
+      server.stop();
+    }
+  }
+
+  @Test
+  void startOnAnAlreadyBoundFixedPortThrows() {
+    EmbeddedMcpServer first = EmbeddedMcpServer.start("Chromatik-MCP", "0.0.1-test", 0);
+    try {
+      int takenPort = first.port();
+      IllegalStateException thrown = assertThrows(IllegalStateException.class,
+          () -> EmbeddedMcpServer.start(
+              "Chromatik-MCP", "0.0.1-test", takenPort, "127.0.0.1", List.of(), null),
+          "Tomcat swallows the connector bind failure internally (logs, returns normally "
+              + "from start()) rather than throwing, so getLocalPort() == -1 is the only "
+              + "signal — this must be surfaced, not reported as a healthy listener.");
+      assertTrue(thrown.getMessage().contains(String.valueOf(takenPort)));
+    } finally {
+      first.stop();
+    }
+  }
+
+  /**
+   * Quit-hang regression guard: LX's package hot-reload can orphan a live plugin (and
+   * its Tomcat) without disposing it — see the comment in {@code EmbeddedMcpServer.start}
+   * above the {@code setUtilityThreadsAsDaemon(true)} call. If any thread this server
+   * owns is non-daemon, an orphaned instance pins the JVM and Chromatik never exits.
+   * Tomcat's HTTP exec/poller/acceptor threads are already daemon by default; this
+   * guards the "Catalina-utility" scheduled-executor threads specifically.
+   */
+  @Test
+  void utilityThreadsAreDaemon() {
+    EmbeddedMcpServer server = EmbeddedMcpServer.start("Chromatik-MCP", "0.0.1-test", 0);
+    try {
+      for (Thread thread : Thread.getAllStackTraces().keySet()) {
+        if (thread.getName().startsWith("Catalina-utility")) {
+          assertTrue(thread.isDaemon(),
+              "Catalina-utility thread must be daemon so an orphaned server can't pin "
+                  + "the JVM at quit: " + thread.getName());
+        }
+      }
+    } finally {
+      server.stop();
+    }
+  }
+
+  /**
+   * PR-2 deliverable: the server advertises the tools capability, so a connected client's
+   * {@code tools/list} succeeds. With no tools registered it returns an empty list (the
+   * first real tool lands in PR-3). This is the over-the-wire proof of the capability.
+   */
+  @Test
+  void listToolsReturnsEmptyOverHttp() {
+    EmbeddedMcpServer server = EmbeddedMcpServer.start("Chromatik-MCP", "0.0.1-test", 0, List.of());
+    try {
+      HttpClientStreamableHttpTransport transport =
+          HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
+              .endpoint(EmbeddedMcpServer.ENDPOINT)
+              .build();
+      McpSyncClient client = McpClient.sync(transport).build();
+      try {
+        client.initialize();
+        McpSchema.ListToolsResult tools = client.listTools();
+        assertNotNull(tools, "listTools() should return a result");
+        assertTrue(tools.tools().isEmpty(), "no tools are registered in PR-2");
+      } finally {
+        client.closeGracefully();
+      }
+    } finally {
+      server.stop();
+    }
+  }
+}

@@ -224,7 +224,7 @@ lx.engine.addTask(() -> {
 
 `addTask` is the thread-safe enqueue (it appends to a synchronized queue and
 sets an `AtomicBoolean`); the engine swaps the queue under lock and runs the
-tasks itself. **This is the answer to the threading question for `lx-mcp`**: MCP
+tasks itself. **This is the answer to the threading question for `chromatik-mcp`**: MCP
 handlers run on the HTTP server's thread, so every domain primitive that mutates
 LX state must marshal its work onto the engine thread with `engine.addTask`,
 then hand the result back to the handler thread (e.g. via a `CompletableFuture`
@@ -293,7 +293,7 @@ mode that callers should distinguish.
 
 ---
 
-### How this maps to `lx-mcp`
+### How this maps to `chromatik-mcp`
 
 This repo is an in-process MCP server, not a pattern, so the render-loop rule
 (§1) and the single-threaded assumption (§4) apply differently: MCP handlers run
@@ -307,6 +307,6 @@ and return `Result.error(...)` instead of throwing. The rest carry over
 directly: model variants with enums (§2), share interfaces (§3), use LX's
 helpers instead of reinventing (§5), prefer upstream when it fits (§6), and keep
 diffs and history clean (§7, §8). The plugin lifecycle rule (§9) applies most
-directly of all — `LxMcpPlugin` *is* an `LXPlugin`, so its `initialize()` must
+directly of all — `ChromatikMcpPlugin` *is* an `LXPlugin`, so its `initialize()` must
 propagate and its `dispose()` must stop the embedded server. See
 [CLAUDE.md](../CLAUDE.md) for the composability rules specific to this project.

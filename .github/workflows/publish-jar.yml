@@ -2,7 +2,7 @@ name: publish jar (rolling latest)
 
 # Every push to main touching package/ rebuilds the jar (full test gate) and
 # updates the rolling `latest` prerelease, so
-#   https://github.com/oveddan/lx-mcp/releases/download/latest/lx-mcp.jar
+#   https://github.com/oveddan/chromatik-mcp/releases/download/latest/chromatik-mcp.jar
 # always serves the newest main build. Versioned releases are cut by pushing a
 # v* tag — see release.yml.
 
@@ -49,7 +49,7 @@ jobs:
         run: ./scripts/verify-load.sh
 
       - name: Stage jar with stable name
-        run: cp "$(ls target/lx-mcp-*.jar | head -1)" target/lx-mcp.jar
+        run: cp "$(ls target/chromatik-mcp-*.jar | head -1)" target/chromatik-mcp.jar
 
       # Only the stable-named jar rides the rolling release — versioned asset
       # names would pile up across pom version bumps (--clobber only replaces
@@ -60,8 +60,12 @@ jobs:
         run: |
           gh release view latest >/dev/null 2>&1 || \
             gh release create latest --prerelease --title "Latest build (main)" --notes "placeholder"
-          gh release upload latest target/lx-mcp.jar --clobber
+          # one-time cleanup from the lx-mcp → chromatik-mcp rename: --clobber
+          # can't replace a differently-named asset, so the stale jar would be
+          # served forever from the old download URL
+          gh release delete-asset latest lx-mcp.jar -y 2>/dev/null || true
+          gh release upload latest target/chromatik-mcp.jar --clobber
           git tag -f latest
           git push -f origin latest
           gh release edit latest --prerelease --title "Latest build (main)" \
-            --notes "Rolling build of main — commit ${GITHUB_SHA}. Updated automatically on every push that touches package/. For a stable download URL use: https://github.com/${GITHUB_REPOSITORY}/releases/download/latest/lx-mcp.jar"
+            --notes "Rolling build of main — commit ${GITHUB_SHA}. Updated automatically on every push that touches package/. For a stable download URL use: https://github.com/${GITHUB_REPOSITORY}/releases/download/latest/chromatik-mcp.jar"

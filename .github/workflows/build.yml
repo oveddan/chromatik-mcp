@@ -28,7 +28,7 @@ jobs:
         run: mvn -B package
 
       # Live load gate: boot LX with no UI, confirm it discovers the shaded jar from a
-      # Packages dir and runs LxMcpPlugin.initialize(). setup-java exports JAVA_HOME,
+      # Packages dir and runs ChromatikMcpPlugin.initialize(). setup-java exports JAVA_HOME,
       # which verify-load.sh resolves first.
       - name: headless load gate
         run: ./scripts/verify-load.sh

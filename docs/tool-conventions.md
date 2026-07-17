@@ -15,7 +15,7 @@ them is a cross-cutting change that touches every tool — propose it as its own
 - The **canonical LX path** is the one address every tool accepts and returns (e.g.
   `/lx/mixer/channel/1/fader`): `LXPath.getCanonicalPath()` produces it,
   `LXPath.get(lx, path)` resolves it natively — the two round-trip. Tools resolve paths
-  through `lxmcp.domain.Resolve` (PR-3b), whose typed failures (`NOT_FOUND`,
+  through `chromatikmcp.domain.Resolve` (PR-3b), whose typed failures (`NOT_FOUND`,
   `TYPE_MISMATCH`, `INVALID_PATH`) the seam maps to the wire codes below.
 - List tools include the `LXComponent` id (stable int, `lx.getComponent(id)`) for each
   component entry as supplementary output; tools do **not** accept ids as input in v1.
@@ -28,9 +28,9 @@ them is a cross-cutting change that touches every tool — propose it as its own
   are wrapped, e.g. `{"patterns": [...]}`), plus a `TextContent` mirror of the same JSON
   for clients that don't read structured output (MCP-spec recommended).
 - **Expected failure**: `isError: true` with `TextContent` `"code: message"`. Codes are
-  the constants on `lxmcp.tools.Result` — `not_found`, `invalid_argument`, `internal` —
+  the constants on `chromatikmcp.tools.Result` — `not_found`, `invalid_argument`, `internal` —
   stable so agents can dispatch on them.
-- Unexpected exceptions map to `internal` at the seam (`lxmcp.tools.Tools`); they never
+- Unexpected exceptions map to `internal` at the seam (`chromatikmcp.tools.Tools`); they never
   cross the MCP boundary as stack traces.
 - The SDK validates `inputSchema` server-side: a request missing a required argument is
   rejected (`isError: true`, SDK-worded message) before the handler runs. Handler
@@ -88,5 +88,5 @@ them is a cross-cutting change that touches every tool — propose it as its own
 ## Test shape
 
 Per `docs/qa-strategy.md`: a domain-primitive unit test against headless LX plus a
-handler integration test over in-process streamable-HTTP (`lxmcp.tools.ToolsIntegrationTest`
+handler integration test over in-process streamable-HTTP (`chromatikmcp.tools.ToolsIntegrationTest`
 is the seed). Mutations additionally get do → undo → assert.

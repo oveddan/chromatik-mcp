@@ -43,7 +43,7 @@ blocks on fixes, and fixes never wait on testing.
    when their fix merges.
 6. **Batch boundary.** Merged fixes reach the live instance only when the
    user rebuilds/installs the jar and restarts Chromatik. On reconnect:
-   re-read `~/.lx-mcp/status.json`, re-initialize, re-list, then
+   re-read `~/.chromatik-mcp/status.json`, re-initialize, re-list, then
    **live-verify every fix in the batch first** before resuming exploratory
    testing.
 

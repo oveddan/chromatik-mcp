@@ -12,7 +12,7 @@ if [[ "${1:-}" == "--load" ]]; then
   WITH_LOAD=1
 fi
 
-JAR="target/lx-mcp-0.0.1-SNAPSHOT.jar"
+JAR="target/chromatik-mcp-0.0.1-SNAPSHOT.jar"
 
 echo "==> mvn package"
 mvn -q -B package
