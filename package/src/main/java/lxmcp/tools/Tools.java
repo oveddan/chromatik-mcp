@@ -46,7 +46,11 @@ public final class Tools {
           + "device's view selector clips its rendering to that subset — map a device by "
           + "set_parameter on its 'view' path to the view's label (discrete/selector "
           + "parameters accept an option name string as well as an integer index) — and "
-          + "'Default' inherits the view from the parent device/channel instead.";
+          + "'Default' inherits the view from the parent device/channel instead. get_tempo "
+          + "reports the engine tempo (bpm, clock source, beat position) and its "
+          + "launchQuantization: with quantization set, a fire_trigger on a quantized "
+          + "trigger (pattern/clip launch) may report pending:true instead of firing "
+          + "immediately, deferring to the next tempo boundary.";
 
   private Tools() {}
 
@@ -83,7 +87,8 @@ public final class Tools {
             new MoveEffect(),
             new GetViews(),
             new AddView(),
-            new RemoveView())
+            new RemoveView(),
+            new GetTempo())
         .stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();

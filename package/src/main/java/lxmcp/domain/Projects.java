@@ -10,10 +10,15 @@ public final class Projects {
   public record OscInfo(int receivePort, boolean receiveActive,
       int transmitPort, boolean transmitActive) {}
 
-  public record OutputInfo(String enabledPath, boolean enabled, String brightnessPath, double brightness) {}
+  public record OutputInfo(String enabledPath, boolean enabled, String brightnessPath, double brightness,
+      String gammaPath, double gamma, String gammaModePath, String gammaMode) {}
+
+  public record EngineInfo(
+      String speedPath, double speed, String framesPerSecondPath, double framesPerSecond) {}
 
   public record ProjectInfo(
-      String lxVersion, String projectPath, int channelCount, OscInfo osc, OutputInfo output) {}
+      String lxVersion, String projectPath, int channelCount, OscInfo osc, OutputInfo output,
+      EngineInfo engine) {}
 
   private Projects() {}
 
@@ -33,6 +38,15 @@ public final class Projects {
             lx.engine.output.enabled.getCanonicalPath(),
             lx.engine.output.enabled.isOn(),
             lx.engine.output.brightness.getCanonicalPath(),
-            lx.engine.output.brightness.getValue()));
+            lx.engine.output.brightness.getValue(),
+            lx.engine.output.gamma.getCanonicalPath(),
+            lx.engine.output.gamma.getValue(),
+            lx.engine.output.gammaMode.getCanonicalPath(),
+            lx.engine.output.gammaMode.getEnum().name()),
+        new EngineInfo(
+            lx.engine.speed.getCanonicalPath(),
+            lx.engine.speed.getValue(),
+            lx.engine.framesPerSecond.getCanonicalPath(),
+            lx.engine.framesPerSecond.getValue()));
   }
 }

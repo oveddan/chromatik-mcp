@@ -60,4 +60,24 @@ class ProjectsTest extends HeadlessLxTest {
     lx.engine.output.enabled.setValue(true);
     assertEquals(true, Projects.info(lx).output().enabled());
   }
+
+  @Test
+  void reportsOutputGammaState() {
+    LX lx = newHeadlessLx();
+    Projects.OutputInfo output = Projects.info(lx).output();
+    assertEquals(lx.engine.output.gamma.getValue(), output.gamma());
+    assertSame(lx.engine.output.gamma, LXPath.get(lx, output.gammaPath()));
+    assertEquals(lx.engine.output.gammaMode.getEnum().name(), output.gammaMode());
+    assertSame(lx.engine.output.gammaMode, LXPath.get(lx, output.gammaModePath()));
+  }
+
+  @Test
+  void reportsEngineGlobalState() {
+    LX lx = newHeadlessLx();
+    Projects.EngineInfo engine = Projects.info(lx).engine();
+    assertEquals(lx.engine.speed.getValue(), engine.speed());
+    assertSame(lx.engine.speed, LXPath.get(lx, engine.speedPath()));
+    assertEquals(lx.engine.framesPerSecond.getValue(), engine.framesPerSecond());
+    assertSame(lx.engine.framesPerSecond, LXPath.get(lx, engine.framesPerSecondPath()));
+  }
 }

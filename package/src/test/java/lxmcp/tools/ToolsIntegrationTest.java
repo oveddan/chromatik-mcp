@@ -175,7 +175,8 @@ class ToolsIntegrationTest {
             "get_component_doc",
             "get_frame", "get_palette", "get_views", "add_view", "remove_view",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
-            "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect"),
+            "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
+            "get_tempo"),
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
         "wire_trigger", "remove_modulation", "remove_modulator", "fire_trigger",
@@ -666,6 +667,19 @@ class ToolsIntegrationTest {
     assertEquals(lx.engine.output.brightness.getValue(),
         ((Number) output.get("brightness")).doubleValue());
     assertEquals(lx.engine.output.brightness.getCanonicalPath(), output.get("brightnessPath"));
+    assertEquals(lx.engine.output.gamma.getValue(), ((Number) output.get("gamma")).doubleValue());
+    assertEquals(lx.engine.output.gamma.getCanonicalPath(), output.get("gammaPath"));
+    assertEquals(lx.engine.output.gammaMode.getEnum().name(), output.get("gammaMode"));
+    assertEquals(lx.engine.output.gammaMode.getCanonicalPath(), output.get("gammaModePath"));
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> engine = (Map<String, Object>) payload.get("engine");
+    assertNotNull(engine, "get_project_info reports engine-global playback state");
+    assertEquals(lx.engine.speed.getValue(), ((Number) engine.get("speed")).doubleValue());
+    assertEquals(lx.engine.speed.getCanonicalPath(), engine.get("speedPath"));
+    assertEquals(lx.engine.framesPerSecond.getValue(),
+        ((Number) engine.get("framesPerSecond")).doubleValue());
+    assertEquals(lx.engine.framesPerSecond.getCanonicalPath(), engine.get("framesPerSecondPath"));
 
     assertFalse(result.content().isEmpty(), "success also carries a text mirror");
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
@@ -1286,5 +1300,31 @@ class ToolsIntegrationTest {
     } finally {
       lx.engine.palette.removeSwatch(saved);
     }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void getTempoDescribesTransportStateAndPaths() {
+    lx.engine.tempo.bpm.setValue(140);
+
+    Map<String, Object> payload = structured(call("get_tempo", Map.of()));
+
+    Map<String, Object> bpm = (Map<String, Object>) payload.get("bpm");
+    assertEquals(lx.engine.tempo.bpm.getCanonicalPath(), bpm.get("path"));
+    assertEquals(140.0, ((Number) bpm.get("value")).doubleValue(), 1e-9);
+
+    Map<String, Object> clockSource = (Map<String, Object>) payload.get("clockSource");
+    assertEquals(lx.engine.tempo.clockSource.getCanonicalPath(), clockSource.get("path"));
+
+    Map<String, Object> launchQuantization = (Map<String, Object>) payload.get("launchQuantization");
+    assertEquals(lx.engine.tempo.launchQuantization.getCanonicalPath(), launchQuantization.get("path"));
+    assertNotNull(launchQuantization.get("options"));
+
+    assertEquals(lx.engine.tempo.tap.getCanonicalPath(), payload.get("tapPath"));
+    assertEquals(lx.engine.tempo.nudgeUp.getCanonicalPath(), payload.get("nudgeUpPath"));
+    assertEquals(lx.engine.tempo.nudgeDown.getCanonicalPath(), payload.get("nudgeDownPath"));
+    assertEquals(lx.engine.tempo.getTriggerSource().getCanonicalPath(), payload.get("triggerSourcePath"));
+    assertNotNull(payload.get("beatCount"));
+    assertNotNull(payload.get("periodMs"));
   }
 }
