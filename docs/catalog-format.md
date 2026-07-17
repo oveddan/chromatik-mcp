@@ -56,27 +56,51 @@ classBytesSha256: <64 hex>         # .class bytes at generation time — the run
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-09T00:00:00Z
-generator: lx-mcp-catalog/1 (<model>)
+generator: lx-mcp-catalog/2 (<model>)
 tags: color, gradient, palette
 ---
 ```
+
+The `generator` major version tracks the *body format* below (`/2` = claim-bullet
+format); bump it when the body contract changes so mixed-vintage catalogs are
+distinguishable.
 
 ## Body: three fixed sections
 
 ```markdown
 ## Summary
-One paragraph: what this renders / does, visually and algorithmically.
+One sentence: what this renders / does. Then atomic claim bullets.
+- claim
+- claim
 
 ## Parameter interactions
-How the knobs interact and which combinations matter — NOT a parameter list
-(names/ranges/options come from get_parameter, live).
+- how the knobs interact and which combinations matter — NOT a parameter list
 
 ## Usage tips
-When to reach for it, what it pairs well with, gotchas.
+- when to reach for it, what it pairs well with, gotchas
 ```
 
 The runtime splits on these exact headings. Content rules for generators:
 
+- **One topic sentence, then claim bullets.** Each section opens with at most one
+  plain sentence, followed by `- ` bullets where each bullet states exactly one
+  verifiable claim. Atomic claims are individually checkable by the review pass and
+  deny the generator room for filler narration. (Summary's topic sentence is the
+  one-line answer to "what does this render?"; its bullets carry the rest.)
+- **The claim filter**: every bullet must either help an agent *choose* this class or
+  prevent a concrete *misuse* of it. Implementation narration that doesn't change what
+  an operator does is cut — "how the code computes it" is out; the visible consequence
+  is in.
+- **Length budget**: Summary ≤ ~100 words; whole body ≤ ~250 words. Simple classes
+  should come in far under budget — a three-bullet entry is a valid entry.
+- **Live vs latched**: for each behavior-shaping control, when discernible from source,
+  say whether it acts *continuously* (responds to live modulation/sweeping) or is
+  *sampled* at trigger/spawn time. This one distinction is most of what a
+  modulation-routing agent needs.
+- **Optional mechanism sketch**: an algorithmically dense class may include one fenced
+  code block immediately after the Summary bullets — short pseudocode of the core loop
+  using *role names* ("density", "the spawn interval"), never source identifiers. Use
+  it to replace prose narration, not to add to it.
 - Describe **behavior**, not structure. Never restate parameter names/ranges/defaults —
   they can drift, and the live tools already answer that. The line: describing *what a
   mode does* ("wrap modes clip or reflect the chase at strip ends") is in scope — bare
@@ -84,8 +108,11 @@ The runtime splits on these exact headings. Content rules for generators:
 - **Every mechanism claim must be verified against the source** — the order of transform
   stages, which buffer is written, what a parameter scales. A confidently wrong mechanism
   is worse than no entry. Never reference a parameter that does not exist in the source.
-- Plain prose, one solid paragraph per section. Written for an LLM audience: precise
-  verbs, no marketing language.
+- **Triage rule (modulators especially)**: if a class's live per-parameter descriptions
+  are the whole story — pure value-holders, trivial comparators — skip the entry or
+  write a minimal one. Entries earn their place with architecture, interactions, or
+  selection knowledge the live tools cannot express.
+- Written for an LLM audience: precise verbs, no marketing language.
 - `tags`: behavior vocabulary (motion, color, audio-reactive, geometric, texture,
   masking, strobe, utility, …), lowercase, comma-separated.
 

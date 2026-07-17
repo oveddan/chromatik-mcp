@@ -49,16 +49,22 @@ it is cheap and safe.
 5. **Summarize — Sonnet subagents** (per the subagent model policy: exploration and
    writing on Sonnet). Batch ~8 classes per agent. Each agent reads the class source
    (plus its direct base class when the subclass is thin) and writes the entry per the
-   format doc. Enforce the content rules: behavior not structure, three fixed sections,
-   no parameter names/ranges, behavior-vocabulary tags.
+   format doc. Front-load the format doc's full content-rule list into the agent prompt;
+   the load-bearing ones: topic sentence + atomic claim bullets (no paragraph
+   narration), the claim filter (every bullet aids selection or prevents misuse),
+   length budget (Summary ≤ ~100 words, body ≤ ~250), live-vs-latched stated per
+   behavior-shaping control, no parameter names/ranges, behavior-vocabulary tags.
+   Apply the triage rule before batching: classes whose live parameter descriptions
+   are the whole story get skipped (count as `triaged-out` in the run report) or get
+   a minimal entry.
 6. **Validate.** `cd package && mvn package` — `CatalogFormatTest` walks every entry
    (frontmatter keys, FQCN=filename, hash shapes, section headings). Fix mechanically
    before review. (Until PR-7b lands the test, validate with a shell pass over the
    required keys.)
 7. **Review.** Standard dev-loop review-agent pass over the diff — doc *quality* is
    judged there, not by the format test.
-8. **Report.** PR body carries counts: generated / skipped-fresh / no-source /
-   hash-missing.
+8. **Report.** PR body carries counts: generated / skipped-fresh / triaged-out /
+   no-source / hash-missing.
 
 ## Never
 
