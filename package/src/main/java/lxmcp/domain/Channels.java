@@ -5,13 +5,16 @@ import java.util.List;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
+import heronarts.lx.blend.LXBlend;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.LXEffect;
 import heronarts.lx.mixer.LXAbstractChannel;
 import heronarts.lx.mixer.LXBus;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXGroup;
+import heronarts.lx.mixer.LXMixerEngine;
 import heronarts.lx.mixer.LXPatternEngine;
+import heronarts.lx.parameter.ObjectParameter;
 import heronarts.lx.pattern.LXPattern;
 
 /**
@@ -36,6 +39,36 @@ public final class Channels {
 
   public record EffectInfo(String path, int id, String label, String className, boolean enabled) {}
 
+  /** A single parameter's live value plus its canonical path, for compact performance-surface fields. */
+  public record Field<T>(T value, String path) {}
+
+  /**
+   * A selector parameter's current option label plus its path. {@code options} is the full
+   * list of option labels when this occurrence owns them, or null when the option set is
+   * shared across every channel and reported once at the mixer level instead (compactness).
+   */
+  public record EnumField(String current, List<String> options, String path) {}
+
+  /**
+   * Auto-cycle and transition settings, owned by a channel's {@link LXPatternEngine} — only
+   * present for channels in PLAYLIST/BLEND mode (groups and the master bus have no pattern
+   * engine). {@code transitionBlendMode}'s options are shared across channels; see
+   * {@link MixerControls#transitionBlendModeOptions()}.
+   */
+  public record PatternEngineControls(Field<Boolean> autoCycleEnabled, EnumField autoCycleMode,
+      Field<Double> autoCycleTimeSecs, Field<Boolean> transitionEnabled,
+      Field<Double> transitionTimeSecs, EnumField transitionBlendMode) {}
+
+  /**
+   * The mixer-performance surface on a single channel: crossfade group assignment, blend
+   * mode, auto-mute, cue/aux preview state, and (for pattern-hosting channels) auto-cycle /
+   * transition settings. {@code blendMode}'s options are shared across channels; see
+   * {@link MixerControls#blendModeOptions()}.
+   */
+  public record ChannelControls(EnumField crossfadeGroup, EnumField blendMode,
+      Field<Boolean> autoMute, Field<Boolean> isAutoMuted, Field<Boolean> cueActive,
+      Field<Boolean> auxActive, PatternEngineControls patternEngine) {}
+
   /**
    * {@code groupPath} is the canonical path of the enclosing group, or null at top level
    * — the mixer's channel list is flat, with group members as siblings of their group.
@@ -44,11 +77,23 @@ public final class Channels {
    */
   public record ChannelInfo(String path, int id, String label, int index, BusType type,
       boolean enabled, double fader, String groupPath, PatternMode patternMode,
-      List<PatternInfo> patterns, List<EffectInfo> effects) {}
+      List<PatternInfo> patterns, List<EffectInfo> effects, ChannelControls controls) {}
 
   public record MasterInfo(String path, int id, String label, double fader, List<EffectInfo> effects) {}
 
-  public record MixerInfo(List<ChannelInfo> channels, MasterInfo master) {}
+  /**
+   * Mixer-wide performance controls: the crossfader (0 = full A, 1 = full B — channels join
+   * group A/B via their {@code crossfadeGroup}), its blend mode, and the cue/aux preview
+   * buses (cue = primary preview, aux = secondary preview). {@code blendModeOptions} /
+   * {@code transitionBlendModeOptions} are the shared option sets referenced by every
+   * channel's {@code blendMode} / {@code patternEngine.transitionBlendMode} — sourced from
+   * the first channel of the matching kind, so both are null on a mixer with no channels.
+   */
+  public record MixerControls(Field<Double> crossfader, EnumField crossfaderBlendMode,
+      Field<Boolean> cueA, Field<Boolean> cueB, Field<Boolean> auxA, Field<Boolean> auxB,
+      List<String> blendModeOptions, List<String> transitionBlendModeOptions) {}
+
+  public record MixerInfo(List<ChannelInfo> channels, MasterInfo master, MixerControls controls) {}
 
   private Channels() {}
 
@@ -64,7 +109,45 @@ public final class Channels {
         master.getId(),
         master.getLabel(),
         master.fader.getValue(),
-        effects(master.getEffects())));
+        effects(master.getEffects())),
+        mixerControls(lx.engine.mixer));
+  }
+
+  private static MixerControls mixerControls(LXMixerEngine mixer) {
+    // blendMode / transitionBlendMode option sets are instantiated per-channel but always
+    // drawn from the same registry class list — report them once here (see the tool-facing
+    // docs on ChannelControls) instead of repeating an identical array per channel.
+    List<String> blendModeOptions = null;
+    List<String> transitionBlendModeOptions = null;
+    for (LXAbstractChannel channel : mixer.channels) {
+      if (blendModeOptions == null) {
+        blendModeOptions = objectOptions(channel.blendMode);
+      }
+      if (transitionBlendModeOptions == null && channel instanceof LXChannel c) {
+        transitionBlendModeOptions = objectOptions(c.getPatternEngine().transitionBlendMode);
+      }
+      if (blendModeOptions != null && transitionBlendModeOptions != null) {
+        break;
+      }
+    }
+    return new MixerControls(
+        new Field<>(mixer.crossfader.getValue(), mixer.crossfader.getCanonicalPath()),
+        new EnumField(mixer.crossfaderBlendMode.getObject().getLabel(),
+            objectOptions(mixer.crossfaderBlendMode), mixer.crossfaderBlendMode.getCanonicalPath()),
+        new Field<>(mixer.cueA.isOn(), mixer.cueA.getCanonicalPath()),
+        new Field<>(mixer.cueB.isOn(), mixer.cueB.getCanonicalPath()),
+        new Field<>(mixer.auxA.isOn(), mixer.auxA.getCanonicalPath()),
+        new Field<>(mixer.auxB.isOn(), mixer.auxB.getCanonicalPath()),
+        blendModeOptions,
+        transitionBlendModeOptions);
+  }
+
+  private static List<String> objectOptions(ObjectParameter<LXBlend> blendParameter) {
+    List<String> options = new ArrayList<>();
+    for (LXBlend blend : blendParameter.getObjects()) {
+      options.add(blend.getLabel());
+    }
+    return options;
   }
 
   // ── Channel mutations ────────────────────────────────────────────────────────
@@ -269,6 +352,7 @@ public final class Channels {
   private static ChannelInfo describe(LXAbstractChannel channel) {
     List<PatternInfo> patterns = List.of();
     PatternMode patternMode = null;
+    PatternEngineControls patternEngineControls = null;
     if (channel instanceof LXChannel c) {
       boolean blend = c.isComposite();
       patternMode = blend ? PatternMode.BLEND : PatternMode.PLAYLIST;
@@ -290,6 +374,7 @@ public final class Channels {
             contributing,
             effects(pattern.getEffects())));
       }
+      patternEngineControls = patternEngineControls(c.getPatternEngine());
     }
     LXGroup group = channel.getGroup();
     return new ChannelInfo(
@@ -303,7 +388,31 @@ public final class Channels {
         (group == null) ? null : group.getCanonicalPath(),
         patternMode,
         patterns,
-        effects(channel.getEffects()));
+        effects(channel.getEffects()),
+        channelControls(channel, patternEngineControls));
+  }
+
+  private static ChannelControls channelControls(LXAbstractChannel channel,
+      PatternEngineControls patternEngineControls) {
+    return new ChannelControls(
+        new EnumField(channel.crossfadeGroup.getOption(), null, channel.crossfadeGroup.getCanonicalPath()),
+        new EnumField(channel.blendMode.getObject().getLabel(), null, channel.blendMode.getCanonicalPath()),
+        new Field<>(channel.autoMute.isOn(), channel.autoMute.getCanonicalPath()),
+        new Field<>(channel.isAutoMuted.isOn(), channel.isAutoMuted.getCanonicalPath()),
+        new Field<>(channel.cueActive.isOn(), channel.cueActive.getCanonicalPath()),
+        new Field<>(channel.auxActive.isOn(), channel.auxActive.getCanonicalPath()),
+        patternEngineControls);
+  }
+
+  private static PatternEngineControls patternEngineControls(LXPatternEngine engine) {
+    return new PatternEngineControls(
+        new Field<>(engine.autoCycleEnabled.isOn(), engine.autoCycleEnabled.getCanonicalPath()),
+        new EnumField(engine.autoCycleMode.getOption(), null, engine.autoCycleMode.getCanonicalPath()),
+        new Field<>(engine.autoCycleTimeSecs.getValue(), engine.autoCycleTimeSecs.getCanonicalPath()),
+        new Field<>(engine.transitionEnabled.isOn(), engine.transitionEnabled.getCanonicalPath()),
+        new Field<>(engine.transitionTimeSecs.getValue(), engine.transitionTimeSecs.getCanonicalPath()),
+        new EnumField(engine.transitionBlendMode.getObject().getLabel(), null,
+            engine.transitionBlendMode.getCanonicalPath()));
   }
 
   private static List<EffectInfo> effects(List<LXEffect> effects) {

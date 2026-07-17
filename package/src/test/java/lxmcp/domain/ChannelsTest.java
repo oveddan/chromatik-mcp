@@ -2,6 +2,7 @@ package lxmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,6 +13,7 @@ import lxmcp.HeadlessLxTest;
 import heronarts.lx.LX;
 import heronarts.lx.LXPath;
 import heronarts.lx.effect.BlurEffect;
+import heronarts.lx.mixer.LXAbstractChannel;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXPatternEngine;
 import heronarts.lx.pattern.color.GradientPattern;
@@ -105,6 +107,81 @@ class ChannelsTest extends HeadlessLxTest {
         .filter(p -> p.path().equals(path))
         .findFirst()
         .orElseThrow();
+  }
+
+  @Test
+  void mixerControlsExposeCrossfaderAndCuePreview() {
+    LX lx = newHeadlessLx();
+    lx.engine.mixer.addChannel(); // blendModeOptions/transitionBlendModeOptions are sourced from a channel
+    lx.engine.mixer.crossfader.setValue(0.75);
+    lx.engine.mixer.cueA.setValue(true);
+    lx.engine.mixer.auxB.setValue(true);
+
+    Channels.MixerControls controls = Channels.list(lx).controls();
+
+    assertEquals(0.75, controls.crossfader().value(), 1e-9);
+    assertSame(lx.engine.mixer.crossfader, LXPath.get(lx, controls.crossfader().path()));
+    assertEquals(lx.engine.mixer.crossfaderBlendMode.getObject().getLabel(),
+        controls.crossfaderBlendMode().current());
+    assertFalse(controls.crossfaderBlendMode().options().isEmpty());
+    assertTrue(controls.cueA().value());
+    assertFalse(controls.cueB().value());
+    assertFalse(controls.auxA().value());
+    assertTrue(controls.auxB().value());
+    assertFalse(controls.blendModeOptions().isEmpty());
+    assertFalse(controls.transitionBlendModeOptions().isEmpty());
+  }
+
+  @Test
+  void channelControlsExposeCrossfadeGroupBlendModeAndCueAux() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.crossfadeGroup.setValue(LXAbstractChannel.CrossfadeGroup.A);
+    channel.autoMute.setValue(true);
+    channel.cueActive.setValue(true);
+    channel.auxActive.setValue(true);
+
+    Channels.ChannelInfo info = Channels.list(lx).channels().get(channel.getIndex());
+    Channels.ChannelControls controls = info.controls();
+
+    assertEquals("A", controls.crossfadeGroup().current());
+    assertNull(controls.crossfadeGroup().options(),
+        "crossfadeGroup options are shared, not repeated per channel");
+    assertSame(channel.crossfadeGroup, LXPath.get(lx, controls.crossfadeGroup().path()));
+    assertEquals(channel.blendMode.getObject().getLabel(), controls.blendMode().current());
+    assertNull(controls.blendMode().options(), "blendMode options live once at mixer level");
+    assertTrue(controls.autoMute().value());
+    assertFalse(controls.isAutoMuted().value());
+    assertTrue(controls.cueActive().value());
+    assertTrue(controls.auxActive().value());
+  }
+
+  @Test
+  void patternEngineControlsPresentOnChannelsAbsentOnGroups() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.getPatternEngine().autoCycleEnabled.setValue(true);
+    channel.getPatternEngine().autoCycleTimeSecs.setValue(30);
+    channel.getPatternEngine().transitionEnabled.setValue(true);
+
+    Channels.ChannelInfo channelInfo = Channels.list(lx).channels().get(channel.getIndex());
+    Channels.PatternEngineControls patternEngine = channelInfo.controls().patternEngine();
+    assertTrue(patternEngine.autoCycleEnabled().value());
+    assertEquals(30, patternEngine.autoCycleTimeSecs().value(), 1e-9);
+    assertTrue(patternEngine.transitionEnabled().value());
+    assertSame(channel.getPatternEngine().autoCycleEnabled,
+        LXPath.get(lx, patternEngine.autoCycleEnabled().path()));
+    assertNull(patternEngine.transitionBlendMode().options(),
+        "transitionBlendMode options live once at mixer level");
+
+    heronarts.lx.mixer.LXGroup group = lx.engine.mixer.addGroup(
+        java.util.List.of(channel));
+    Channels.ChannelInfo groupInfo = Channels.list(lx).channels().stream()
+        .filter(c -> c.type() == Channels.BusType.GROUP)
+        .findFirst()
+        .orElseThrow();
+    assertNull(groupInfo.controls().patternEngine(), "groups have no pattern engine");
+    assertEquals(group.getCanonicalPath(), groupInfo.path());
   }
 
   @Test

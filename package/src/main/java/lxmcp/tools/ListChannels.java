@@ -30,7 +30,20 @@ public final class ListChannels implements LxTool {
         + "or its fader is 0, or if engine output is off (see get_project_info). "
         + "Patterns can host their own effect chains — each pattern entry carries its own "
         + "effects list (e.g. a Gradient Mask living inside a pattern rather than on the "
-        + "channel).";
+        + "channel). "
+        + "The top-level 'mixer' object is the crossfader performance surface: 'crossfader' "
+        + "runs 0 (full A) to 1 (full B) — only channels whose 'controls.crossfadeGroup' is "
+        + "'A' or 'B' (not 'BYPASS') are affected by it, blended via 'crossfaderBlendMode'. "
+        + "'cueA'/'cueB'/'auxA'/'auxB' toggle the crossfade-group preview buses: cue is the "
+        + "primary preview output, aux is a secondary/independent preview output — neither "
+        + "affects the main program output. Per-channel and per-pattern-engine blend-mode "
+        + "option lists are identical across channels, so they are reported once at "
+        + "'mixer.blendModeOptions' / 'mixer.transitionBlendModeOptions' rather than repeated "
+        + "on every channel. Each channel's 'controls' block carries its crossfade-group "
+        + "assignment, blend mode, auto-mute state, and cue/aux preview toggles; "
+        + "'controls.patternEngine' (playlist/blend channels only — absent on groups) carries "
+        + "auto-cycle and pattern-transition settings, with 'set_parameter' as the mutation "
+        + "path for any of these fields via the accompanying canonical 'path'.";
   }
 
   @Override
@@ -66,6 +79,7 @@ public final class ListChannels implements LxTool {
       }
       entry.put("patterns", patterns(channel.patterns(), blend));
       entry.put("effects", effects(channel.effects()));
+      entry.put("controls", channelControls(channel.controls()));
       channels.add(entry);
     }
 
@@ -79,7 +93,63 @@ public final class ListChannels implements LxTool {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("channels", channels);
     payload.put("master", master);
+    payload.put("mixer", mixerControls(mixer.controls()));
     return Result.ok(payload);
+  }
+
+  private static Map<String, Object> field(Channels.Field<?> field) {
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("value", field.value());
+    entry.put("path", field.path());
+    return entry;
+  }
+
+  private static Map<String, Object> enumField(Channels.EnumField field) {
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("current", field.current());
+    if (field.options() != null) {
+      entry.put("options", field.options());
+    }
+    entry.put("path", field.path());
+    return entry;
+  }
+
+  private static Map<String, Object> channelControls(Channels.ChannelControls controls) {
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("crossfadeGroup", enumField(controls.crossfadeGroup()));
+    entry.put("blendMode", enumField(controls.blendMode()));
+    entry.put("autoMute", field(controls.autoMute()));
+    entry.put("isAutoMuted", field(controls.isAutoMuted()));
+    entry.put("cueActive", field(controls.cueActive()));
+    entry.put("auxActive", field(controls.auxActive()));
+    if (controls.patternEngine() != null) {
+      entry.put("patternEngine", patternEngineControls(controls.patternEngine()));
+    }
+    return entry;
+  }
+
+  private static Map<String, Object> patternEngineControls(Channels.PatternEngineControls controls) {
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("autoCycleEnabled", field(controls.autoCycleEnabled()));
+    entry.put("autoCycleMode", enumField(controls.autoCycleMode()));
+    entry.put("autoCycleTimeSecs", field(controls.autoCycleTimeSecs()));
+    entry.put("transitionEnabled", field(controls.transitionEnabled()));
+    entry.put("transitionTimeSecs", field(controls.transitionTimeSecs()));
+    entry.put("transitionBlendMode", enumField(controls.transitionBlendMode()));
+    return entry;
+  }
+
+  private static Map<String, Object> mixerControls(Channels.MixerControls controls) {
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("crossfader", field(controls.crossfader()));
+    entry.put("crossfaderBlendMode", enumField(controls.crossfaderBlendMode()));
+    entry.put("cueA", field(controls.cueA()));
+    entry.put("cueB", field(controls.cueB()));
+    entry.put("auxA", field(controls.auxA()));
+    entry.put("auxB", field(controls.auxB()));
+    entry.put("blendModeOptions", controls.blendModeOptions());
+    entry.put("transitionBlendModeOptions", controls.transitionBlendModeOptions());
+    return entry;
   }
 
   private static List<Map<String, Object>> patterns(List<Channels.PatternInfo> patterns,

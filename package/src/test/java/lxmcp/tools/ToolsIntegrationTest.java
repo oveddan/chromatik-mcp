@@ -722,6 +722,45 @@ class ToolsIntegrationTest {
     }
 
     assertNotNull(payload.get("master"), "master bus is always present");
+
+    Map<String, Object> controls = (Map<String, Object>) entry.get("controls");
+    assertNotNull(controls, "channel entries carry a performance-surface controls block");
+    assertNotNull(controls.get("crossfadeGroup"));
+    assertNotNull(controls.get("blendMode"));
+    assertNotNull(controls.get("autoMute"));
+    assertNotNull(controls.get("isAutoMuted"));
+    assertNotNull(controls.get("cueActive"));
+    assertNotNull(controls.get("auxActive"));
+    Map<String, Object> patternEngine = (Map<String, Object>) controls.get("patternEngine");
+    assertNotNull(patternEngine, "playlist/blend channels carry a patternEngine controls block");
+    assertNotNull(patternEngine.get("autoCycleEnabled"));
+    assertNotNull(patternEngine.get("transitionBlendMode"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listChannelsMixerControlsExposeCrossfaderAndCuePreview() {
+    Map<String, Object> payload = structured(call("list_channels", Map.of()));
+    Map<String, Object> mixer = (Map<String, Object>) payload.get("mixer");
+    assertNotNull(mixer, "the top-level mixer object carries the crossfader performance surface");
+
+    Map<String, Object> crossfader = (Map<String, Object>) mixer.get("crossfader");
+    assertEquals(lx.engine.mixer.crossfader.getValue(), ((Number) crossfader.get("value")).doubleValue(), 1e-9);
+    assertEquals(lx.engine.mixer.crossfader.getCanonicalPath(), crossfader.get("path"));
+
+    Map<String, Object> crossfaderBlendMode = (Map<String, Object>) mixer.get("crossfaderBlendMode");
+    assertEquals(lx.engine.mixer.crossfaderBlendMode.getObject().getLabel(),
+        crossfaderBlendMode.get("current"));
+    assertFalse(((List<String>) crossfaderBlendMode.get("options")).isEmpty());
+
+    for (String key : List.of("cueA", "cueB", "auxA", "auxB")) {
+      Map<String, Object> field = (Map<String, Object>) mixer.get(key);
+      assertNotNull(field, key + " is reported on the mixer");
+      assertNotNull(field.get("path"));
+    }
+
+    assertFalse(((List<String>) mixer.get("blendModeOptions")).isEmpty());
+    assertFalse(((List<String>) mixer.get("transitionBlendModeOptions")).isEmpty());
   }
 
   @Test
