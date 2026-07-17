@@ -8,6 +8,7 @@ import java.util.Map;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXDeviceComponent;
+import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.LXEffect;
 import heronarts.lx.mixer.LXAbstractChannel;
 import heronarts.lx.mixer.LXChannel;
@@ -88,13 +89,21 @@ public final class Views {
   }
 
   /**
-   * Compose a new named model subset. LXViewEngine has no LXCommand for view lifecycle —
-   * this and {@link #removeView} are direct engine edits, not undoable (same category as
-   * swatch recall — see docs/tool-conventions.md). Call on the engine thread.
+   * Compose a new named model subset, routed through {@code LXCommand.Structure.AddView}
+   * for undo. The command's no-arg constructor only creates a bare view — label, selector,
+   * normalization and orientation are applied as direct parameter edits afterward, so
+   * undoing the add removes the freshly-configured view as a whole (there is nothing left
+   * to separately undo). Call on the engine thread.
    */
   public static ViewInfo addView(LX lx, String label, String selector,
       LXView.Normalization normalization, LXView.Orientation orientation) {
-    LXViewDefinition view = lx.structure.views.addView();
+    List<LXViewDefinition> views = lx.structure.views.views;
+    int before = views.size();
+    Commands.perform(lx, new LXCommand.Structure.AddView());
+    if (views.size() != before + 1) {
+      throw new IllegalStateException("AddView did not add a view");
+    }
+    LXViewDefinition view = views.get(before);
     view.label.setValue(label);
     view.selector.setValue(selector);
     view.normalization.setValue(normalization);
@@ -103,7 +112,11 @@ public final class Views {
   }
 
   /**
-   * Remove a view. Not undoable (see {@link #addView}).
+   * Remove a view, routed through {@code LXCommand.Structure.RemoveView} for undo. Undo
+   * reconstructs the view (label/selector/normalization/orientation, serialized at remove
+   * time) at its original index — but does <strong>not</strong> restore device 'view'
+   * selections that pointed at the removed view: see the reassignment caveat below, which
+   * applies whether or not the removal is later undone.
    *
    * <p>Devices selecting a <em>surviving</em> view are unaffected: {@code
    * LXViewEngine.removeView} calls {@code updateSelectors()}, which rebuilds every
@@ -115,10 +128,11 @@ public final class Views {
    * DiscreteParameter.setOptions} -> {@code setRange}) — so it silently reassigns to
    * whatever view (or Default) now occupies that index, which is usually a different view,
    * not necessarily Default. Callers should re-check device 'view' assignments (get_views'
-   * assignments) after removing a view rather than assume they reset.
+   * assignments) after removing a view rather than assume they reset; undoing the removal
+   * does not restore those stale selector assignments either.
    */
   public static void removeView(LX lx, LXViewDefinition view) {
-    lx.structure.views.removeView(view);
+    Commands.perform(lx, new LXCommand.Structure.RemoveView(view));
     if (lx.structure.views.views.contains(view)) {
       throw new IllegalStateException("removeView did not remove the view");
     }

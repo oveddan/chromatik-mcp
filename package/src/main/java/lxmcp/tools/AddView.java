@@ -24,8 +24,7 @@ public final class AddView implements LxTool {
         + "the response are immediate match feedback: 0 fixtures is legal (an empty view) but "
         + "usually means a selector typo — cross-check against get_views' modelTags. Map a "
         + "device to the new view by setting its 'view' parameter (set_parameter) to the "
-        + "view's label. Not undoable: LXViewEngine has no LXCommand for view lifecycle, "
-        + "unlike most mutations in this server (no Cmd-Z in Chromatik).";
+        + "view's label.";
   }
 
   @Override

@@ -139,6 +139,60 @@ class ViewsTest extends HeadlessLxTest {
   }
 
   @Test
+  void addViewIsUndoable() {
+    LX lx = newHeadlessLx();
+
+    Views.addView(lx, "Cubes", "cube", LXView.Normalization.RELATIVE, LXView.Orientation.GLOBAL);
+    assertEquals(1, lx.structure.views.views.size());
+
+    lx.command.undo();
+
+    assertTrue(lx.structure.views.views.isEmpty(), "undo removes the added view entirely");
+  }
+
+  @Test
+  void removeViewIsUndoableAndRestoresLabelAndSelector() {
+    LX lx = newHeadlessLx();
+    Views.ViewInfo added = Views.addView(
+        lx, "Cubes", "cube", LXView.Normalization.ABSOLUTE, LXView.Orientation.GROUP);
+
+    LXViewDefinition view = lx.structure.views.views.get(0);
+    Views.removeView(lx, view);
+    assertTrue(lx.structure.views.views.isEmpty());
+
+    lx.command.undo();
+
+    assertEquals(1, lx.structure.views.views.size(), "undo reconstructs the view");
+    LXViewDefinition restored = lx.structure.views.views.get(0);
+    assertEquals("Cubes", restored.getLabel(), "compare by content — undo builds a fresh instance");
+    assertEquals("cube", restored.selector.getString());
+    assertEquals("absolute", restored.normalization.getEnum().name().toLowerCase());
+    assertEquals("group", restored.orientation.getEnum().name().toLowerCase());
+  }
+
+  @Test
+  void removeViewUndoDoesNotRestoreADevicesStaleSelectorAssignment() {
+    LX lx = newHeadlessLx();
+    LXViewDefinition view = lx.structure.views.addView();
+    view.label.setValue("Cubes");
+    view.selector.setValue("cube");
+
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.view.setValue(view);
+    assertSame(view, channel.view.getObject());
+
+    Views.removeView(lx, view);
+    // Only view left was removed, so the device's selector index now maps to Default.
+    assertNull(channel.view.getObject());
+
+    lx.command.undo();
+
+    assertEquals(1, lx.structure.views.views.size(), "undo reconstructs the view");
+    assertNull(channel.view.getObject(),
+        "undo restores the view definition, not the stale selector assignment it left behind");
+  }
+
+  @Test
   void removeViewReassignsADeviceSelectorToWhateverNowOccupiesTheOldIndex() {
     LX lx = newHeadlessLx();
     LXViewDefinition first = lx.structure.views.addView();

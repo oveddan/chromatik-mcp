@@ -19,14 +19,14 @@ public final class RemoveView implements LxTool {
 
   @Override
   public String description() {
-    return "Remove a view by its canonical path (as returned by add_view/get_views). Not "
-        + "undoable: LXViewEngine has no LXCommand for view lifecycle (no Cmd-Z in "
-        + "Chromatik). Devices selecting a different, surviving view are unaffected. But a "
-        + "device whose 'view' selector pointed at the removed view is NOT reset to Default "
-        + "— LX only clamps the selector's stored index into the shrunk view list, so it "
-        + "silently reassigns to whichever view (or Default) now sits at that index. "
-        + "Re-check device 'view' assignments (get_views' assignments) after removing a "
-        + "view rather than assuming they reset.";
+    return "Remove a view by its canonical path (as returned by add_view/get_views). "
+        + "Devices selecting a different, surviving view are unaffected. But a device whose "
+        + "'view' selector pointed at the removed view is NOT reset to Default — LX only "
+        + "clamps the selector's stored index into the shrunk view list, so it silently "
+        + "reassigns to whichever view (or Default) now sits at that index. Re-check device "
+        + "'view' assignments (get_views' assignments) after removing a view rather than "
+        + "assuming they reset — undo does not fix this trap either; remap affected devices "
+        + "to Default before removing a view they still reference.";
   }
 
   @Override

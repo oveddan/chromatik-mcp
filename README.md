@@ -77,8 +77,8 @@ Views are named subsets of the model ("Cube Interior", "Faces Exterior"), define
 | tool | what it does |
 |---|---|
 | `get_views` | every view definition (selector, enabled/priority, normalization/orientation, **live match counts**), which devices currently use each view, and the model's **tag vocabulary** selectors compose from |
-| `add_view {label, selector, normalization?, orientation?}` | create a view; the response's `numGroups`/`numFixtures` immediately show what the selector matched (a `warning` flags zero matches). *Not undoable* — no LX command exists for view lifecycle |
-| `remove_view {path}` | delete a view. Caution (LX behavior): devices mapped to the removed view silently reassign to whatever view takes over that index — remap them to `Default` first |
+| `add_view {label, selector, normalization?, orientation?}` | create a view; the response's `numGroups`/`numFixtures` immediately show what the selector matched (a `warning` flags zero matches) |
+| `remove_view {path}` | delete a view. Caution (LX behavior, undo does not fix it): devices mapped to the removed view silently reassign to whatever view takes over that index — remap them to `Default` first |
 
 Selectors are a small CSS-like language over model tags — space for descendant, `,` union, `&` intersect, `;` separate groups, `*` group-by, `tag[n-m]` index ranges (full grammar in the `get_views` description). Map a device with `set_parameter` on its `view` path using the view's label:
 
@@ -93,7 +93,7 @@ Parameter payloads carry the address an OSC controller must send to. For most pa
 
 ## Architecture
 
-The jar embeds an HTTP MCP server (official Java MCP SDK, streamable-HTTP on embedded Tomcat) inside the LX runtime as an `LXPlugin`. Any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, custom orchestrators — connects to it directly and calls tools that mutate LX state in-process. No separate Node server, no `.lxp` file editing, no file watcher. Mutations route through `LXCommand`, so every change gets undo for free (exceptions — swatch recall, view add/remove, trigger fires — are called out in their tool descriptions), and are serialized onto the LX engine thread. The filesystem touchpoints are `~/.lx-mcp/status.json` (written on startup for endpoint discovery) and the optional `~/.lx-mcp/config.json` (fixed port / bind host). Default bind is `127.0.0.1` only; there is no authentication layer, so non-loopback binds are at your own risk (a startup warning says as much).
+The jar embeds an HTTP MCP server (official Java MCP SDK, streamable-HTTP on embedded Tomcat) inside the LX runtime as an `LXPlugin`. Any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, custom orchestrators — connects to it directly and calls tools that mutate LX state in-process. No separate Node server, no `.lxp` file editing, no file watcher. Mutations route through `LXCommand`, so every change gets undo for free (exceptions — swatch recall, trigger fires — are called out in their tool descriptions), and are serialized onto the LX engine thread. The filesystem touchpoints are `~/.lx-mcp/status.json` (written on startup for endpoint discovery) and the optional `~/.lx-mcp/config.json` (fixed port / bind host). Default bind is `127.0.0.1` only; there is no authentication layer, so non-loopback binds are at your own risk (a startup warning says as much).
 
 ```
 tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutation with undo)
