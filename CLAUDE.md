@@ -2,6 +2,26 @@
 
 Project context for AI assistants working in this repo. See [README.md](README.md) for the architecture and [docs/build-plan.md](docs/build-plan.md) for the PR breakdown.
 
+## Always work in a worktree — the primary checkout is shared
+
+Multiple agent sessions run against this repo concurrently. The primary checkout
+(the repo root) is shared state: at any moment it may be on another session's
+branch, carrying another session's uncommitted edits.
+
+- **All work — code, docs, site, even a one-line fix — happens in a dedicated git
+  worktree** under `.claude/worktrees/<branch-name>`, on its own branch. Never edit,
+  commit, switch branches, stash, or clean in the primary checkout. Read-only
+  operations (Read, grep, `git log`) are fine anywhere.
+- **`git fetch origin main` immediately before creating the worktree**, and branch
+  from `origin/main` — merges land via the GitHub API, so local `origin/main` is
+  routinely stale, and branching from it silently bases your PR on pre-merge
+  history (this has caused a near-revert of merged work).
+- Never remove, reuse, or commit inside another session's worktree. Leave
+  `.claude/worktrees/` entries alone unless the branch is yours.
+- If you notice you've dirtied the primary checkout, move the change into a
+  worktree branch and restore the checkout (`git checkout -- <file>`) — restore
+  only *your* files; other sessions' modifications stay.
+
 ## Shape of the project
 
 A single Java package (`package/`) — drop-in LX jar (Maven). The jar embeds an HTTP MCP server inside the LX runtime, so AI clients (any MCP-speaking agentic platform — Claude Code, Claude Desktop, Cursor, Codex, custom orchestrators) connect to it directly and call tools that mutate LX state in-process. No separate Node server, no `.lxp` file editing, no file watcher.
