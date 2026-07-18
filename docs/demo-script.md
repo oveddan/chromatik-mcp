@@ -62,6 +62,16 @@ Caption:
 
 > "Every agent edit is one undo step. github.com/oveddan/chromatik-mcp"
 
+**Before recording: upgrade the running Chromatik to the renamed jar**
+(`chromatik-mcp.jar`) so the plugin list, status section, and any visible paths say
+Chromatik-MCP on camera — and remove the old `lx-mcp*.jar` first (double-load trap).
+
+Read-only dry-run 2026-07-17 against a live instance (old jar): server healthy,
+output live at 60fps, Gradient + Sparkle patterns and MacroKnobs/VariableLFO all
+available, `get_frame` summary sane. Still to verify on the NEW jar before recording:
+the mutation beats (2–4) end-to-end, and that Gradient/Sparkle carry catalog docs
+(`documented` was false on the pre-catalog-v2 jar).
+
 ## Dry-run checklist (do this via MCP before recording)
 
 - [ ] Beat 2 prompt produces a visible warm look within ~5 tool calls (tune wording
