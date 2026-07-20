@@ -94,6 +94,18 @@ zero-config). To pin a fixed port or change the bind host, create
 - `host` — defaults to `127.0.0.1`. A malformed or missing `config.json` silently falls
   back to the defaults; a config that fails to parse never takes the server down.
 
+**Recommended if you connect from Claude Code via the checked-in `.mcp.json`**: pin the
+port to `3232` (chosen to echo Chromatik's default OSC ports 3030/4040) so the repo's
+`.mcp.json` finds the server without any per-machine editing:
+
+```json
+{ "port": 3232 }
+```
+
+Restart Chromatik after saving this file — a config change only takes effect on the next
+plugin startup. Otherwise, leave `config.json` absent and stay on the ephemeral+loopback
+defaults described above.
+
 **SECURITY WARNING**: setting `host` to anything other than `localhost`, `::1`, or a
 `127.0.0.0/8` address binds the MCP server to a network-reachable interface. This server
 is **unauthenticated** — anyone who can reach that address has full control of a live
@@ -135,14 +147,52 @@ startup whenever a non-loopback host is configured.
 Any MCP client that speaks streamable HTTP works. The port is ephemeral, so read it from
 status.json (or re-read it after restarting Chromatik and update your client config).
 
-**Claude Code** — from your working directory (uses `jq` to read the port):
+**Claude Code** — the repo ships a project-scope [`.mcp.json`](../.mcp.json) that expects
+the fixed port `3232`:
+
+1. Pin the port — see [Configuring the port and host](#configuring-the-port-and-host)
+   above — and restart Chromatik.
+2. Open Claude Code in this repo (or any directory containing a copy of `.mcp.json`) and
+   the `chromatik` server is available automatically.
+
+For other projects, or if you'd rather not pin the port, add the server manually with the
+port read live from `status.json` (uses `jq`):
 
 ```sh
 claude mcp add --transport http chromatik "http://127.0.0.1:$(jq -r .port ~/.chromatik-mcp/status.json)/mcp"
 ```
 
-**Claude Desktop / other clients** — add a streamable-HTTP server with URL
-`http://127.0.0.1:<port>/mcp` in the client's MCP settings.
+**Claude Desktop / other clients** — point the client at
+`http://127.0.0.1:<port>/mcp` (`3232` if pinned). In Claude Desktop, remote/HTTP MCP
+servers are added as a custom connector (Settings → Connectors → Add custom connector)
+with that URL — `claude_desktop_config.json` only accepts stdio (`command`/`args`)
+servers, so an HTTP entry pasted there is silently ignored. Clients that only support
+stdio config can bridge with [`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+
+```json
+{
+  "mcpServers": {
+    "chromatik": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://127.0.0.1:3232/mcp"]
+    }
+  }
+}
+```
+
+**Curl-level fallback / smoke test** — [`scripts/mcp-client.sh`](../scripts/mcp-client.sh)
+is a dependency-light (`curl` + `python3`) client for exercising the endpoint without a
+full MCP client, and doubles as a quick way to confirm the server is reachable:
+
+```sh
+scripts/mcp-client.sh init                          # handshake, prints server instructions
+scripts/mcp-client.sh tools                          # list available tool names
+scripts/mcp-client.sh call get_status '{}'           # call a tool, print structuredContent
+```
+
+It resolves the port from `$CHROMATIK_MCP_PORT`, then `~/.chromatik-mcp/status.json`, then
+the legacy `~/.lx-mcp/status.json`, and transparently re-initializes its session if
+Chromatik has restarted since the last call.
 
 Verify the connection by calling `get_project_info` — it should report the LX version,
 channel count, and OSC ports of the running instance.
