@@ -8,7 +8,7 @@ classBytesSha256: 8521fb5f13b7e7b2a4ba5150a34815151d091120a5f07127a320a8de6c0e35
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: envelope, motion, trigger, utility, editable-curve
 ---
 

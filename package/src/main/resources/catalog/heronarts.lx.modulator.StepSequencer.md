@@ -8,7 +8,7 @@ classBytesSha256: 1e1abb2118172847abfff3939d3ee668cbd01c9201c806ba540de655e067c7
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, sequencer, rhythm, utility
 ---
 

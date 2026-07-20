@@ -8,7 +8,7 @@ classBytesSha256: 10ae8ea3109db8141948f87e48d53caeea7257e4b66acb86ebd3c98b567861
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, macro, trigger, midi
 ---
 

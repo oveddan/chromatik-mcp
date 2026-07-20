@@ -1,6 +1,6 @@
 ---
 name: pr-verifier
-description: Runs the lx-mcp gate (build-gate.sh, verify-load.sh, optional targeted test classes) in a given worktree/branch and returns one compact PASS/FAIL verdict. Cheap throwaway context — spawn fresh each time, never resume; use for the final independent gate before push and for orchestrator re-checks after rebases, NOT inside an implementer's fix loop.
+description: Runs the chromatik-mcp gate (build-gate.sh, verify-load.sh, optional targeted test classes) in a given worktree/branch and returns one compact PASS/FAIL verdict. Cheap throwaway context — spawn fresh each time, never resume; use for the final independent gate before push and for orchestrator re-checks after rebases, NOT inside an implementer's fix loop.
 tools: Read, Bash, Grep, Glob
 model: haiku
 effort: low

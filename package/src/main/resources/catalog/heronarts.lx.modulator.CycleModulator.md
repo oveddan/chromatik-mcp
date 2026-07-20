@@ -8,7 +8,7 @@ classBytesSha256: aeb6cf19f6e22cc16ae0040853f838eedd1e2a65dadbfc50dfd1ee7735b81a
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: motion, lfo, phase, utility
 ---
 

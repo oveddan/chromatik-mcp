@@ -8,7 +8,7 @@ classBytesSha256: cc63debe9b4f5a7d65ff26cf2a24efdc2f6ac2ec7e823272ec5fe1c2c39628
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: strobe, motion, utility
 ---
 

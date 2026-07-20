@@ -8,7 +8,7 @@ classBytesSha256: d0705c7fc339b9d43db5c557016d5fe24ce6d91d9eac3220f6005d54e4893a
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, smoothing, filter, envelope
 ---
 

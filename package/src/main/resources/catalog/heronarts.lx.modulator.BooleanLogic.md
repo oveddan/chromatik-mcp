@@ -8,7 +8,7 @@ classBytesSha256: edfa062fe78cf512d20822e4a6a43682ff3f52b54b4cc90c13e47710bf56f6
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, utility, logic
 ---
 

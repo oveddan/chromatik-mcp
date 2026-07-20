@@ -8,7 +8,7 @@ classBytesSha256: 4d6d5164be3b97b88d471c157522fcb0105039442f86625c09939b98689dc5
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: motion, trigger, midi, utility, smoothing, lfo
 ---
 

@@ -8,7 +8,7 @@ classBytesSha256: b2b0079889321b3c53ffc788cce191fd003f1263f5686764579f5b1d038c25
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: texture, motion, lfo, utility, noise
 ---
 

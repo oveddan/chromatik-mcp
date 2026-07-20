@@ -8,7 +8,7 @@ classBytesSha256: 8c0f08247d552e0a1540c18f89b2b36a02d4934c5b7cf8879e7db21f8af3ca
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: masking, geometric, utility, gradient
 ---
 

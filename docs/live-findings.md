@@ -1,6 +1,6 @@
 # Live-testing findings queue
 
-Small findings from live MCP driving, per the `/lx-mcp-fix` workflow — batched
+Small findings from live MCP driving, per the `/chromatik-mcp-fix` workflow — batched
 into slices when related items accumulate; lines deleted when their fix merges.
 
 ## Queued

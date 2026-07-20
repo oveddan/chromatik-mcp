@@ -31,7 +31,7 @@ One PR per iteration, run by `/loop` or by hand. The pipeline:
    slice — anything bigger is too big (the scope guard in `CLAUDE.md`).
 4. **Gate (objective).** `cd package && mvn package` — compiles and runs the full JUnit
    suite, including the headless harness and any do→undo→assert tests. Green is the bar.
-5. **Catalog freshness.** Run the `lx-mcp-catalog` skill's incremental pass every
+5. **Catalog freshness.** Run the `chromatik-mcp-catalog` skill's incremental pass every
    iteration. It is keyed on source-content hashes, so an unchanged codebase no-ops in
    seconds; when a pattern/effect/modulator source did change, the regenerated entries
    ride in the same PR. Rationale: the semantic catalog
@@ -83,7 +83,7 @@ Named so we recognize them in the act:
 - **Self-preferential bias** — the implementer grades its own work too kindly.
   Mitigation: the review agent runs in a *fresh context*, not the implementing session.
 - **Goal drift** — long sessions lose earlier constraints. Mitigation: re-read
-  `CLAUDE.md` + the conventions docs each iteration (the `/lx-mcp-loop` skill loads them).
+  `CLAUDE.md` + the conventions docs each iteration (the `/chromatik-mcp-loop` skill loads them).
 - **Comprehension debt** — code ships faster than anyone reads it. Mitigation: the user
   reads every diff before merge; PRs stay small (the scope guard).
 

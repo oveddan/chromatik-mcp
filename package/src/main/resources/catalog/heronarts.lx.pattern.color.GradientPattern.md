@@ -8,7 +8,7 @@ classBytesSha256: ef225bc8e0ed51f529887ac59927e1ac07dd46ca0160d492fb00057eb2dab1
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: color, gradient, palette, geometric, generative
 ---
 

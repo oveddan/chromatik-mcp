@@ -8,7 +8,7 @@ classBytesSha256: 907d7c214a9e5d43973ce895bc674bd78a55db7d2af7ccf4aac90c0e72bb74
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: audio-reactive, masking, spatial, utility
 ---
 

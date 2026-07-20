@@ -8,7 +8,7 @@ classBytesSha256: 8da501511f93162774f5e9d1e9b9d06cf5418e6807de1d165142bd282b2eaa
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, macro
 ---
 

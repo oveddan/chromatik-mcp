@@ -8,7 +8,7 @@ classBytesSha256: ec9f16d0e40b80d36b258aa248a7da6d0ccb13eab0b3e49efbdaba38ba9100
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: texture, generative, motion, geometric
 ---
 

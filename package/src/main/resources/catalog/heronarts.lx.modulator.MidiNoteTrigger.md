@@ -8,7 +8,7 @@ classBytesSha256: b00b16185a855ac88ed30f436b0bd703149fb5e616d8c0e846e844f1210470
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, midi, audio-reactive, utility
 ---
 

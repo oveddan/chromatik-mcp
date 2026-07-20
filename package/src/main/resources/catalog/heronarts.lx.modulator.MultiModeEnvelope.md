@@ -8,7 +8,7 @@ classBytesSha256: 0c5ecbfce63c57f903cd5e17a6a54413828a4411d6c03d3eb72feccfce4bb1
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: envelope, trigger, midi, adsr, motion, utility
 ---
 

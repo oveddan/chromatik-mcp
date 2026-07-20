@@ -8,7 +8,7 @@ classBytesSha256: 71ebb4c149a05b3af576a21264542742a4bc6bf9eb5e470f67b4b192cfcf31
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, schedule, time, utility
 ---
 

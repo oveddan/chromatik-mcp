@@ -8,7 +8,7 @@ classBytesSha256: 57818cd801d46bd3d2a58b6a32337d774709b61b069c2a03d97e7115493910
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: audio-reactive, envelope, smoothing, utility
 ---
 

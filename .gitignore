@@ -27,5 +27,5 @@ site/.astro/
 # Content drafts for social posts (Dan posts manually)
 drafts/
 
-# lx-mcp-catalog machine-local checkout paths
-.claude/skills/lx-mcp-catalog/sources.local.json
+# chromatik-mcp-catalog machine-local checkout paths
+.claude/skills/chromatik-mcp-catalog/sources.local.json

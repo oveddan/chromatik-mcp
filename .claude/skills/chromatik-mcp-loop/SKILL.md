@@ -1,9 +1,9 @@
 ---
-name: lx-mcp-loop
-description: Run one iteration of the lx-mcp dev loop — implement the next build-plan PR per the project's layering and conventions, gate on mvn package, review, and open a single-squashed-commit PR. Use when picking up lx-mcp build work (the PR-5 fan-out, PR-6, follow-ups).
+name: chromatik-mcp-loop
+description: Run one iteration of the chromatik-mcp dev loop — implement the next build-plan PR per the project's layering and conventions, gate on mvn package, review, and open a single-squashed-commit PR. Use when picking up chromatik-mcp build work (the PR-5 fan-out, PR-6, follow-ups).
 ---
 
-# lx-mcp dev loop
+# chromatik-mcp dev loop
 
 Run one PR per invocation. The full rationale (4-condition test, objective gates,
 failure modes, future explorations) lives in [`docs/loop-engineering.md`](../../../docs/loop-engineering.md) —
@@ -38,7 +38,7 @@ Load the project's persistent knowledge before touching code:
    pass. While iterating, run just the affected test class
    (`mvn test -Dtest=ClassName -q`, output to a file) and save the full suite for this
    gate — the full build is only ~10s, but its log is the expensive part in agent context.
-5. **Catalog freshness.** Run the [`lx-mcp-catalog`](../lx-mcp-catalog/SKILL.md)
+5. **Catalog freshness.** Run the [`chromatik-mcp-catalog`](../chromatik-mcp-catalog/SKILL.md)
    incremental pass. It is hash-keyed, so on an unchanged codebase it no-ops in seconds —
    run it **every iteration**, not just when you think something changed. Regenerated
    entries ride in this PR; if any were regenerated, re-run the gate (CatalogFormatTest

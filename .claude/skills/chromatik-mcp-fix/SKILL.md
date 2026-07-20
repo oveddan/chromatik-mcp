@@ -1,9 +1,9 @@
 ---
-name: lx-mcp-fix
+name: chromatik-mcp-fix
 description: Dispatch a fix for a gap found while live-testing the MCP server — root-cause now, propose a one-line dispatch, spawn a background pr-implementer in a worktree on confirmation, return to live testing. Use whenever live driving surfaces a missing tool, wrong payload, misleading description, or client-etiquette fault.
 ---
 
-# lx-mcp fix dispatch
+# chromatik-mcp fix dispatch
 
 Turns a live-testing finding into an in-flight PR without pausing the testing
 session. The main session is the **dispatcher**: it stays connected to the live

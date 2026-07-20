@@ -8,7 +8,7 @@ classBytesSha256: 0619f63042b23de19862c6bac51f722a1d1efa1c69451c103a18995f1f6133
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: texture, generative, strobe
 ---
 

@@ -8,7 +8,7 @@ classBytesSha256: 03dce456745b0d6fefec29a9b2367d58d9fa739c25f705fe3f1da4b5f693a5
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, generative, container
 ---
 

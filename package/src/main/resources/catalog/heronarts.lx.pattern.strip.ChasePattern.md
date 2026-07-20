@@ -8,7 +8,7 @@ classBytesSha256: 4b5cfb80bd3a519467aa3340927a17426ba7e230a53365b154e0ebe232f216
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: motion, strip, geometric, generative
 ---
 

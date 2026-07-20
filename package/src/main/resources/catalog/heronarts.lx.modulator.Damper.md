@@ -8,7 +8,7 @@ classBytesSha256: 6edf94c1931c8dc2dfe955908abdc18dbaec19793406e11159b3208fdfcc09
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: envelope, smoothing, trigger, utility, midi
 ---
 

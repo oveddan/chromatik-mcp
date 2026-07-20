@@ -1,9 +1,9 @@
 ---
-name: lx-mcp-catalog
+name: chromatik-mcp-catalog
 description: Generate or refresh the hash-keyed semantic catalog (package/src/main/resources/catalog/) for LX patterns/effects/modulators — locate sources, skip fresh entries by source hash, summarize changed classes with Sonnet subagents, and record bytecode hashes for runtime staleness detection. Use when adding catalog coverage or after LX/content-repo code changes.
 ---
 
-# lx-mcp catalog generation
+# chromatik-mcp catalog generation
 
 Regenerates the semantic catalog defined by [`docs/catalog-format.md`](../../../docs/catalog-format.md)
 — read that contract first; it owns the schema. Entries are a **cache of source
@@ -19,7 +19,7 @@ it is cheap and safe.
   - `classBytes`: `maven:<group>:<artifact>:<version>` (resolved under `~/.m2` — for
     stock LX this is the exact bytes Chromatik loads) or a repo-relative dir like
     `target/classes`.
-  - `target`: symbolic — `lx-mcp` → `package/src/main/resources/catalog/` (ships in our
+  - `target`: symbolic — `chromatik-mcp` → `package/src/main/resources/catalog/` (ships in our
     jar; stock LX only), `repo` → the content repo's own `src/main/resources/catalog/`
     (docs ship inside *its* jar — preferred when you have write access), `overlay` →
     `~/.chromatik-mcp/catalog/` (machine-local; for content you can read but not modify).

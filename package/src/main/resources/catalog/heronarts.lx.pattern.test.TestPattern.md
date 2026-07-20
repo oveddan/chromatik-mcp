@@ -8,7 +8,7 @@ classBytesSha256: 23c1895aeaca5b89ffe34719f279ba471b4a6e55eaf03a072ecfc74e012b34
 classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
-generator: lx-mcp-catalog/2 (claude-sonnet-5)
+generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, test
 ---
 

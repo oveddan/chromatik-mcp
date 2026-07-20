@@ -26,11 +26,11 @@ export default defineConfig({
       ],
       plugins: [
         starlightLlmsTxt({
-          projectName: 'lx-mcp',
+          projectName: 'chromatik-mcp',
           description:
             'A drop-in LX/Chromatik package for AI-driven show composition over MCP.',
           details:
-            'lx-mcp embeds an HTTP MCP server inside the LX runtime. MCP clients discover the port from ~/.lx-mcp/status.json and call tools that mutate LX state in-process.',
+            'chromatik-mcp embeds an HTTP MCP server inside the LX runtime. MCP clients discover the port from ~/.chromatik-mcp/status.json and call tools that mutate LX state in-process.',
         }),
       ],
       editLink: {
