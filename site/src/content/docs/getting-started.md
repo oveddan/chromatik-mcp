@@ -47,6 +47,13 @@ plugin twice — and one copy is stale. Remove the other jar when switching meth
 including any `lx-mcp*.jar` left over from before this project was renamed.
 :::
 
+:::caution[Never reinstall while Chromatik is running]
+Overwriting the jar with Chromatik open triggers LX's package hot-reload watcher, which
+orphans the live MCP server instead of restarting it — it keeps answering with stale
+code (compare `get_status`'s `buildTime`). On versions before v0.0.1's fix, it also made
+Chromatik hang on quit. **Quit Chromatik → install → relaunch.**
+:::
+
 ## 2. Enable the plugin in Chromatik
 
 Start (or restart) Chromatik, open **Preferences → Plugins**, and enable **Chromatik-MCP**.

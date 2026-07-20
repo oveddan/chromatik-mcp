@@ -52,7 +52,7 @@ Each tool ships two tests. The split mirrors the [layering rule in `CLAUDE.md`](
 
 ```java
 LX lx = newHeadlessLx();
-LXModulator m = Modulators.addGlobalModulator(lx, MacroKnobs.class);   // the primitive
+LXModulator m = Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);   // the primitive
 assertEquals(1, lx.engine.modulation.modulators.size());
 assertSame(m, lx.engine.modulation.modulators.get(0));
 ```
@@ -121,7 +121,7 @@ class AddMacroKnobTest {
 
   @Test void primitive_mutatesEngineState() {
     LX lx = newHeadlessLx();
-    LXModulator m = Modulators.addGlobalModulator(lx, MacroKnobs.class);
+    LXModulator m = Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
     assertEquals(1, lx.engine.modulation.modulators.size());
     // ... assert identity / side effects per the lxcommand-mapping table
   }
@@ -129,7 +129,7 @@ class AddMacroKnobTest {
   @Test void primitive_undoRestoresState() {
     LX lx = newHeadlessLx();
     int before = lx.engine.modulation.modulators.size();
-    Modulators.addGlobalModulator(lx, MacroKnobs.class);
+    Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
     lx.command.undo();
     assertEquals(before, lx.engine.modulation.modulators.size());
   }

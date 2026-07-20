@@ -87,7 +87,19 @@ set_parameter {path: <bank>/macro1, value: 0.75}            → turn the knob
   create them; `remove_modulation {path}` unwires. `wire_trigger` + `fire_trigger`
   cover boolean pulse wiring and momentary triggers (`set_parameter` rejects those).
 
-## 5. Multi-agent patterns
+## 5. See what you made
+
+```
+get_frame                               → non-black fraction, mean brightness,
+                                          dominant colors, NxN mean-color grid
+get_frame {include_image: true}         → plus a PNG the model literally looks at
+```
+
+The summary is cheap; the PNG is token-expensive — use it at checkpoints, not in
+tight loops (`grid` / `width` tune the cost). This closes the loop: mutate → look →
+adjust, against the actual render instead of a mental model.
+
+## 6. Multi-agent patterns
 
 The server serializes every tool call onto the LX engine thread, so **concurrent
 agents are safe** — calls interleave atomically, and each mutation lands as its own
@@ -106,3 +118,33 @@ undo step. Patterns that work well:
 
 Caveat for parallel sessions: mutations are in-memory until the human saves in
 Chromatik; there is no `save_project` tool (deliberate — Phase 2).
+
+## 7. Capture looks and stay in time
+
+```
+add_snapshot {label: "Verse"}           → captures current mixer/pattern/effect/
+                                          modulation state as a new snapshot
+list_snapshots                          → recall order, plus transitionEnabled/
+                                          transitionTimeSecs and the recall* scope booleans
+recall_snapshot {path: <snapshot path>} → restores the captured state
+get_tempo                               → bpm, clockSource (options: Int/MIDI/OSC),
+                                          launchQuantization, beat/bar position
+get_views                               → named model subsets a device's `view` can clip to
+add_view {label: "Cubes", selector: "cube"}
+remove_view {path: <view path>}
+```
+
+Wrinkles:
+
+- Cmd-Z after `recall_snapshot` does not reliably restore plain parameter values to
+  their pre-recall state — an LX-side ordering quirk in how it builds the undo entry.
+  `recall_snapshot` again (or a different snapshot) to get back to a known state
+  instead of relying on undo here.
+- With `launchQuantization` set to something other than NONE, `fire_trigger` on a
+  quantized trigger reports `pending: true` and defers to the next tempo boundary
+  instead of firing immediately.
+- `remove_view` does not reset a device's `view` selector to Default when the view it
+  pointed at is removed — LX only clamps the selector's stored index into the shrunk
+  view list, so it silently reassigns to whichever view now sits at that index.
+  Re-check `get_views`' `assignments` after removing a view rather than assuming
+  affected devices reset.

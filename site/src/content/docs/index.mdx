@@ -26,19 +26,35 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 <div class="chat-demo not-content">
   <div class="chat-line human">
     <span class="chat-who">you</span>
-    <p>Give me a slow amber sunrise across the whole structure, with sparkles
-    that ride the beat. Keep it subtle until the drop.</p>
+    <p>What does the Drop channel do — and how is it triggered?</p>
   </div>
   <div class="chat-line agent">
     <span class="chat-who">agent</span>
-    <p>Built a gradient channel with a 90-second amber→rose sweep, an LFO
-    breathing the brightness, and a sparkle layer gated by the beat pulse.
-    Its intensity is on <code>macro1</code> — pull it up when the drop hits.
-    I rendered a frame to check: reading warm, but dim on the north face.
-    Raising it 12%.</p>
+    <p>It's your payoff moment: a blend channel that sits dark until
+    triggered — by a MIDI note from the song, or pad A16 on your controller.
+    Either one fires an envelope that takes the channel to full in 250ms,
+    holds two seconds, and eases out over three — retriggering five effect
+    envelopes on the way up.</p>
+  </div>
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>Fire it so I can see it.</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Fired — watch the rig. It's a one-shot; it cleans up after itself.</p>
+  </div>
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>Again, but give it a longer tail.</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Decay stretched from 3 to 6 seconds. Fired again.</p>
   </div>
   <div class="chat-caption">
-    Changes land live, on the engine thread — and unwind with Cmd-Z.
+    From a session on a live rig the agent had never seen. Changes land
+    live, on the engine thread — and unwind with Cmd-Z.
   </div>
 </div>
 
@@ -50,6 +66,90 @@ cycle, no separate server: the agent reads and mutates the same live show your
 console renders. Describe a look and it builds the structure; ask for motion
 and it wires the modulation; ask for control and it hands you a macro rig with
 OSC addresses attached.
+
+<div class="chat-demo not-content">
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>Build a smooth wash over the whole structure — soft sparkles riding
+    on top, and drift to a new color every minute.</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Done: a gradient wash breathing on a slow LFO, a sparkle layer that's
+    silent at rest and shimmers on the beat pulse, and the palette
+    auto-cycling through four saved swatches — sixty seconds each,
+    five-second blends. The wash follows the palette, so the whole look
+    drifts together.</p>
+  </div>
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>Warmer. And slower.</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Shifted the swatches toward amber and stretched the sweep to 45
+    seconds.</p>
+  </div>
+  <div class="chat-caption">
+    One prompt builds the look — structure, motion, and palette together.
+  </div>
+</div>
+
+<div class="chat-demo not-content">
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>Give the edge trace a pulse on every kick, and dip the brightness
+    when the clap hits.</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Wired the kick follower to position at full depth, and the clap onto
+    brightness with negative depth — full at rest, a 30% dip on each
+    hit.</p>
+  </div>
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>Softer. It should breathe, not blink.</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Halved both depths and eased the envelope release — it sways now
+    instead of snapping.</p>
+  </div>
+  <div class="chat-caption">
+    The difference between a static change and a musical one is a
+    sentence.
+  </div>
+</div>
+
+<div class="chat-demo not-content">
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>Map the first knob on my controller to a global intensity — and give
+    every pattern its own take on what intensity means.</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Added an Intensity macro and wired your knob to it. Then, per
+    pattern: on the wash it drives brightness and sparkle density; on the
+    tunnel, speed and trail length; on the grid, contrast with a touch of
+    strobe. One knob, eight interpretations — pull it up and the whole show
+    leans in.</p>
+  </div>
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>Make the top of the knob more dramatic.</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Curved the response — gentle through the first half, steep at the
+    top. The final stretch now doubles the strobe and pushes the speed to
+    its ceiling.</p>
+  </div>
+  <div class="chat-caption">
+    The mapping is part of the composition.
+  </div>
+</div>
 
 ```sh
 curl -L --create-dirs -o ~/Chromatik/Packages/chromatik-mcp.jar \
@@ -80,6 +180,43 @@ claude mcp add --transport http chromatik "http://127.0.0.1:$(jq -r .port ~/.chr
     file is untouched until you save.
   </Card>
 </CardGrid>
+
+## Also heard on the console
+
+<div class="chat-demo not-content">
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>Nothing's showing. Why?</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Output is live and your fader's up — but the pattern's surface
+    selector is set to Cylinder. You're staring at the cube. Switched it:
+    there's your trace.</p>
+  </div>
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>What can I map from the lighting console over OSC?</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Every parameter here has an OSC address. Here are the forty on your
+    active patterns — starting with the ones already in motion.</p>
+  </div>
+  <div class="chat-line human">
+    <span class="chat-who">you</span>
+    <p>Sync the tempo to the CDJs and put the beat in the strobes.</p>
+  </div>
+  <div class="chat-line agent">
+    <span class="chat-who">agent</span>
+    <p>Clock source switched to OSC — locked to the deck. The strobes are
+    tempo-synced now, quarter notes; say the word and I'll halve them at the
+    build.</p>
+  </div>
+  <div class="chat-caption">
+    Debugging, discovery, and sync are the same conversation.
+  </div>
+</div>
 
 ## Part of a bigger pattern
 
