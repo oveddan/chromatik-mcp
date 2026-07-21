@@ -1,6 +1,6 @@
 ---
 title: Chromatik MCP
-description: An MCP server inside Chromatik, the digital lighting workstation. An agent parses your scene, composes into it, and debugs it while you build the show.
+description: An MCP server inside Chromatik, the digital lighting workstation. An agent parses your scene, composes into it, maps it to your controller, and debugs it.
 template: splash
 # Starlight defaults every page to og:type=article; the home page is the site.
 head:
@@ -12,10 +12,8 @@ hero:
   tagline: >-
     An MCP server inside <a href="https://chromatik.co/">Chromatik</a> — the
     digital lighting workstation for 3D lighting composition and performance.
-    An agent parses your scene, explains how it's wired, composes into it, and
-    debugs it. This is build-time work: it hands you a rig, mapped and
-    rehearsed. When it's time to play it, you're on the faders, not in a chat
-    window.
+    An agent parses your scene, explains how it's wired, composes into it,
+    maps it to your controller, and debugs it — all in the running engine.
   actions:
     - text: Get started
       link: getting-started/
@@ -133,12 +131,12 @@ sentence.
   </div>
 </div>
 
-## Build the rig you'll play
+## Wire up the controls
 
-Mapping is the slowest part of prep and the part you most want done before
-the run. Ask for control and the agent builds it — macro knobs bound to your
+Ask for control and the agent builds it — macro knobs bound to your
 controller, tempo locked to the deck, one-shot triggers that clean up after
-themselves — then you rehearse it by hand.
+themselves. Mapping is the slowest part of putting a show together, and it
+comes back done.
 
 <div class="chat-demo not-content">
   <div class="chat-line human">
@@ -175,15 +173,14 @@ themselves — then you rehearse it by hand.
     here.</p>
   </div>
   <div class="chat-caption">
-    Built and rehearsed up front; played by hand when it counts.
+    The mapping is part of the composition.
   </div>
 </div>
 
 ## Debug
 
-Something looks wrong on the rig and the cause is four panels deep — the kind
-of thing that eats an afternoon of build time. The agent reads the same state
-you do, without clicking through it.
+Something looks wrong on the rig and the cause is four panels deep. The agent
+reads the same state you do, without clicking through it.
 
 <div class="chat-demo not-content">
   <div class="chat-line human">
@@ -222,10 +219,10 @@ you do, without clicking through it.
     modulator actually does — color modes, parameter interactions — with
     bytecode-hash staleness flags so it never bluffs about changed code.
   </Card>
-  <Card title="Prep, not autopilot" icon="rocket">
+  <Card title="It builds the rig you play" icon="rocket">
     Tempo and beat-pulse wiring, macro knob banks, snapshots for whole looks,
-    cue/aux preview buses, spatial views over the model's geometry. The agent
-    builds the rig; you play it.
+    cue/aux preview buses, spatial views over the model's geometry — the
+    performance surface, assembled on request.
   </Card>
   <Card title="You keep the console" icon="approve-check">
     Mutations route through Chromatik's own undo system — an agent's session

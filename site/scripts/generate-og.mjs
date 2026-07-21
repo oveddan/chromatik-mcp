@@ -106,7 +106,7 @@ const markup = {
             maxWidth: 900,
           },
           children:
-            'Inside Chromatik, the digital lighting workstation: an agent that parses your scene, composes into it, and debugs it while you build the show.',
+            'Inside Chromatik, the digital lighting workstation: an agent that parses your scene, composes into it, maps it to your controller, and debugs it.',
         },
       },
       {
