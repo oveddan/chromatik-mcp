@@ -9,7 +9,7 @@ point your MCP client at the port it publishes. No separate server process.
 
 ## Requirements
 
-- Chromatik with LX **1.2.1** (the pinned framework version in `lx.package`)
+- [Chromatik](https://chromatik.co/download/) with LX **1.2.1** (the pinned framework version in `lx.package`)
 - To build from source (optional): Java **21** and Maven
 
 ## 1. Install the jar
