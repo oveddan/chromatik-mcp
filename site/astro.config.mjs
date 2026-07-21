@@ -14,7 +14,7 @@ export default defineConfig({
     starlight({
       title: 'Chromatik MCP',
       description:
-        'Parse, compose, and debug a running Chromatik show by conversation, over MCP — build-time work, before the doors open.',
+        'Parse, compose, and debug a running Chromatik show by conversation, over MCP — the building, not the playing.',
       // Starlight emits og:title/description/url per page; the share image and
       // the large-card opt-in are ours. Absolute URLs — crawlers don't resolve
       // relative ones.
