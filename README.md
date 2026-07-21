@@ -1,6 +1,6 @@
 # chromatik-mcp
 
-A drop-in LX/Chromatik package that lets an agent read, explain, compose into, and debug a live show over MCP.
+A drop-in LX/Chromatik package that lets an agent read, explain, compose into, and debug a running Chromatik show over MCP.
 
 **Status**: the v1 tool surface is working end-to-end — discovery, parameters, tempo, modulation wiring, channels/patterns/effect chains, mixer performance controls (crossfader, cue/aux), palette (read-write), snapshots, model views, render previews, OSC addressing, and a generated semantic catalog of what each component does. MIDI mapping is the remaining slice. See [docs/build-plan.md](docs/build-plan.md) for the roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
 

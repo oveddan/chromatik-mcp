@@ -14,7 +14,7 @@ export default defineConfig({
     starlight({
       title: 'Chromatik MCP',
       description:
-        'Parse, compose, perform, and debug a live Chromatik show by conversation, over MCP.',
+        'Parse, compose, and debug a running Chromatik show by conversation, over MCP — build-time work, before the doors open.',
       // Starlight emits og:title/description/url per page; the share image and
       // the large-card opt-in are ours. Absolute URLs — crawlers don't resolve
       // relative ones.
@@ -26,7 +26,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             property: 'og:image:alt',
-            content: 'Chromatik MCP — an agent inside the Chromatik runtime that parses, composes into, and debugs a live show.',
+            content: 'Chromatik MCP — an agent inside the Chromatik runtime that parses, composes into, and debugs a running show.',
           },
         },
         { tag: 'meta', attrs: { property: 'og:site_name', content: 'Chromatik MCP' } },
@@ -51,7 +51,7 @@ export default defineConfig({
         starlightLlmsTxt({
           projectName: 'chromatik-mcp',
           description:
-            'A drop-in LX/Chromatik package that lets an agent read, explain, compose into, and debug a live show over MCP.',
+            'A drop-in LX/Chromatik package that lets an agent read, explain, compose into, and debug a running Chromatik show over MCP.',
           details:
             'chromatik-mcp embeds an HTTP MCP server inside the LX runtime. MCP clients discover the port from ~/.chromatik-mcp/status.json and call tools that mutate LX state in-process.',
         }),

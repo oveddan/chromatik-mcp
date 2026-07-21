@@ -1,14 +1,14 @@
 ---
 title: Chromatik MCP
-description: An MCP server inside Chromatik, the digital lighting workstation. An agent parses your scene, explains how it's wired, composes into it, and debugs it while the show runs.
+description: An MCP server inside Chromatik, the digital lighting workstation. An agent parses your scene, explains how it's wired, composes into it, and debugs it — in the studio, before the doors open.
 template: splash
 hero:
   tagline: >-
     An MCP server inside <a href="https://chromatik.co/">Chromatik</a> — the
     digital lighting workstation for 3D lighting composition and performance.
     An agent parses your scene, explains how it's wired, composes into it, and
-    debugs it — while the show runs. You keep the faders, the snapshots, and
-    the undo stack.
+    debugs it. This is build-time work: it hands you a rig, mapped and
+    rehearsed. Come showtime you're on the faders, not in a chat window.
   actions:
     - text: Get started
       link: getting-started/
@@ -32,8 +32,8 @@ claude mcp add --transport http chromatik "http://127.0.0.1:$(jq -r .port ~/.chr
 
 Any MCP client — Claude Code, Claude Desktop, Cursor, your own orchestrator —
 connects straight into the running engine. No project-file editing, no reload
-cycle, no separate server: the agent reads and mutates the same live show your
-console renders.
+cycle, no separate server: the agent reads and mutates the same running
+instance your console renders, and you see every change on the rig as it lands.
 
 ## Parse the scene
 
@@ -126,11 +126,12 @@ sentence.
   </div>
 </div>
 
-## Perform
+## Build the rig you'll play
 
-Ask for control and it hands you a rig you can play — macro knobs with OSC
-addresses attached, tempo locked to the room, one-shot triggers that clean up
-after themselves.
+Mapping is the slowest part of prep and the part you most want done before
+doors. Ask for control and the agent builds it — macro knobs bound to your
+controller, tempo locked to the deck, one-shot triggers that clean up after
+themselves — then you rehearse it by hand.
 
 <div class="chat-demo not-content">
   <div class="chat-line human">
@@ -158,21 +159,24 @@ after themselves.
   </div>
   <div class="chat-line human">
     <span class="chat-who">you</span>
-    <p>Fire the drop so I can see it.</p>
+    <p>Fire the drop once so I can see it.</p>
   </div>
   <div class="chat-line agent">
     <span class="chat-who">agent</span>
-    <p>Fired — watch the rig. It's a one-shot; it cleans up after itself.</p>
+    <p>Fired — watch the rig. It's a one-shot; it cleans up after itself.
+    The trigger is on your pad now, so you can drive it yourself from
+    here.</p>
   </div>
   <div class="chat-caption">
-    The mapping is part of the composition.
+    Built and rehearsed at soundcheck; played by hand at showtime.
   </div>
 </div>
 
 ## Debug
 
-The show is running, something is wrong, and the cause is four panels deep.
-The agent reads the same state you do, without clicking through it.
+Something looks wrong on the rig and the cause is four panels deep — the kind
+of thing that eats an afternoon of build time. The agent reads the same state
+you do, without clicking through it.
 
 <div class="chat-demo not-content">
   <div class="chat-line human">
@@ -211,10 +215,10 @@ The agent reads the same state you do, without clicking through it.
     modulator actually does — color modes, parameter interactions — with
     bytecode-hash staleness flags so it never bluffs about changed code.
   </Card>
-  <Card title="Built for performance" icon="rocket">
+  <Card title="Prep, not autopilot" icon="rocket">
     Tempo and beat-pulse wiring, macro knob banks, snapshots for whole looks,
     cue/aux preview buses, spatial views over the model's geometry. The agent
-    composes the rig; you play it.
+    builds the rig at soundcheck; you play it at showtime.
   </Card>
   <Card title="You keep the console" icon="approve-check">
     Mutations route through Chromatik's own undo system — an agent's session
