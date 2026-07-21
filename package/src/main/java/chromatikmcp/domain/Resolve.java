@@ -8,6 +8,7 @@ import heronarts.lx.LXComponent;
 import heronarts.lx.LXPath;
 import heronarts.lx.parameter.AggregateParameter;
 import heronarts.lx.parameter.LXParameter;
+import heronarts.lx.structure.LXStructure;
 
 /**
  * Resolves a canonical LX path (the addressing convention from
@@ -198,23 +199,34 @@ public final class Resolve {
     if (child != null) {
       return (index == parts.length - 1) ? child : walk(child, parts, index + 1);
     }
+    if (component instanceof LXStructure structure && "fixture".equals(key)) {
+      // LXStructure never calls addArray("fixture", ...) — only LXViewEngine registers a
+      // child array ("view") — so structure.fixtures is otherwise unreachable through
+      // childArrays. Index into it directly, same 1-indexed convention as below.
+      return walkIndexed(structure.fixtures, parts, index);
+    }
     List<? extends LXComponent> array = component.childArrays.get(key);
     if (array != null) {
-      int nextIndex = index + 1;
-      if (nextIndex < parts.length) {
-        try {
-          // Path indices are 1-indexed (OSC/UI convention) — see LXComponent.path().
-          int arrIndex = Integer.parseInt(parts[nextIndex]) - 1;
-          if (arrIndex >= 0 && arrIndex < array.size()) {
-            LXComponent arrayChild = array.get(arrIndex);
-            if (nextIndex == parts.length - 1) {
-              return arrayChild;
-            }
-            return (arrayChild != null) ? walk(arrayChild, parts, nextIndex + 1) : null;
+      return walkIndexed(array, parts, index);
+    }
+    return null;
+  }
+
+  private static LXPath walkIndexed(List<? extends LXComponent> array, String[] parts, int index) {
+    int nextIndex = index + 1;
+    if (nextIndex < parts.length) {
+      try {
+        // Path indices are 1-indexed (OSC/UI convention) — see LXComponent.path().
+        int arrIndex = Integer.parseInt(parts[nextIndex]) - 1;
+        if (arrIndex >= 0 && arrIndex < array.size()) {
+          LXComponent arrayChild = array.get(arrIndex);
+          if (nextIndex == parts.length - 1) {
+            return arrayChild;
           }
-        } catch (NumberFormatException nfx) {
-          return null;
+          return (arrayChild != null) ? walk(arrayChild, parts, nextIndex + 1) : null;
         }
+      } catch (NumberFormatException nfx) {
+        return null;
       }
     }
     return null;

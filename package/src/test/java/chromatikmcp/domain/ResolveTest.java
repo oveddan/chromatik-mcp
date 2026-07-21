@@ -13,9 +13,13 @@ import chromatikmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
+import heronarts.lx.command.LXCommand;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.modulator.LXModulator;
+import heronarts.lx.structure.GridFixture;
+import heronarts.lx.structure.LXFixture;
+import heronarts.lx.structure.LXProtocolFixture;
 
 /**
  * The PR-3b gate: every path-taking mutation downstream depends on this resolver, so
@@ -176,5 +180,39 @@ class ResolveTest extends HeadlessLxTest {
         failureOf(() -> Resolve.component(lx, "/lx/structure/views/view/1")));
     assertEquals(Resolve.Failure.NOT_FOUND,
         failureOf(() -> Resolve.component(lx, "/lx/structure/nope")));
+  }
+
+  // ── fixture paths: LXStructure never registers "fixture" via addArray, so it needs a
+  // dedicated case in Resolve.walk (unlike "view", which LXViewEngine registers) ──
+
+  @Test
+  void resolvesIntoTheFixtureTree() {
+    // addFixture throws against a static model — construct a dynamic-structure LX
+    // (no model passed) rather than the per-test GridModel default.
+    LX lx = track(new LX());
+    Commands.perform(lx, new LXCommand.Structure.AddFixture(GridFixture.class));
+    LXProtocolFixture fixture = (LXProtocolFixture) lx.structure.fixtures.get(0);
+
+    LXComponent resolved = Resolve.component(lx, "/lx/structure/fixture/1");
+    assertSame(fixture, resolved);
+    assertSame(fixture.x, Resolve.parameter(lx, "/lx/structure/fixture/1/x"));
+
+    // set_parameter's underlying primitive round-trips through the same resolver.
+    Parameters.set(lx, "/lx/structure/fixture/1/artNetUniverse", 5);
+    assertEquals(5, fixture.artNetUniverse.getValuei());
+
+    // The existing view paths still resolve unchanged.
+    var view = lx.structure.views.addView();
+    assertSame(view, Resolve.component(lx, "/lx/structure/views/view/1"));
+  }
+
+  @Test
+  void outOfRangeFixtureIndexIsNotFound() {
+    LX lx = track(new LX());
+    Commands.perform(lx, new LXCommand.Structure.AddFixture(GridFixture.class));
+    LXFixture fixture = lx.structure.fixtures.get(0);
+
+    assertEquals(Resolve.Failure.NOT_FOUND,
+        failureOf(() -> Resolve.component(lx, "/lx/structure/fixture/2")));
   }
 }

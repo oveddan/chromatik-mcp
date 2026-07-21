@@ -49,7 +49,12 @@ public final class Tools {
           + "'Default' inherits the view from the parent device/channel instead. describe_model reports "
           + "the model tree those view selectors match against, depth-limited (re-call with a "
           + "child's path or a higher depth to keep descending) — its pointIndexRange fields "
-          + "index the same global color buffer get_frame reports. get_tempo "
+          + "index the same global color buffer get_frame reports. list_fixtures/get_fixture "
+          + "report the physical wiring layer beneath that model tree — one entry per fixture, "
+          + "with its output protocol (universe/channel/host) and geometry transform; every "
+          + "fixture parameter (wiring, placement, or a fixture-type-specific one like a "
+          + "GridFixture's numRows) is settable via set_parameter on '<fixture path>/<param>'. "
+          + "get_tempo "
           + "reports the engine tempo (bpm, clock source, beat position) and its "
           + "launchQuantization: with quantization set, a fire_trigger on a quantized "
           + "trigger (pattern/clip launch) may report pending:true instead of firing "
@@ -101,6 +106,8 @@ public final class Tools {
             new GetViews(),
             new AddView(),
             new RemoveView(),
+            new ListFixtures(),
+            new GetFixture(),
             new GetTempo(),
             new ListSnapshots(),
             new AddSnapshot(),

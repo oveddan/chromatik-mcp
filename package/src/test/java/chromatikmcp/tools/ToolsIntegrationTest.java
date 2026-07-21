@@ -194,6 +194,7 @@ class ToolsIntegrationTest {
             "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
             "get_component_doc",
             "get_frame", "get_palette", "describe_model", "get_views", "add_view", "remove_view",
+            "list_fixtures", "get_fixture",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
             "get_tempo",
@@ -1233,6 +1234,37 @@ class ToolsIntegrationTest {
     List<Map<String, Object>> tagVocabulary = (List<Map<String, Object>>) payload.get("tagVocabulary");
     assertTrue(tagVocabulary.stream().anyMatch(t -> "grid".equals(t.get("tag"))),
         "tagVocabulary: " + tagVocabulary);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listFixturesReportsRootFactsWithNoFixturesOnAStaticModel() {
+    // The class-level LX is constructed with an immutable GridModel (isStatic true),
+    // against which LXStructure.addFixture throws — full fixture-add coverage (index
+    // range, transform, submodels, undo) lives in FixturesTest's dynamic-structure LX.
+    Map<String, Object> payload = structured(call("list_fixtures", Map.of()));
+
+    assertEquals(lx.structure.isStatic.isOn(), payload.get("isStatic"));
+    assertNotNull(payload.get("modelName"));
+    assertEquals(64, ((Number) payload.get("totalPoints")).intValue());
+    assertNotNull(payload.get("outputError"));
+    assertTrue(((List<Map<String, Object>>) payload.get("fixtures")).isEmpty());
+  }
+
+  @Test
+  void getFixtureUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result = call("get_fixture", Map.of("path", "/lx/structure/fixture/1"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  void getFixtureNonFixturePathIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("get_fixture", Map.of("path", channel.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
   }
 
   @Test
