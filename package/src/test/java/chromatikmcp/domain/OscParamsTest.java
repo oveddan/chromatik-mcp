@@ -38,6 +38,7 @@ class OscParamsTest extends HeadlessLxTest {
     assertEquals(1.0, ((Number) fader.get("max")).doubleValue(), 1e-9);
     assertTrue(fader.containsKey("componentPath"));
     assertTrue(fader.containsKey("componentLabel"));
+    assertEquals(channel.getClass().getSimpleName(), fader.get("componentType"));
   }
 
   @Test

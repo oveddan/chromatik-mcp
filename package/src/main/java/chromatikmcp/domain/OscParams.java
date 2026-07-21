@@ -44,6 +44,11 @@ public final class OscParams {
     }
     String componentPath = Resolve.canonicalPath(component);
     String componentLabel = component.getLabel();
+    // componentLabel is user-editable (renamed freely in the UI), so it can't be used to tell
+    // components apart programmatically. componentType is the stable discriminator a consumer
+    // needs to e.g. pick out LX's macro modulators (MacroKnobs, MacroTriggers, MacroSwitches)
+    // from the full parameter list. Computed once per component, not per parameter.
+    String componentType = component.getClass().getSimpleName();
     for (LXParameter parameter : component.getParameters()) {
       Parameters.ParameterMeta meta = Parameters.describeMeta(parameter);
       if (meta.oscAddress() == null) {
@@ -56,6 +61,7 @@ public final class OscParams {
       entry.put("type", meta.type());
       entry.put("componentPath", componentPath);
       entry.put("componentLabel", componentLabel);
+      entry.put("componentType", componentType);
       entry.put("units", meta.units());
       if (meta.min() != null) {
         entry.put("min", meta.min());
