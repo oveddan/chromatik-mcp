@@ -75,6 +75,7 @@ Scoped to *mutation primitives*: no speculative abstraction layers until two rea
 - Tests: every domain primitive gets a unit test against a headless `LX`; every tool handler gets an integration test. Template and do→undo→assert pattern in [docs/qa-strategy.md](docs/qa-strategy.md).
 - Build gate: run `package/scripts/build-gate.sh` instead of raw `mvn -f package/pom.xml package` — it keeps the full log on disk and prints a one-line pass/fail summary, so agents don't flood their context with surefire output.
 - Conventions decided once, not re-decided per PR: [docs/tool-conventions.md](docs/tool-conventions.md) (tool surface, canonical-path addressing, `Result` wire shape, engine-thread rule), [docs/lx-coding-guidelines.md](docs/lx-coding-guidelines.md) (LX idioms, distilled from upstream review).
+- Releasing: follow [docs/releasing.md](docs/releasing.md) — a release is cut by merging a PR that bumps `<version>` in `package/pom.xml`; CI tags the commit and publishes. Never push a `v*` tag by hand to cut a routine release, and never build and upload a jar manually.
 
 ## Driving a live instance
 
