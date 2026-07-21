@@ -58,8 +58,8 @@ class OscParamsTest extends HeadlessLxTest {
     }
 
     // Merely completing without a StackOverflowError/infinite loop is the assertion — the
-    // visited-set cycle guard and depth cap are defense-in-depth, not expected to trigger
-    // on a normal project, but this proves the walk terminates.
+    // visited-set cycle guard is defense-in-depth, not expected to trigger on a normal
+    // project, but this proves the walk terminates.
     List<Map<String, Object>> params = OscParams.list(lx);
     assertFalse(params.isEmpty());
   }

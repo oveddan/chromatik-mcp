@@ -21,8 +21,9 @@ import chromatikmcp.engine.EngineExecutor;
  * a future VST/M4L device). Deliberately not an MCP tool — callers are simple HTTP
  * clients, not MCP sessions.
  *
- * <p>Read-only and loopback-bound by default (same connector as {@code /mcp}), so the
- * permissive CORS header is safe and lets a local browser page skip a proxy hop.
+ * <p>Read-only and loopback-bound by default (same connector as {@code /mcp}). The Bitwig
+ * bridge proxies this endpoint server-side, so no browser needs CORS — no
+ * {@code Access-Control-Allow-Origin} header is sent.
  */
 public final class OscParamsServlet extends HttpServlet {
 
@@ -52,7 +53,6 @@ public final class OscParamsServlet extends HttpServlet {
     response.setStatus(status);
     response.setContentType("application/json");
     response.setCharacterEncoding("UTF-8");
-    response.setHeader("Access-Control-Allow-Origin", "*");
     response.getWriter().write(body);
   }
 }

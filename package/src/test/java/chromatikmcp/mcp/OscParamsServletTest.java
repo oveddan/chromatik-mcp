@@ -93,7 +93,8 @@ class OscParamsServletTest {
 
     assertEquals(200, response.statusCode());
     assertEquals("application/json;charset=UTF-8", response.headers().firstValue("Content-Type").orElse(null));
-    assertEquals("*", response.headers().firstValue("Access-Control-Allow-Origin").orElse(null));
+    assertTrue(response.headers().firstValue("Access-Control-Allow-Origin").isEmpty(),
+        "no CORS header — the Bitwig bridge proxies server-side, no browser needs it");
     String body = response.body();
     assertTrue(body.contains("\"count\""), "response should carry a count field: " + body);
     assertTrue(body.contains("\"params\""), "response should carry a params array: " + body);

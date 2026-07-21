@@ -91,6 +91,39 @@ public final class Parameters {
   private Parameters() {}
 
   /**
+   * The subset of {@link ParameterInfo} that costs nothing to compute: no live value read,
+   * no modulation scan, no {@code getFormatter().format(...)}. For callers that only need
+   * the static shape of a parameter (e.g. a bind-target picker), not its current reading.
+   */
+  public record ParameterMeta(String oscAddress, String label, String path, String type,
+      String units, Double min, Double max) {}
+
+  /**
+   * Cheap, read-only metadata for {@code parameter} — safe to call for every OSC-addressable
+   * parameter in the engine (e.g. from {@link OscParams#list}) without competing with
+   * render-thread work. Does not read the parameter's value or scan for live modulation.
+   */
+  static ParameterMeta describeMeta(LXParameter parameter) {
+    Double min = null;
+    Double max = null;
+    if (parameter instanceof DiscreteParameter d) {
+      min = (double) d.getMinValue();
+      max = (double) d.getMaxValue();
+    } else if (parameter instanceof BoundedParameter b) {
+      min = b.range.min;
+      max = b.range.max;
+    }
+    return new ParameterMeta(
+        LXOscEngine.getOscAddress(parameter),
+        parameter.getLabel(),
+        Resolve.canonicalPath(parameter),
+        parameter.getClass().getSimpleName(),
+        parameter.getUnits().name(),
+        min,
+        max);
+  }
+
+  /**
    * Resolve a canonical path (as produced by {@code getCanonicalPath()}, e.g.
    * {@code /lx/mixer/channel/1/fader}) to a snapshot. Call on the engine thread.
    *
