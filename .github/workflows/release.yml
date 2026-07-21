@@ -1,17 +1,30 @@
-name: release (tagged)
+name: release (versioned)
 
-# Cut a versioned release: bump <version> in package/pom.xml, merge, then
-#   git tag v0.1.0 && git push origin v0.1.0
-# This builds the jar (full test gate) and creates a GitHub Release, making
+# Cutting a release = merging a PR that bumps <version> in package/pom.xml.
+# On every push to main this reads the pom version and, if v<version> is not
+# already tagged, runs the full gate, tags the commit, and creates the GitHub
+# Release — making
 #   https://github.com/oveddan/chromatik-mcp/releases/latest/download/chromatik-mcp.jar
-# serve the newest tagged release.
+# serve the newest release. main's pom always holds a plain release version;
+# a -SNAPSHOT version is treated as "not a release" and skipped.
+#
+# Tagging and release creation live in THIS job on purpose. A tag pushed with
+# the default GITHUB_TOKEN does not trigger workflows (GitHub suppresses that
+# to prevent recursion), so a separate tag-then-release split would need a PAT.
+#
+# Pushing a v* tag by hand still works, for backfilling or re-cutting.
 
 on:
   push:
+    branches: [main]
     tags: ["v*"]
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -24,6 +37,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need existing tags to decide whether this version is already released
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -32,21 +47,63 @@ jobs:
           distribution: temurin
           cache: maven
 
+      - name: Resolve version and decide whether to release
+        id: v
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            # Manual tag push — honor it as-is, even if it disagrees with the pom.
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          VERSION=$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)
+          echo "pom version: $VERSION"
+
+          if [[ "$VERSION" == *-SNAPSHOT ]]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$VERSION is a snapshot — no release cut."
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::v$VERSION already released — nothing to do."
+            exit 0
+          fi
+
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::cutting v$VERSION"
+
       # Full gate — never publish a jar that didn't pass the suite
       - name: mvn package
+        if: steps.v.outputs.release == 'true'
         run: mvn -B package
 
       - name: headless load gate
+        if: steps.v.outputs.release == 'true'
         run: ./scripts/verify-load.sh
 
       - name: Stage jar with stable name
         id: jar
+        if: steps.v.outputs.release == 'true'
         run: |
           JAR=$(ls target/chromatik-mcp-*.jar | head -1)
           echo "versioned=$(basename "$JAR")" >> "$GITHUB_OUTPUT"
           cp "$JAR" target/chromatik-mcp.jar
 
-      - name: Create versioned release
+      # Tag only after the gate passes, so a failed build leaves no tag behind
+      # to block a retry once the problem is fixed.
+      - name: Tag the release commit
+        if: steps.v.outputs.release == 'true' && github.ref_type != 'tag'
         run: |
-          gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --generate-notes \
+          git tag "${{ steps.v.outputs.tag }}"
+          git push origin "${{ steps.v.outputs.tag }}"
+
+      - name: Create versioned release
+        if: steps.v.outputs.release == 'true'
+        run: |
+          gh release create "${{ steps.v.outputs.tag }}" \
+            --title "${{ steps.v.outputs.tag }}" --generate-notes \
             target/chromatik-mcp.jar "target/${{ steps.jar.outputs.versioned }}"
