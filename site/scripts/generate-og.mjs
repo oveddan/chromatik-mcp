@@ -106,7 +106,7 @@ const markup = {
             maxWidth: 900,
           },
           children:
-            'An agent inside the Chromatik runtime — it parses your scene, explains how it is wired, and composes into it — long before the doors open.',
+            'Inside Chromatik, the digital lighting workstation: an agent that parses your scene, composes into it, and debugs it — before the doors open.',
         },
       },
       {

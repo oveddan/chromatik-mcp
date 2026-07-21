@@ -26,7 +26,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             property: 'og:image:alt',
-            content: 'Chromatik MCP — an agent inside the Chromatik runtime that parses, composes into, and debugs a running show.',
+            content: 'Chromatik MCP — an agent inside Chromatik, the digital lighting workstation, that parses your scene, composes into it, and debugs it.',
           },
         },
         { tag: 'meta', attrs: { property: 'og:site_name', content: 'Chromatik MCP' } },
