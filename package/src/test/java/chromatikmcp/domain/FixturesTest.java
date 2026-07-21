@@ -4,11 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -96,6 +99,22 @@ class FixturesTest extends HeadlessLxTest {
     assertEquals("ARTNET", info.output().protocol());
     assertEquals(3, info.output().universe());
     assertEquals(7, info.output().channel());
+  }
+
+  @Test
+  void deactivatedFixtureWithRegeneratedGeometryDescribesWithoutThrowing() {
+    // LXFixture.getModel() is nulled inside regenerate() and only restored by toModel(),
+    // which LXStructure.regenerateModel() skips for deactivated fixtures — so a fixture
+    // that is deactivated and then has a metrics parameter changed keeps model == null.
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+    lx.command.perform(new LXCommand.Parameter.SetValue(fixture.deactivate, 1));
+    lx.command.perform(new LXCommand.Parameter.SetValue(fixture.numRows, 5));
+
+    Fixtures.FixtureInfo info = Fixtures.describeFixture(fixture);
+    assertFalse(info.modelAvailable(), "deactivated fixture has no built model");
+    assertEquals(0, info.submodelCount());
+    assertEquals(fixture.tagList, info.tags(), "falls back to tagList when no model is built");
   }
 
   @Test
@@ -234,5 +253,79 @@ class FixturesTest extends HeadlessLxTest {
     assertEquals("nodeSpacing", parameters.get(0).name());
     assertEquals("FLOAT", parameters.get(0).type());
     assertEquals(9.375, (double) parameters.get(0).value(), 1e-9);
+  }
+
+  @Test
+  void setParamsBatchesNumericAndBooleanEditsIntoOneUndoEntry() {
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+
+    Fixtures.SetParamsResult result = Fixtures.setParams(lx, fixture,
+        Map.of("x", 1.5, "y", 2.5, "enabled", true));
+
+    assertEquals(1, result.undoEntries());
+    assertEquals(1.5, (Double) result.values().get("x"), 1e-9);
+    assertEquals(2.5, (Double) result.values().get("y"), 1e-9);
+    assertEquals(Boolean.TRUE, result.values().get("enabled"));
+    assertEquals(1.5, fixture.x.getValue(), 1e-9);
+    assertEquals(2.5, fixture.y.getValue(), 1e-9);
+    assertTrue(fixture.enabled.isOn());
+
+    LXCommand undo = lx.command.getUndoCommand();
+    assertNotNull(undo, "one command sits on top of the undo stack");
+    lx.command.undo();
+    assertEquals(0.0, fixture.x.getValue(), 1e-9, "undo restores x");
+    assertEquals(0.0, fixture.y.getValue(), 1e-9, "undo restores y");
+    assertFalse(fixture.enabled.isOn(), "undo restores enabled");
+  }
+
+  @Test
+  void setParamsMixingNumericAndStringProducesTwoUndoEntries() {
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+
+    Fixtures.SetParamsResult result = Fixtures.setParams(lx, fixture,
+        Map.of("x", 3.0, "host", "10.0.0.5"));
+
+    assertEquals(2, result.undoEntries(), "one ArrangeFixtures + one SetString = two undo entries");
+    assertEquals(3.0, fixture.x.getValue(), 1e-9);
+    assertEquals("10.0.0.5", fixture.host.getString());
+  }
+
+  @Test
+  void setParamsUnknownNameWritesNothing() {
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+
+    Resolve.ResolveException ex = assertThrows(Resolve.ResolveException.class,
+        () -> Fixtures.setParams(lx, fixture, Map.of("x", 9.0, "notAParam", 1.0)));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertEquals(0.0, fixture.x.getValue(), 1e-9,
+        "validation for every name runs before any write — the whole call is atomic");
+  }
+
+  @Test
+  void setTagsValidatesAndReplacesTags() {
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+
+    List<String> result = Fixtures.setTags(lx, fixture, List.of("cube", "front"));
+    assertEquals(List.of("cube", "front"), result);
+    assertEquals(List.of("cube", "front"), fixture.getModel().tags);
+
+    lx.command.undo();
+    assertFalse(fixture.getModel().tags.contains("cube"), "undo restores the previous tags");
+  }
+
+  @Test
+  void setTagsRejectsAnInvalidTokenAndWritesNothing() {
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+    String before = fixture.tags.getString();
+
+    Resolve.ResolveException ex = assertThrows(Resolve.ResolveException.class,
+        () -> Fixtures.setTags(lx, fixture, List.of("cube", "bad tag!")));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertEquals(before, fixture.tags.getString(), "an invalid token leaves the tags parameter untouched");
   }
 }

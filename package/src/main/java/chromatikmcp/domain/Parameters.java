@@ -300,14 +300,19 @@ public final class Parameters {
     return new FireInfo(describe(parameter), pending);
   }
 
-  private static String requireString(LXParameter p, Object value) {
+  // Package-private (not private): reused by Fixtures.setParams so set_fixture_params
+  // shares the exact same coercion as set_parameter, per CLAUDE.md ("do not write new
+  // coercion") — the fixture-editing primitive only differs in command *routing*
+  // (batched vs. immediate), not value validation.
+
+  static String requireString(LXParameter p, Object value) {
     if (value instanceof String s) {
       return s;
     }
     throw mismatch(p, "expects a string value");
   }
 
-  private static boolean requireBoolean(LXParameter p, Object value) {
+  static boolean requireBoolean(LXParameter p, Object value) {
     if (value instanceof Boolean b) {
       return b;
     }
@@ -320,7 +325,7 @@ public final class Parameters {
    * device's view selector accepts the target view's label, so callers don't have to look
    * up its numeric index first.
    */
-  private static int requireDiscreteIndex(DiscreteParameter p, Object value) {
+  static int requireDiscreteIndex(DiscreteParameter p, Object value) {
     if (value instanceof Number n) {
       double d = n.doubleValue();
       if (d != Math.rint(d)) {
@@ -356,7 +361,7 @@ public final class Parameters {
     throw mismatch(p, "expects an integer value or an option name string");
   }
 
-  private static double requireNumber(LXParameter p, Object value) {
+  static double requireNumber(LXParameter p, Object value) {
     if (value instanceof Number n) {
       return n.doubleValue();
     }
@@ -382,7 +387,7 @@ public final class Parameters {
     }
   }
 
-  private static Resolve.ResolveException mismatch(LXParameter p, String detail) {
+  static Resolve.ResolveException mismatch(LXParameter p, String detail) {
     return new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
         Resolve.canonicalPath(p) + " (" + p.getClass().getSimpleName() + ") " + detail);
   }

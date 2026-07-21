@@ -194,7 +194,7 @@ class ToolsIntegrationTest {
             "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
             "get_component_doc",
             "get_frame", "get_palette", "describe_model", "get_views", "add_view", "remove_view",
-            "list_fixtures", "get_fixture",
+            "list_fixtures", "get_fixture", "set_fixture_params", "set_fixture_tags", "reload_fixtures",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
             "get_tempo",
@@ -205,7 +205,7 @@ class ToolsIntegrationTest {
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
         "wire_trigger", "remove_modulation", "remove_modulator", "fire_trigger",
-        "add_view", "remove_view",
+        "add_view", "remove_view", "set_fixture_params", "set_fixture_tags", "reload_fixtures",
         "add_channel", "remove_channel", "add_pattern", "remove_pattern",
         "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
         "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
@@ -1276,6 +1276,73 @@ class ToolsIntegrationTest {
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void setFixtureParamsUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result = call("set_fixture_params",
+        Map.of("path", "/lx/structure/fixture/1", "params", Map.of("x", 1.0)));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  void setFixtureParamsNonFixturePathIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("set_fixture_params",
+        Map.of("path", channel.getCanonicalPath(), "params", Map.of("x", 1.0)));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void setFixtureParamsEmptyParamsIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("set_fixture_params",
+        Map.of("path", "/lx/structure/fixture/1", "params", Map.of()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void setFixtureTagsUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result = call("set_fixture_tags",
+        Map.of("path", "/lx/structure/fixture/1", "tags", List.of("cube")));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  void setFixtureTagsNonFixturePathIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("set_fixture_tags",
+        Map.of("path", channel.getCanonicalPath(), "tags", List.of("cube")));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void setFixtureTagsEmptyTagsIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("set_fixture_tags",
+        Map.of("path", "/lx/structure/fixture/1", "tags", List.of()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void reloadFixturesOverMcpReturnsRefreshedTypeListAndFixtures() {
+    // lx's model is static/immutable (see class javadoc), against which LXStructure.reload()
+    // is a documented no-op (checkStaticModel-style early return) — this exercises the tool
+    // end-to-end over real HTTP without needing a dynamic structure; the actual reload
+    // behavior (picking up a disk edit) is covered in FixtureEditingTest.
+    Map<String, Object> payload = structured(call("reload_fixtures", Map.of()));
+    assertTrue(payload.containsKey("jsonTypes"));
+    assertTrue(payload.containsKey("errors"));
+    assertTrue(((List<Map<String, Object>>) payload.get("fixtures")).isEmpty());
   }
 
   @Test

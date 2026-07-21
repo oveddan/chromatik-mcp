@@ -51,9 +51,16 @@ public final class Tools {
           + "child's path or a higher depth to keep descending) — its pointIndexRange fields "
           + "index the same global color buffer get_frame reports. list_fixtures/get_fixture "
           + "report the physical wiring layer beneath that model tree — one entry per fixture, "
-          + "with its output protocol (universe/channel/host) and geometry transform; every "
-          + "fixture parameter (wiring, placement, or a fixture-type-specific one like a "
-          + "GridFixture's numRows) is settable via set_parameter on '<fixture path>/<param>'. "
+          + "with its output protocol (universe/channel/host) and geometry transform; a "
+          + "registered fixture parameter (wiring, placement, or a fixture-type-specific one "
+          + "like a GridFixture's numRows) is settable via set_parameter on "
+          + "'<fixture path>/<param>', but set_fixture_params is the batched, undo-grouped way "
+          + "to set several at once and the only way to reach a JsonFixture's .lxf-declared "
+          + "'jsonParameters' (e.g. controller IP strings), which have no canonical path at "
+          + "all. set_fixture_tags sets a fixture's model tags (the get_views selector "
+          + "vocabulary) with pre-write validation, since LX itself silently drops invalid "
+          + "tags. reload_fixtures picks up .lxf edits made on disk — nothing does so "
+          + "automatically. "
           + "get_tempo "
           + "reports the engine tempo (bpm, clock source, beat position) and its "
           + "launchQuantization: with quantization set, a fire_trigger on a quantized "
@@ -108,6 +115,9 @@ public final class Tools {
             new RemoveView(),
             new ListFixtures(),
             new GetFixture(),
+            new SetFixtureParams(),
+            new SetFixtureTags(),
+            new ReloadFixtures(),
             new GetTempo(),
             new ListSnapshots(),
             new AddSnapshot(),

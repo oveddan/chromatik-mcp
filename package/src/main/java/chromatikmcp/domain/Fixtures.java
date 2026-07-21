@@ -3,11 +3,21 @@ package chromatikmcp.domain;
 import java.lang.reflect.Field;
 import java.lang.reflect.InaccessibleObjectException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
+import heronarts.lx.command.LXCommand;
 import heronarts.lx.model.LXModel;
+import heronarts.lx.parameter.AggregateParameter;
+import heronarts.lx.parameter.BooleanParameter;
+import heronarts.lx.parameter.DiscreteParameter;
+import heronarts.lx.parameter.FunctionalParameter;
+import heronarts.lx.parameter.LXParameter;
+import heronarts.lx.parameter.StringParameter;
 import heronarts.lx.structure.JsonFixture;
 import heronarts.lx.structure.LXFixture;
 import heronarts.lx.structure.LXProtocolFixture;
@@ -47,10 +57,18 @@ public final class Fixtures {
    * submodels). These are genuinely different things — a {@code GridFixture} has 0 subfixtures
    * but several submodels — so both are reported rather than conflated.
    */
+  /**
+   * {@code modelAvailable} is {@code false} only when {@code fixture.getModel()} is
+   * currently {@code null} — a deactivated fixture (see {@code LXFixture.deactivate}) has no
+   * built model until it is reactivated and the structure regenerates ({@code
+   * LXStructure.regenerateModel} skips {@code toModel()} for deactivated fixtures). When
+   * {@code false}, {@code tags} falls back to {@code fixture.tagList} (the {@code .lxf}-declared
+   * subset, never null) and {@code submodelCount} reports 0.
+   */
   public record FixtureInfo(String path, int id, int index, String label, String type,
       int size, Integer firstIndex, Integer lastIndex, boolean enabled, boolean deactivate,
       double brightness, List<String> tags, int childCount, int submodelCount,
-      TransformInfo transform, OutputInfo output, JsonInfo json) {}
+      boolean modelAvailable, TransformInfo transform, OutputInfo output, JsonInfo json) {}
 
   /** One node in a subfixture tree; {@code children} is {@code null} when the walk stopped
    * before descending (depth exhausted), mirroring {@link Model.NodeInfo}. */
@@ -103,9 +121,15 @@ public final class Fixtures {
         fixture.enabled.isOn(),
         fixture.deactivate.isOn(),
         fixture.brightness.getValue(),
-        List.copyOf(fixture.tagList),
+        // model.tags is the *effective* tag list (fixture.tagList — only a .lxf "tags"
+        // declaration populates it — plus any tokens from the user-editable fixture.tags
+        // string field, see Fixtures#setTags); fixture.tagList alone would silently miss
+        // every tag set_fixture_tags writes. When the model isn't currently built (deactivated
+        // fixture), fall back to tagList rather than crash.
+        (model != null) ? List.copyOf(model.tags) : fixture.tagList,
         children(fixture).size(),
-        model.children.length,
+        (model != null) ? model.children.length : 0,
+        model != null,
         new TransformInfo(
             fixture.x.getValue(), fixture.y.getValue(), fixture.z.getValue(),
             fixture.yaw.getValue(), fixture.pitch.getValue(), fixture.roll.getValue(),
@@ -194,6 +218,219 @@ public final class Fixtures {
     return false;
   }
 
+  /** {@code undoEntries} counts the undo-stack entries the write produced: 1 when every
+   * edited parameter was numeric/boolean (all batched into a single {@code ArrangeFixtures}),
+   * plus 1 per string parameter (no batched string command exists). {@code values} is the
+   * re-read result for every name in the request, in the order requested. {@code
+   * shadowedJsonParams} lists names, if any, that were written to the registered geometry
+   * parameter of that name while a same-named {@code .lxf}-declared parameter (legal for any
+   * name except {@code instances}/{@code instance}) went untouched — see {@link #resolveByName}. */
+  public record SetParamsResult(int undoEntries, Map<String, Object> values,
+      List<String> shadowedJsonParams) {}
+
+  private record ParamEdit(String name, LXParameter parameter, Object coerced) {}
+
+  /**
+   * Set several of {@code fixture}'s parameters — registered ones (reachable via {@code
+   * fixture.getParameter(name)}) and, for a {@link JsonFixture}, its {@code .lxf}-declared
+   * ones (reachable only via {@link JsonFixture#getJsonParameters()}, by {@code name}, since
+   * they carry no canonical path) — in one call. Validation is atomic: every name is
+   * resolved and every value coerced <strong>before</strong> anything is written, so an
+   * unknown name or a type mismatch on any entry leaves the fixture untouched. The write
+   * phase is not atomic, though: numeric/boolean edits are always batched into a single
+   * {@code LXCommand.Structure.ArrangeFixtures} and performed first (one undo entry),
+   * regardless of the caller's map order, followed by one individual {@code
+   * LXCommand.Parameter.SetString} per string edit (no batched string command exists). If a
+   * {@code SetString} fails partway through a mixed numeric+string call, the earlier writes
+   * stay applied — and {@code LXCommandEngine.perform} clears the <strong>entire</strong>
+   * undo/redo stack on any command failure, not just the failing entry. Call on the engine
+   * thread.
+   *
+   * @throws Resolve.ResolveException {@code TYPE_MISMATCH} for a {@code fixture} that is a
+   *     subfixture of a {@code JsonFixture} (see {@link #isJsonDerived}), an unknown
+   *     parameter name, or a value that doesn't match the resolved parameter's type
+   */
+  public static SetParamsResult setParams(LX lx, LXFixture fixture, Map<String, Object> params) {
+    if (isJsonDerived(fixture)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          Resolve.canonicalPath(fixture) + " is computed from its .lxf file and will be "
+              + "overwritten on reload — edit the .lxf and call reload_fixtures instead");
+    }
+    if (params.isEmpty()) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH, "params must not be empty");
+    }
+
+    JsonFixture jsonFixture = (fixture instanceof JsonFixture jf) ? jf : null;
+
+    List<ParamEdit> numericOrBooleanEdits = new ArrayList<>();
+    List<ParamEdit> stringEdits = new ArrayList<>();
+    List<String> shadowedJsonParams = new ArrayList<>();
+    for (Map.Entry<String, Object> entry : params.entrySet()) {
+      String name = entry.getKey();
+      LXParameter parameter = resolveByName(fixture, jsonFixture, name);
+      if (parameter == fixture.getParameter(name) && jsonFixture != null
+          && declaresJsonParameter(jsonFixture, name)) {
+        // resolveByName's registered-wins precedence silently leaves the same-named .lxf
+        // parameter untouched — surface it rather than let the caller assume it was written.
+        shadowedJsonParams.add(name);
+      }
+      Object value = entry.getValue();
+      if (parameter instanceof StringParameter s) {
+        stringEdits.add(new ParamEdit(name, s, Parameters.requireString(s, value)));
+      } else if (parameter instanceof heronarts.lx.parameter.TriggerParameter) {
+        throw Parameters.mismatch(parameter, "is a momentary trigger — use fire_trigger");
+      } else if (parameter instanceof BooleanParameter b) {
+        numericOrBooleanEdits.add(new ParamEdit(name, b, Parameters.requireBoolean(b, value)));
+      } else if (parameter instanceof DiscreteParameter d) {
+        numericOrBooleanEdits.add(new ParamEdit(name, d, (double) Parameters.requireDiscreteIndex(d, value)));
+      } else if (parameter instanceof AggregateParameter a) {
+        throw Parameters.mismatch(a, "is an aggregate — set its components via the "
+            + a.subparameters.keySet().stream().map(key -> ".../" + key)
+                .collect(Collectors.joining(", ")) + " paths");
+      } else if (parameter instanceof FunctionalParameter) {
+        throw Parameters.mismatch(parameter, "is a computed read-only parameter and cannot be set");
+      } else {
+        numericOrBooleanEdits.add(new ParamEdit(name, parameter, Parameters.requireNumber(parameter, value)));
+      }
+    }
+
+    int undoEntries = 0;
+    if (!numericOrBooleanEdits.isEmpty()) {
+      LXCommand.Structure.ArrangeFixtures arrange = new LXCommand.Structure.ArrangeFixtures();
+      for (ParamEdit edit : numericOrBooleanEdits) {
+        if (edit.parameter() instanceof BooleanParameter b) {
+          arrange.add(b, (Boolean) edit.coerced());
+        } else {
+          arrange.add(edit.parameter(), (Double) edit.coerced());
+        }
+      }
+      Commands.perform(lx, arrange);
+      ++undoEntries;
+    }
+    for (ParamEdit edit : stringEdits) {
+      Commands.perform(lx, new LXCommand.Parameter.SetString(
+          (StringParameter) edit.parameter(), (String) edit.coerced()));
+      ++undoEntries;
+    }
+
+    Map<String, JsonParameterInfo> jsonValues = (jsonFixture == null)
+        ? Map.of()
+        : jsonParameters(jsonFixture).stream()
+            .collect(Collectors.toMap(JsonParameterInfo::name, info -> info));
+    Map<String, Object> values = new LinkedHashMap<>();
+    for (String name : params.keySet()) {
+      LXParameter registered = fixture.getParameter(name);
+      values.put(name, (registered != null)
+          ? Parameters.describe(registered).value()
+          : jsonValues.get(name).value());
+    }
+    return new SetParamsResult(undoEntries, values, shadowedJsonParams);
+  }
+
+  private static LXParameter resolveByName(LXFixture fixture, JsonFixture jsonFixture, String name) {
+    LXParameter registered = fixture.getParameter(name);
+    if (registered != null) {
+      return registered;
+    }
+    if (jsonFixture != null) {
+      for (JsonFixture.ParameterDefinition definition : jsonFixture.getJsonParameters()) {
+        if (definition.name.equals(name)) {
+          return definition.parameter;
+        }
+      }
+    }
+    throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+        "No parameter named '" + name + "' on " + Resolve.canonicalPath(fixture)
+            + " (checked registered parameters"
+            + ((jsonFixture != null) ? " and .lxf-declared parameters" : "") + ")");
+  }
+
+  private static boolean declaresJsonParameter(JsonFixture jsonFixture, String name) {
+    for (JsonFixture.ParameterDefinition definition : jsonFixture.getJsonParameters()) {
+      if (definition.name.equals(name)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Set a fixture's model tags, routed through {@code LXCommand.Parameter.SetString} on
+   * {@code fixture.tags} (the user-editable "Tag" string field — distinct from {@code
+   * tagList}, which only a {@code .lxf}'s own {@code "tags"} declaration populates) for
+   * undo. Every token is validated against {@code LXModel.Tag.VALID_TAG_REGEX}
+   * <strong>before</strong> writing — {@code LXFixture.getModelTags} silently drops any
+   * token that fails this regex, and silently restores the fixture's default tags if every
+   * token fails, so an unvalidated write can look successful while quietly breaking
+   * view-selector addressing. Call on the engine thread.
+   *
+   * @return the fixture's resulting effective model tags ({@code fixture.getModel().tags}
+   *     — {@code tags} plus any {@code tagList} from a {@code .lxf} declaration), re-read
+   *     after the write
+   * @throws Resolve.ResolveException {@code TYPE_MISMATCH} for a {@code fixture} that is a
+   *     subfixture of a {@code JsonFixture}, an empty tag list, an empty token, or a token
+   *     that fails {@code LXModel.Tag.VALID_TAG_REGEX}
+   */
+  public static List<String> setTags(LX lx, LXFixture fixture, List<String> tags) {
+    if (isJsonDerived(fixture)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          Resolve.canonicalPath(fixture) + " is computed from its .lxf file and will be "
+              + "overwritten on reload — edit the .lxf and call reload_fixtures instead");
+    }
+    if (tags.isEmpty()) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "tags must not be empty — an empty tag list would silently restore the fixture's "
+              + "default tags (LXFixture.getModelTags)");
+    }
+    for (String tag : tags) {
+      if (tag.isEmpty() || !LXModel.Tag.isValid(tag)) {
+        throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+            "Invalid tag token: '" + tag + "' — tags must match " + LXModel.Tag.VALID_TAG_REGEX
+                + " (LXFixture silently drops invalid tokens rather than rejecting them, so "
+                + "this call rejects up front instead)");
+      }
+    }
+    Commands.perform(lx, new LXCommand.Parameter.SetString(fixture.tags, String.join(" ", tags)));
+    LXModel model = fixture.getModel();
+    return (model != null) ? List.copyOf(model.tags) : fixture.tagList;
+  }
+
+  /** One entry from {@code lx.registry.jsonFixtureErrors} — a {@code .lxf} that failed to
+   * parse (syntax/I-O error), distinct from a per-fixture {@link JsonInfo} load error. */
+  public record JsonTypeError(String path, String type, String exception) {}
+
+  /** {@code jsonTypes}/{@code errors} come from a fresh {@code lx.registry.reloadJsonFixtures()}
+   * walk of the Fixtures folder; {@code fixtures} is every top-level fixture's state after
+   * {@code lx.structure.reload()} re-reads every instantiated {@code JsonFixture} from disk. */
+  public record ReloadResult(List<String> jsonTypes, List<JsonTypeError> errors, List<FixtureInfo> fixtures) {}
+
+  /**
+   * Pick up {@code .lxf} edits made on disk (with an external tool — nothing watches the
+   * Fixtures folder). {@code lx.registry.reloadJsonFixtures()} refreshes the available
+   * fixture *type* list; {@code lx.structure.reload()} then reloads every instantiated
+   * top-level {@code JsonFixture} and regenerates the model exactly once — the only batched
+   * regeneration path in LX. Not undoable. Call on the engine thread.
+   */
+  public static ReloadResult reload(LX lx) {
+    lx.registry.reloadJsonFixtures();
+    lx.structure.reload();
+
+    List<String> jsonTypes = new ArrayList<>();
+    for (var jsonType : lx.registry.jsonFixtures) {
+      jsonTypes.add(jsonType.type);
+    }
+    List<JsonTypeError> errors = new ArrayList<>();
+    for (var error : lx.registry.jsonFixtureErrors) {
+      errors.add(new JsonTypeError(error.path, error.type,
+          (error.exception == null) ? null : error.exception.toString()));
+    }
+    List<FixtureInfo> fixtures = new ArrayList<>();
+    for (LXFixture fixture : lx.structure.fixtures) {
+      fixtures.add(describeFixture(fixture));
+    }
+    return new ReloadResult(jsonTypes, errors, fixtures);
+  }
+
   private static String typeOf(LXFixture fixture) {
     if (fixture instanceof JsonFixture jsonFixture) {
       String fixturePath = jsonFixture.getFixturePath();
@@ -223,10 +460,13 @@ public final class Fixtures {
 
   /**
    * The knobs a {@code JsonFixture}'s {@code .lxf} file declares via its
-   * {@code "parameters"} block — a caller can set any of these through {@code
-   * set_parameter} on {@code <fixturePath>/<name>} like any other fixture parameter; this
-   * just surfaces what exists and its current value, since the set is JSON-file-defined
-   * and not otherwise discoverable. Call on the engine thread.
+   * {@code "parameters"} block. Unlike a registered fixture parameter, these are built as
+   * bare {@code new StringParameter(...)}/etc. and never passed through {@code
+   * addParameter} (structure/JsonFixture.java:401-500), so they have <strong>no canonical
+   * path</strong> — {@code Resolve} cannot reach them, and {@code getCanonicalPath()} on
+   * one directly yields a bogus {@code "/null"}. They are addressed by {@code name} only,
+   * via {@code set_fixture_params}, never {@code set_parameter}. Call on the engine
+   * thread.
    */
   public static List<JsonParameterInfo> jsonParameters(JsonFixture fixture) {
     List<JsonParameterInfo> parameters = new ArrayList<>();

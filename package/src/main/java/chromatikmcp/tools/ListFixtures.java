@@ -33,7 +33,11 @@ public final class ListFixtures implements LxTool {
         + "'components', recursively) — 'childCount' is the number of those subfixtures, while "
         + "'submodelCount' is the unrelated number of model-tree groupings the fixture's own "
         + "geometry splits into (e.g. a GridFixture's per-row/per-column submodels; it has 0 "
-        + "subfixtures but several submodels). Subfixture paths (e.g. "
+        + "subfixtures but several submodels). A deactivated fixture (see 'deactivate') has no "
+        + "built model until it is reactivated and the structure regenerates — for such a "
+        + "fixture 'modelAvailable' is reported as false (omitted, meaning true, otherwise), "
+        + "'tags' falls back to the .lxf-declared subset only, and 'submodelCount' is 0. "
+        + "Subfixture paths (e.g. "
         + "/lx/structure/fixture/1/fixture/3) are addressable with get_parameter/set_parameter "
         + "exactly like top-level fixtures — writes to a subfixture of a JsonFixture are "
         + "rejected, since its values are computed from the .lxf and recomputed on reload. Use "
@@ -91,6 +95,12 @@ public final class ListFixtures implements LxTool {
     entry.put("tags", fixture.tags());
     entry.put("childCount", fixture.childCount());
     entry.put("submodelCount", fixture.submodelCount());
+    if (!fixture.modelAvailable()) {
+      // Only surfaced when false — a deactivated fixture has no built model until it is
+      // reactivated and regenerated; this distinguishes "no submodels" from "geometry not
+      // currently built" rather than silently reporting 0/[] either way.
+      entry.put("modelAvailable", false);
+    }
 
     Map<String, Object> transform = new LinkedHashMap<>();
     transform.put("x", fixture.transform().x());

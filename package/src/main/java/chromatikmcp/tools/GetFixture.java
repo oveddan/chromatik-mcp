@@ -30,13 +30,16 @@ public final class GetFixture implements LxTool {
         + "set_parameter on its own path, same as any other component parameter), "
         + "'submodels' (the fixture's own child model nodes, e.g. a GridFixture's per-row and "
         + "per-column groupings — each with path/tags/size/pointIndexRange/contiguous/metaData, "
-        + "same node shape as describe_model), 'children' "
+        + "same node shape as describe_model; empty when the fixture is deactivated and has no "
+        + "built model — see 'modelAvailable' in list_fixtures), 'children' "
         + "(the fixture's subfixture tree — e.g. a JsonFixture's .lxf-declared 'components', "
         + "recursively — depth-limited by the 'depth' argument; each node uses the same shape "
         + "as a list_fixtures row, itself with a nested 'children' if depth allows further "
         + "recursion; 'childCount' there is the number of direct subfixtures, distinct from "
         + "'submodelCount'), and for a JsonFixture, 'jsonParameters' (the knobs its .lxf file "
-        + "declares, each settable via set_parameter on '<path>/<name>'). Subfixture paths "
+        + "declares — these have no canonical path, so they carry no 'path' field here and "
+        + "are NOT reachable via set_parameter; set them by name via set_fixture_params). "
+        + "Subfixture paths "
         + "(e.g. '<path>/fixture/3') are addressable with get_parameter/set_parameter/"
         + "get_fixture exactly like top-level fixtures — writes to a subfixture of a "
         + "JsonFixture are rejected, since its values are computed from the .lxf and "
@@ -93,8 +96,10 @@ public final class GetFixture implements LxTool {
 
     List<Map<String, Object>> submodels = new ArrayList<>();
     LXModel model = fixture.getModel();
-    for (LXModel child : model.children) {
-      submodels.add(submodelMap(Model.describeNode(child, 0)));
+    if (model != null) {
+      for (LXModel child : model.children) {
+        submodels.add(submodelMap(Model.describeNode(child, 0)));
+      }
     }
     payload.put("submodels", submodels);
 
