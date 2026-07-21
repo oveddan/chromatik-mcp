@@ -153,7 +153,7 @@ OSC addresses attached.
 
 ```sh
 curl -L --create-dirs -o ~/Chromatik/Packages/chromatik-mcp.jar \
-  https://github.com/oveddan/chromatik-mcp/releases/download/latest/chromatik-mcp.jar
+  https://github.com/oveddan/chromatik-mcp/releases/latest/download/chromatik-mcp.jar
 # enable Chromatik-MCP in Preferences → Plugins, restart, then:
 claude mcp add --transport http chromatik "http://127.0.0.1:$(jq -r .port ~/.chromatik-mcp/status.json)/mcp"
 ```

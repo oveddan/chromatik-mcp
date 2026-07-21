@@ -4,14 +4,14 @@ A drop-in LX/Chromatik package for AI-driven show composition over MCP.
 
 **Status**: the v1 tool surface is working end-to-end — discovery, parameters, tempo, modulation wiring, channels/patterns/effect chains, mixer performance controls (crossfader, cue/aux), palette (read-write), snapshots, model views, render previews, OSC addressing, and a generated semantic catalog of what each component does. MIDI mapping is the remaining slice. See [docs/build-plan.md](docs/build-plan.md) for the roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
 
-**Docs**: [chromatik-mcp.vercel.app](https://chromatik-mcp.vercel.app) — for AI agents, the full docs are available as plain markdown at [chromatik-mcp.vercel.app/llms-full.txt](https://chromatik-mcp.vercel.app/llms-full.txt) ([llms.txt](https://chromatik-mcp.vercel.app/llms.txt) index).
+**Docs**: [oveddan.github.io/chromatik-mcp](https://oveddan.github.io/chromatik-mcp/) — for AI agents, the full docs are available as plain markdown at [llms-full.txt](https://oveddan.github.io/chromatik-mcp/llms-full.txt) ([llms.txt](https://oveddan.github.io/chromatik-mcp/llms.txt) index).
 
 ## Quick start
 
 ```sh
-# download the latest CI-built jar (or: cd package && mvn install -Pinstall)
+# download the latest release (or: cd package && mvn install -Pinstall)
 curl -L --create-dirs -o ~/Chromatik/Packages/chromatik-mcp.jar \
-  https://github.com/oveddan/chromatik-mcp/releases/download/latest/chromatik-mcp.jar
+  https://github.com/oveddan/chromatik-mcp/releases/latest/download/chromatik-mcp.jar
 # then: enable Chromatik-MCP in Chromatik Preferences → Plugins, restart, and connect:
 claude mcp add --transport http chromatik "http://127.0.0.1:$(jq -r .port ~/.chromatik-mcp/status.json)/mcp"
 ```

@@ -16,16 +16,18 @@ point your MCP client at the port it publishes. No separate server process.
 
 ### Option A — download (no build tools needed)
 
-Download the latest jar into Chromatik's packages directory:
+Download the latest release into Chromatik's packages directory:
 
 ```sh
 curl -L --create-dirs -o ~/Chromatik/Packages/chromatik-mcp.jar \
-  https://github.com/oveddan/chromatik-mcp/releases/download/latest/chromatik-mcp.jar
+  https://github.com/oveddan/chromatik-mcp/releases/latest/download/chromatik-mcp.jar
 ```
 
-Every push to main that touches the plugin code republishes this jar after the full
-test suite passes. Versioned releases live on the
-[releases page](https://github.com/oveddan/chromatik-mcp/releases).
+That URL always resolves to the newest tagged release; older ones are on the
+[releases page](https://github.com/oveddan/chromatik-mcp/releases). To track main
+instead — rebuilt on every push that touches the plugin code and passes the full test
+suite — swap the URL for
+`https://github.com/oveddan/chromatik-mcp/releases/download/latest/chromatik-mcp.jar`.
 
 ### Option B — build from source
 

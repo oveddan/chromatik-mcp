@@ -11,14 +11,18 @@ your MCP client at the port it publishes. No separate server process.
 
 ## 1. Install the jar
 
-**Download** (no build tools needed) — the rolling `latest` release republishes on
-every main-branch push that passes the full test suite; versioned releases are on the
+**Download** (no build tools needed) — this URL always resolves to the newest tagged
+release; older ones are on the
 [releases page](https://github.com/oveddan/chromatik-mcp/releases):
 
 ```sh
 curl -L --create-dirs -o ~/Chromatik/Packages/chromatik-mcp.jar \
-  https://github.com/oveddan/chromatik-mcp/releases/download/latest/chromatik-mcp.jar
+  https://github.com/oveddan/chromatik-mcp/releases/latest/download/chromatik-mcp.jar
 ```
+
+To track main instead, use the rolling `latest` prerelease — republished on every
+main-branch push that touches `package/` and passes the full test suite:
+`https://github.com/oveddan/chromatik-mcp/releases/download/latest/chromatik-mcp.jar`
 
 **Or build from source:**
 
