@@ -3,14 +3,36 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
 
+const SITE = 'https://oveddan.github.io';
+const BASE = '/chromatik-mcp';
+const OG_IMAGE = `${SITE}${BASE}/og.png`;
+
 export default defineConfig({
-  site: 'https://oveddan.github.io',
-  base: '/chromatik-mcp',
+  site: SITE,
+  base: BASE,
   integrations: [
     starlight({
       title: 'Chromatik MCP',
       description:
         'AI-accelerated light-show composition and performance for Chromatik, over MCP.',
+      // Starlight emits og:title/description/url per page; the share image and
+      // the large-card opt-in are ours. Absolute URLs — crawlers don't resolve
+      // relative ones.
+      head: [
+        { tag: 'meta', attrs: { property: 'og:image', content: OG_IMAGE } },
+        { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+        { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+        {
+          tag: 'meta',
+          attrs: {
+            property: 'og:image:alt',
+            content: 'Chromatik MCP — AI-accelerated light-show composition and performance.',
+          },
+        },
+        { tag: 'meta', attrs: { property: 'og:site_name', content: 'Chromatik MCP' } },
+        { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
+        { tag: 'meta', attrs: { name: 'twitter:image', content: OG_IMAGE } },
+      ],
       customCss: [
         '@fontsource/space-grotesk/500.css',
         '@fontsource/space-grotesk/700.css',
