@@ -4,7 +4,8 @@ import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
 
 export default defineConfig({
-  site: 'https://chromatik-mcp.vercel.app',
+  site: 'https://oveddan.github.io',
+  base: '/chromatik-mcp',
   integrations: [
     starlight({
       title: 'Chromatik MCP',

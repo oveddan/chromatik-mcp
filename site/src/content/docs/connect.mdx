@@ -9,7 +9,7 @@ endpoint is `http://127.0.0.1:<port>/mcp`, where `<port>` comes from
 
 :::note[The port is ephemeral by default]
 Unless you pin a fixed port in `~/.chromatik-mcp/config.json` (see
-[Getting started](/getting-started/#configuring-the-port-and-host)), the port
+[Getting started](../getting-started/#configuring-the-port-and-host)), the port
 changes each time Chromatik restarts — re-read `status.json` and update your client
 config after a restart. Pinning a port (e.g. `{"port": 7000}`) makes every config
 below stable.
@@ -115,4 +115,4 @@ Once connected, ask your agent:
   failures LX swallows internally are logged there.
 - **Connecting from another machine** — requires a non-loopback `host` in
   `config.json`. The server is unauthenticated; understand the exposure first (see the
-  security warning in [Getting started](/getting-started/)).
+  security warning in [Getting started](../getting-started/)).

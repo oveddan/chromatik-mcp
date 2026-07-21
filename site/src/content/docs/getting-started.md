@@ -119,7 +119,7 @@ plugin logs a loud warning on startup whenever a non-loopback host is configured
 
 ## 4. Connect your AI client
 
-See [Connect your AI client](/connect/) for step-by-step setup in Claude Code,
+See [Connect your AI client](../connect/) for step-by-step setup in Claude Code,
 Claude Desktop, Cursor, VS Code, Codex, and any other streamable-HTTP MCP client.
 
 Verify the connection by asking your agent to call `get_project_info` — it should

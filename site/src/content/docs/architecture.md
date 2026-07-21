@@ -21,7 +21,7 @@ This page is the contract you build against, guarantee by guarantee.
 - Discovery: the plugin writes `~/.chromatik-mcp/status.json` on startup — `{pid,
   port, host, url, projectPath, lxVersion, serverVersion, buildTime, connected,
   lastActivityAt}`. Pin a fixed port instead with `{"port": 3232}` in
-  `~/.chromatik-mcp/config.json` (see [Connect](/connect/)).
+  `~/.chromatik-mcp/config.json` (see [Connect](../connect/)).
 - The `initialize` result carries server-level `instructions` — mixer semantics,
   addressing rules, quantization behavior. Surface them to your model; they exist to
   prevent the standard first-session mistakes.
