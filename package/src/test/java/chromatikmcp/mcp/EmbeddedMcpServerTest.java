@@ -1,13 +1,24 @@
 package chromatikmcp.mcp;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -40,6 +51,82 @@ class EmbeddedMcpServerTest {
       } finally {
         client.closeGracefully();
       }
+    } finally {
+      server.stop();
+    }
+  }
+
+  /** A trivial servlet standing in for a real extra mount (e.g. {@code OscParamsServlet}). */
+  private static final class EchoServlet extends HttpServlet {
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+        throws IOException {
+      response.setStatus(HttpServletResponse.SC_OK);
+      response.setContentType("text/plain");
+      response.getWriter().write("echo");
+    }
+  }
+
+  /**
+   * PR-A deliverable: an extra servlet mounted alongside the MCP endpoint answers on its
+   * own exact path, and {@code /mcp} keeps working (the exact-path mapping doesn't shadow
+   * the {@code /*} wildcard mapping).
+   */
+  @Test
+  void extraServletIsMountedAlongsideMcpEndpoint() throws IOException, InterruptedException {
+    EmbeddedMcpServer server = EmbeddedMcpServer.start(
+        "Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1", List.of(), null, new ConnectionTracker(),
+        Map.of("/osc-params", new EchoServlet()));
+    try {
+      HttpClient http = HttpClient.newHttpClient();
+      HttpResponse<String> response = http.send(
+          HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + server.port() + "/osc-params"))
+              .GET()
+              .build(),
+          HttpResponse.BodyHandlers.ofString());
+      assertEquals(200, response.statusCode());
+      assertEquals("echo", response.body());
+
+      HttpClientStreamableHttpTransport transport =
+          HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
+              .endpoint(EmbeddedMcpServer.ENDPOINT)
+              .build();
+      McpSyncClient client = McpClient.sync(transport).build();
+      try {
+        assertNotNull(client.initialize(), "/mcp must still answer alongside the extra mount");
+      } finally {
+        client.closeGracefully();
+      }
+    } finally {
+      server.stop();
+    }
+  }
+
+  /**
+   * The {@code ConnectionTracker} filter is scoped to {@code /mcp} (see {@code
+   * EmbeddedMcpServer.startWithContextClassLoader}), so plain REST polling of an extra
+   * mount must not flip the MCP "connected" state — otherwise a Bitwig-side param picker
+   * polling {@code /osc-params} every couple seconds would make Chromatik's status.json
+   * report a live MCP client that was never there.
+   */
+  @Test
+  void pollingAnExtraServletDoesNotMarkConnectionTrackerConnected()
+      throws IOException, InterruptedException {
+    ConnectionTracker connectionTracker = new ConnectionTracker();
+    EmbeddedMcpServer server = EmbeddedMcpServer.start(
+        "Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1", List.of(), null, connectionTracker,
+        Map.of("/osc-params", new EchoServlet()));
+    try {
+      HttpClient http = HttpClient.newHttpClient();
+      HttpResponse<String> response = http.send(
+          HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + server.port() + "/osc-params"))
+              .GET()
+              .build(),
+          HttpResponse.BodyHandlers.ofString());
+      assertEquals(200, response.statusCode());
+
+      assertFalse(connectionTracker.snapshot(System.currentTimeMillis()).connected(),
+          "REST polling of a non-MCP mount must not flip the MCP connected state");
     } finally {
       server.stop();
     }

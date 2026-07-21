@@ -1,6 +1,7 @@
 package chromatikmcp.mcp;
 
 import java.util.List;
+import java.util.Map;
 
 import org.apache.catalina.Context;
 import org.apache.catalina.LifecycleException;
@@ -9,6 +10,8 @@ import org.apache.catalina.core.StandardServer;
 import org.apache.catalina.startup.Tomcat;
 import org.apache.tomcat.util.descriptor.web.FilterDef;
 import org.apache.tomcat.util.descriptor.web.FilterMap;
+
+import jakarta.servlet.http.HttpServlet;
 
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
@@ -101,6 +104,28 @@ public final class EmbeddedMcpServer {
       List<McpServerFeatures.SyncToolSpecification> tools,
       String instructions,
       ConnectionTracker connectionTracker) {
+    return start(
+        serverName, version, requestedPort, host, tools, instructions, connectionTracker,
+        Map.of());
+  }
+
+  /**
+   * Same as the seven-arg {@code connectionTracker} overload, but additionally mounts
+   * {@code extraServlets} (path → servlet, e.g. {@code "/osc-params"}) alongside the MCP
+   * endpoint on the same Tomcat listener and port. Each extra servlet is registered with
+   * an exact-path mapping, which Tomcat's servlet-mapping precedence rules resolve ahead
+   * of the MCP wrapper's {@code /*} wildcard mapping — so {@code /mcp} traffic is
+   * unaffected by anything mounted here.
+   */
+  public static EmbeddedMcpServer start(
+      String serverName,
+      String version,
+      int requestedPort,
+      String host,
+      List<McpServerFeatures.SyncToolSpecification> tools,
+      String instructions,
+      ConnectionTracker connectionTracker,
+      Map<String, HttpServlet> extraServlets) {
     // The SDK resolves its JSON mapper + schema validator via ServiceLoader on the
     // thread-context classloader, eagerly at builder time. Inside Chromatik this jar
     // lives in a child classloader (LXClassLoader) that is never the TCCL, so without
@@ -112,7 +137,8 @@ public final class EmbeddedMcpServer {
     thread.setContextClassLoader(EmbeddedMcpServer.class.getClassLoader());
     try {
       return startWithContextClassLoader(
-          serverName, version, requestedPort, host, tools, instructions, connectionTracker);
+          serverName, version, requestedPort, host, tools, instructions, connectionTracker,
+          extraServlets);
     } finally {
       thread.setContextClassLoader(prior);
     }
@@ -125,7 +151,8 @@ public final class EmbeddedMcpServer {
       String host,
       List<McpServerFeatures.SyncToolSpecification> tools,
       String instructions,
-      ConnectionTracker connectionTracker) {
+      ConnectionTracker connectionTracker,
+      Map<String, HttpServlet> extraServlets) {
     HttpServletStreamableServerTransportProvider transport =
         HttpServletStreamableServerTransportProvider.builder()
             .mcpEndpoint(ENDPOINT)
@@ -154,6 +181,20 @@ public final class EmbeddedMcpServer {
     context.addChild(wrapper);
     context.addServletMappingDecoded("/*", "mcp");
 
+    // Exact-path mappings (e.g. "/osc-params") outrank the "/*" wildcard mapping above
+    // per the servlet spec's mapping-precedence rules, so these never shadow /mcp.
+    int extraServletIndex = 0;
+    for (Map.Entry<String, HttpServlet> entry : extraServlets.entrySet()) {
+      String path = entry.getKey();
+      String name = "extra-" + (extraServletIndex++);
+      Wrapper extraWrapper = context.createWrapper();
+      extraWrapper.setName(name);
+      extraWrapper.setServlet(entry.getValue());
+      extraWrapper.setLoadOnStartup(1);
+      context.addChild(extraWrapper);
+      context.addServletMappingDecoded(path, name);
+    }
+
     FilterDef filterDef = new FilterDef();
     filterDef.setFilterName("connection-tracker");
     filterDef.setFilter(connectionTracker);
@@ -161,7 +202,11 @@ public final class EmbeddedMcpServer {
     context.addFilterDef(filterDef);
     FilterMap filterMap = new FilterMap();
     filterMap.setFilterName("connection-tracker");
-    filterMap.addURLPattern("/*");
+    // Scoped to the MCP endpoint only — plain REST polling of extra servlets (e.g.
+    // /osc-params) must not flip the MCP "connected" state in status.json. Both patterns
+    // cover the exact path and any sub-path a future MCP transport variant might use.
+    filterMap.addURLPattern(ENDPOINT);
+    filterMap.addURLPattern(ENDPOINT + "/*");
     context.addFilterMap(filterMap);
 
     // Loopback by default: status.json discovery is inherently local, and the tool

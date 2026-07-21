@@ -3,6 +3,7 @@ package chromatikmcp;
 import java.io.File;
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Map;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXLoopTask;
@@ -14,6 +15,7 @@ import chromatikmcp.mcp.BuildInfo;
 import chromatikmcp.mcp.ConfigFile;
 import chromatikmcp.mcp.ConnectionTracker;
 import chromatikmcp.mcp.EmbeddedMcpServer;
+import chromatikmcp.mcp.OscParamsServlet;
 import chromatikmcp.mcp.StatusFile;
 import chromatikmcp.tools.GetStatus;
 import chromatikmcp.tools.Tools;
@@ -64,14 +66,15 @@ public class ChromatikMcpPlugin implements LXPlugin {
     ConnectionTracker connectionTracker = new ConnectionTracker();
     GetStatus getStatus = new GetStatus(
         this.status, () -> connectionTracker.snapshot(System.currentTimeMillis()));
+    EngineExecutor engineExecutor = new EngineExecutor(lx);
 
     // Let failures propagate: LX wraps initialize() and surfaces them via
     // pushError (user-facing) + marks the plugin as errored. Swallowing here
     // would leave the plugin looking healthy while the server is down.
     this.server = EmbeddedMcpServer.start(
         SERVER_NAME, BuildInfo.version(), config.port(), config.host(),
-        Tools.specifications(lx, new EngineExecutor(lx), getStatus), Tools.INSTRUCTIONS,
-        connectionTracker);
+        Tools.specifications(lx, engineExecutor, getStatus), Tools.INSTRUCTIONS,
+        connectionTracker, Map.of("/osc-params", new OscParamsServlet(lx, engineExecutor)));
     long startedAtMs = System.currentTimeMillis();
     this.status.initialize(config.host(), this.server.port(), startedAtMs, EmbeddedMcpServer.ENDPOINT);
     // Only published for the UI plugin to find once fully initialized — if start()
