@@ -7,6 +7,7 @@ import java.util.Map;
 
 import heronarts.lx.LX;
 
+import chromatikmcp.domain.Model;
 import chromatikmcp.domain.Views;
 
 public final class GetViews implements LxTool {
@@ -80,7 +81,7 @@ public final class GetViews implements LxTool {
     }
 
     List<Map<String, Object>> modelTags = new ArrayList<>();
-    for (Views.TagInfo tag : snapshot.modelTags()) {
+    for (Model.TagInfo tag : snapshot.modelTags()) {
       Map<String, Object> entry = new LinkedHashMap<>();
       entry.put("tag", tag.tag());
       entry.put("count", tag.count());

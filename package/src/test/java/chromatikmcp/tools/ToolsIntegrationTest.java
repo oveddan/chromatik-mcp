@@ -193,7 +193,7 @@ class ToolsIntegrationTest {
             "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
             "get_component_doc",
-            "get_frame", "get_palette", "get_views", "add_view", "remove_view",
+            "get_frame", "get_palette", "describe_model", "get_views", "add_view", "remove_view",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
             "get_tempo",
@@ -1206,6 +1206,57 @@ class ToolsIntegrationTest {
 
     // assertions on shape only — "assignments" is exercised for content in ViewsTest
     assertNotNull(payload.get("assignments"));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void describeModelReportsRootShapeAndProjectLevelFacts() {
+    Map<String, Object> payload = structured(call("describe_model", Map.of()));
+
+    assertEquals(lx.getModel().getPath(), payload.get("path"));
+    assertEquals(64, ((Number) payload.get("size")).intValue());
+    List<Number> range = (List<Number>) payload.get("pointIndexRange");
+    assertEquals(0, range.get(0).intValue());
+    assertEquals(63, range.get(1).intValue());
+    assertEquals(Boolean.TRUE, payload.get("contiguous"));
+    assertNotNull(payload.get("bounds"));
+    assertNotNull(payload.get("center"));
+    // GridModel(8, 8) is flat: no submodel children, so childCount is 0; "children" is
+    // still present (depth > 0) but empty.
+    assertEquals(0, ((Number) payload.get("childCount")).intValue());
+    assertTrue(((List<?>) payload.get("children")).isEmpty());
+
+    assertNotNull(payload.get("modelName"));
+    assertEquals(lx.structure.isStatic.isOn(), payload.get("isStatic"));
+    assertEquals(64, ((Number) payload.get("totalPoints")).intValue());
+    assertEquals(0, ((Number) payload.get("fixtureCount")).intValue());
+    List<Map<String, Object>> tagVocabulary = (List<Map<String, Object>>) payload.get("tagVocabulary");
+    assertTrue(tagVocabulary.stream().anyMatch(t -> "grid".equals(t.get("tag"))),
+        "tagVocabulary: " + tagVocabulary);
+  }
+
+  @Test
+  void describeModelUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result = call("describe_model", Map.of("path", "/no/such/node"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  void describeModelNegativeDepthIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("describe_model", Map.of("depth", -1));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void describeModelAddressesTheRootItselfByItsOwnPath() {
+    Map<String, Object> payload = structured(
+        call("describe_model", Map.of("path", lx.getModel().getPath())));
+    assertEquals(lx.getModel().getPath(), payload.get("path"));
+    assertNotNull(payload.get("modelName"), "addressing the root by its own path is still the root");
   }
 
   @Test

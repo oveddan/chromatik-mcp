@@ -1,10 +1,8 @@
 package chromatikmcp.domain;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXDeviceComponent;
@@ -13,7 +11,6 @@ import heronarts.lx.effect.LXEffect;
 import heronarts.lx.mixer.LXAbstractChannel;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXMasterBus;
-import heronarts.lx.model.LXModel;
 import heronarts.lx.model.LXView;
 import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.structure.view.LXViewDefinition;
@@ -31,10 +28,8 @@ public final class Views {
 
   public record AssignmentInfo(String viewPath, String devicePath, String deviceLabel) {}
 
-  public record TagInfo(String tag, int count) {}
-
   public record ViewsSnapshot(List<ViewInfo> views, List<AssignmentInfo> assignments,
-      List<TagInfo> modelTags) {}
+      List<Model.TagInfo> modelTags) {}
 
   private Views() {}
 
@@ -61,7 +56,7 @@ public final class Views {
     LXMasterBus master = lx.engine.mixer.masterBus;
     addDeviceEffects(assignments, master.getEffects());
 
-    List<TagInfo> modelTags = collectTags(lx.getModel());
+    List<Model.TagInfo> modelTags = Model.collectTags(lx.getModel());
 
     return new ViewsSnapshot(views, assignments, modelTags);
   }
@@ -152,23 +147,4 @@ public final class Views {
         Resolve.canonicalPath(def.cueActive));
   }
 
-  /** Distinct tags across the loaded model, collected recursively, with occurrence counts. */
-  private static List<TagInfo> collectTags(LXModel model) {
-    Map<String, Integer> counts = new LinkedHashMap<>();
-    collectTags(model, counts);
-    List<TagInfo> tags = new ArrayList<>();
-    for (Map.Entry<String, Integer> entry : counts.entrySet()) {
-      tags.add(new TagInfo(entry.getKey(), entry.getValue()));
-    }
-    return tags;
-  }
-
-  private static void collectTags(LXModel model, Map<String, Integer> counts) {
-    for (String tag : model.tags) {
-      counts.merge(tag, 1, Integer::sum);
-    }
-    for (LXModel child : model.children) {
-      collectTags(child, counts);
-    }
-  }
 }

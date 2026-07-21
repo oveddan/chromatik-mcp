@@ -46,7 +46,10 @@ public final class Tools {
           + "device's view selector clips its rendering to that subset — map a device by "
           + "set_parameter on its 'view' path to the view's label (discrete/selector "
           + "parameters accept an option name string as well as an integer index) — and "
-          + "'Default' inherits the view from the parent device/channel instead. get_tempo "
+          + "'Default' inherits the view from the parent device/channel instead. describe_model reports "
+          + "the model tree those view selectors match against, depth-limited (re-call with a "
+          + "child's path or a higher depth to keep descending) — its pointIndexRange fields "
+          + "index the same global color buffer get_frame reports. get_tempo "
           + "reports the engine tempo (bpm, clock source, beat position) and its "
           + "launchQuantization: with quantization set, a fire_trigger on a quantized "
           + "trigger (pattern/clip launch) may report pending:true instead of firing "
@@ -79,6 +82,7 @@ public final class Tools {
             new GetComponentDoc(),
             new GetFrame(),
             new GetPalette(),
+            new DescribeModel(),
             new SaveSwatch(),
             new SetSwatch(),
             new RemoveSwatch(),

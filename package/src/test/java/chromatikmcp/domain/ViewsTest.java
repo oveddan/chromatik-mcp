@@ -58,9 +58,9 @@ class ViewsTest extends HeadlessLxTest {
     LX lx = newHeadlessLx();
 
     Views.ViewsSnapshot snapshot = Views.describe(lx);
-    List<String> tags = snapshot.modelTags().stream().map(Views.TagInfo::tag).toList();
+    List<String> tags = snapshot.modelTags().stream().map(Model.TagInfo::tag).toList();
     assertTrue(tags.contains("cube"), "tags: " + tags);
-    Views.TagInfo cubeTag = snapshot.modelTags().stream()
+    Model.TagInfo cubeTag = snapshot.modelTags().stream()
         .filter(t -> t.tag().equals("cube")).findFirst().orElseThrow();
     assertEquals(2, cubeTag.count());
   }
