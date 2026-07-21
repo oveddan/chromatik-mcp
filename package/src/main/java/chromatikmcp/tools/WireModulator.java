@@ -11,6 +11,7 @@ import heronarts.lx.parameter.LXNormalizedParameter;
 import heronarts.lx.parameter.LXParameter;
 
 import chromatikmcp.domain.Modulators;
+import chromatikmcp.domain.Parameters;
 import chromatikmcp.domain.Resolve;
 
 public final class WireModulator implements LxTool {
@@ -95,6 +96,7 @@ public final class WireModulator implements LxTool {
           + " (" + target.getClass().getSimpleName() + ") cannot receive continuous "
           + "modulation — only compound parameters can");
     }
+    Parameters.requireWritable(target);
     LXModulationEngine engine = Modulators.selectEngine(lx, (String) scope, source);
     LXCompoundModulation modulation =
         Modulators.wireModulation(lx, engine, normalizedSource, compoundTarget, range);

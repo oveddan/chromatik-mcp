@@ -11,6 +11,7 @@ import heronarts.lx.parameter.BooleanParameter;
 import heronarts.lx.parameter.LXParameter;
 
 import chromatikmcp.domain.Modulators;
+import chromatikmcp.domain.Parameters;
 import chromatikmcp.domain.Resolve;
 
 public final class WireTrigger implements LxTool {
@@ -70,6 +71,7 @@ public final class WireTrigger implements LxTool {
       return Result.error(Result.INVALID_ARGUMENT, "Trigger target " + targetPath
           + " (" + target.getClass().getSimpleName() + ") must be a boolean parameter");
     }
+    Parameters.requireWritable(booleanTarget);
     LXModulationEngine engine = Modulators.selectEngine(lx, (String) scope, source);
     LXTriggerModulation trigger =
         Modulators.wireTrigger(lx, engine, booleanSource, booleanTarget);

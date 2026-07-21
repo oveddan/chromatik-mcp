@@ -19,11 +19,13 @@ import heronarts.lx.parameter.BoundedParameter;
 import heronarts.lx.parameter.DiscreteParameter;
 import heronarts.lx.parameter.FunctionalParameter;
 import heronarts.lx.modulation.LXCompoundModulation;
+import heronarts.lx.parameter.LXListenableParameter;
 import heronarts.lx.parameter.LXNormalizedParameter;
 import heronarts.lx.parameter.LXParameter;
 import heronarts.lx.parameter.QuantizedTriggerParameter;
 import heronarts.lx.parameter.StringParameter;
 import heronarts.lx.parameter.TriggerParameter;
+import heronarts.lx.structure.LXFixture;
 
 /** Parameter lookup, introspection, and undoable set by canonical LX path. */
 public final class Parameters {
@@ -226,6 +228,7 @@ public final class Parameters {
    */
   public static ParameterInfo set(LX lx, String path, Object value) {
     LXParameter parameter = Resolve.parameter(lx, path);
+    requireWritable(parameter);
     if (parameter instanceof StringParameter s) {
       Commands.perform(lx, new LXCommand.Parameter.SetString(s, requireString(parameter, value)));
     } else if (parameter instanceof TriggerParameter) {
@@ -275,6 +278,7 @@ public final class Parameters {
    */
   public static FireInfo fire(LX lx, String path) {
     LXParameter parameter = Resolve.parameter(lx, path);
+    requireWritable(parameter);
     boolean pending = false;
     if (parameter instanceof TriggerParameter t) {
       t.trigger();
@@ -357,6 +361,25 @@ public final class Parameters {
       return n.doubleValue();
     }
     throw mismatch(p, "expects a numeric value");
+  }
+
+  /**
+   * Rejects writes to a parameter owned by a subfixture of a {@link
+   * heronarts.lx.structure.JsonFixture}: its value is computed from the {@code .lxf}'s {@code
+   * $expr} and recomputed on every reload, so a write here would silently be overwritten. Every
+   * write-intent site that resolves a parameter via {@link Resolve#parameter} — {@link #set},
+   * {@link #fire}, and the wiring tools ({@code wire_trigger}, {@code wire_modulator}) — must
+   * call this before mutating. The top-level {@code .lxf} fixture's own parameters are
+   * unaffected (see {@link Fixtures#isJsonDerived}).
+   */
+  public static void requireWritable(LXParameter parameter) {
+    if (parameter instanceof LXListenableParameter listenable
+        && listenable.getParent() instanceof LXFixture fixture
+        && Fixtures.isJsonDerived(fixture)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          Resolve.canonicalPath(parameter) + " is computed from its .lxf file and will be "
+              + "overwritten on reload — edit the .lxf and call reload_fixtures instead");
+    }
   }
 
   private static Resolve.ResolveException mismatch(LXParameter p, String detail) {

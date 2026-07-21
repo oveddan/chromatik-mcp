@@ -30,15 +30,31 @@ public final class GetFixture implements LxTool {
         + "set_parameter on its own path, same as any other component parameter), "
         + "'submodels' (the fixture's own child model nodes, e.g. a GridFixture's per-row and "
         + "per-column groupings — each with path/tags/size/pointIndexRange/contiguous/metaData, "
-        + "same node shape as describe_model), and for a "
-        + "JsonFixture, 'jsonParameters' (the knobs its .lxf file declares, each settable via "
-        + "set_parameter on '<path>/<name>').";
+        + "same node shape as describe_model), 'children' "
+        + "(the fixture's subfixture tree — e.g. a JsonFixture's .lxf-declared 'components', "
+        + "recursively — depth-limited by the 'depth' argument; each node uses the same shape "
+        + "as a list_fixtures row, itself with a nested 'children' if depth allows further "
+        + "recursion; 'childCount' there is the number of direct subfixtures, distinct from "
+        + "'submodelCount'), and for a JsonFixture, 'jsonParameters' (the knobs its .lxf file "
+        + "declares, each settable via set_parameter on '<path>/<name>'). Subfixture paths "
+        + "(e.g. '<path>/fixture/3') are addressable with get_parameter/set_parameter/"
+        + "get_fixture exactly like top-level fixtures — writes to a subfixture of a "
+        + "JsonFixture are rejected, since its values are computed from the .lxf and "
+        + "recomputed on reload. 'depth' is silently clamped to its max (real installations "
+        + "can have hundreds of subfixtures nested deep) rather than erroring — only a "
+        + "negative depth is rejected.";
   }
 
   @Override
   public Map<String, Object> inputSchema() {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("path", Schemas.string("Canonical path of the fixture, e.g. /lx/structure/fixture/1"));
+    properties.put("depth", Map.of(
+        "type", "integer",
+        "description", "How many levels of subfixtures to include in 'children' (default 1, "
+            + "clamped to 10 max; negative is rejected). A real installation's fixture tree "
+            + "can be hundreds of nodes deep and wide (e.g. ~640 subfixtures on an "
+            + "Apotheneum-shaped rig), so this is capped rather than unbounded."));
     return Schemas.object(properties, List.of("path"));
   }
 
@@ -52,6 +68,18 @@ public final class GetFixture implements LxTool {
     Object pathArg = args.get("path");
     if (!(pathArg instanceof String path) || path.isEmpty()) {
       return Result.error(Result.INVALID_ARGUMENT, "path must be a non-empty string");
+    }
+    int depth = 1;
+    if (args.containsKey("depth")) {
+      Object depthArg = args.get("depth");
+      if (!(depthArg instanceof Number number) || number.doubleValue() != Math.rint(number.doubleValue())) {
+        return Result.error(Result.INVALID_ARGUMENT, "depth must be an integer");
+      }
+      depth = number.intValue();
+      if (depth < 0) {
+        return Result.error(Result.INVALID_ARGUMENT, "depth must be >= 0");
+      }
+      depth = Math.min(depth, 10);
     }
     LXFixture fixture = Resolve.component(lx, path, LXFixture.class);
 
@@ -70,6 +98,21 @@ public final class GetFixture implements LxTool {
     }
     payload.put("submodels", submodels);
 
+    if (!Fixtures.subfixturesAvailable()) {
+      // Only surfaced on failure — a degraded run (reflective accessor unavailable) should
+      // be visible rather than silently reporting childCount 0 / children [] for a fixture
+      // that may genuinely have subfixtures. Mirrors list_fixtures' contract.
+      payload.put("subfixturesAvailable", false);
+    }
+
+    if (depth > 0) {
+      List<Map<String, Object>> children = new ArrayList<>();
+      for (LXFixture child : Fixtures.children(fixture)) {
+        children.add(fixtureNodeMap(Fixtures.describeTree(child, depth - 1)));
+      }
+      payload.put("children", children);
+    }
+
     if (fixture instanceof JsonFixture jsonFixture) {
       List<Map<String, Object>> jsonParameters = new ArrayList<>();
       for (Fixtures.JsonParameterInfo parameter : Fixtures.jsonParameters(jsonFixture)) {
@@ -84,6 +127,18 @@ public final class GetFixture implements LxTool {
     }
 
     return Result.ok(payload);
+  }
+
+  private static Map<String, Object> fixtureNodeMap(Fixtures.FixtureNode node) {
+    Map<String, Object> entry = ListFixtures.toMap(node.info());
+    if (node.children() != null) {
+      List<Map<String, Object>> children = new ArrayList<>();
+      for (Fixtures.FixtureNode child : node.children()) {
+        children.add(fixtureNodeMap(child));
+      }
+      entry.put("children", children);
+    }
+    return entry;
   }
 
   private static Map<String, Object> submodelMap(Model.NodeInfo node) {

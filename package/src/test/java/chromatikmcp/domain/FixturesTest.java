@@ -63,8 +63,10 @@ class FixturesTest extends HeadlessLxTest {
     assertEquals(1.5, info.transform().x(), 1e-9);
     assertFalse(info.enabled(), "LXFixture.enabled (output enabled) defaults to false");
     assertFalse(info.deactivate());
-    // GridFixture registers row + column submodels (toSubmodels()) as its model's children.
-    assertEquals(2 + 3, info.childCount());
+    // GridFixture has no subfixtures (childCount 0) but registers row + column submodels
+    // (toSubmodels()) as its model's children (submodelCount).
+    assertEquals(0, info.childCount());
+    assertEquals(2 + 3, info.submodelCount());
     assertNotNull(info.output(), "GridFixture is an LXProtocolFixture");
     assertEquals("NONE", info.output().protocol(), "no protocol configured by default");
   }

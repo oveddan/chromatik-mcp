@@ -1268,6 +1268,30 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void getFixtureNegativeDepthIsInvalidArgument() {
+    // channel.getCanonicalPath() isn't a fixture path either, but depth validation runs
+    // before path resolution — a bad depth is rejected regardless of what path was given.
+    McpSchema.CallToolResult result = call("get_fixture",
+        Map.of("path", "/lx/structure/fixture/1", "depth", -1));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listFixturesReportsChildCountAndSubmodelCountSeparatelyAndOmitsSubfixturesAvailableFlagWhenHealthy() {
+    // No fixtures exist on this static-model LX (full fixture-tree coverage against a
+    // dynamic-structure LX lives in SubfixtureTreeTest/FixturesTest), but the payload shape
+    // — no fixtures listed, and no degraded-reflection flag on a healthy run — is still
+    // exercised over the real HTTP transport here.
+    Map<String, Object> payload = structured(call("list_fixtures", Map.of()));
+    assertFalse(payload.containsKey("subfixturesAvailable"),
+        "only present when the reflective accessor failed to initialize");
+    assertTrue(((List<Map<String, Object>>) payload.get("fixtures")).isEmpty());
+  }
+
+  @Test
   void describeModelUnknownPathIsNotFound() {
     McpSchema.CallToolResult result = call("describe_model", Map.of("path", "/no/such/node"));
     assertEquals(Boolean.TRUE, result.isError());

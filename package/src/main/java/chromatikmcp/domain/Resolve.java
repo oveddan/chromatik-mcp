@@ -8,6 +8,7 @@ import heronarts.lx.LXComponent;
 import heronarts.lx.LXPath;
 import heronarts.lx.parameter.AggregateParameter;
 import heronarts.lx.parameter.LXParameter;
+import heronarts.lx.structure.LXFixture;
 import heronarts.lx.structure.LXStructure;
 
 /**
@@ -204,6 +205,11 @@ public final class Resolve {
       // child array ("view") — so structure.fixtures is otherwise unreachable through
       // childArrays. Index into it directly, same 1-indexed convention as below.
       return walkIndexed(structure.fixtures, parts, index);
+    }
+    if (component instanceof LXFixture fixture && "fixture".equals(key)) {
+      // Subfixtures (a JsonFixture's .lxf-declared components, recursively) aren't in
+      // LXComponent.children/childArrays either — see Fixtures.children.
+      return walkIndexed(Fixtures.children(fixture), parts, index);
     }
     List<? extends LXComponent> array = component.childArrays.get(key);
     if (array != null) {

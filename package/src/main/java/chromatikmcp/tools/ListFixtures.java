@@ -29,8 +29,16 @@ public final class ListFixtures implements LxTool {
         + "clean). 'output' is present only for a protocol-driven fixture (protocol 'NONE' when "
         + "no output is configured); a JsonFixture's outputs are declared inside its .lxf file "
         + "instead, so it has no 'output' key — see 'fixturePath'/'error'/'warnings' there "
-        + "instead. Use get_fixture on a single fixture's path for its full parameter list and "
-        + "submodels.";
+        + "instead. A fixture can itself contain subfixtures (e.g. a JsonFixture's .lxf "
+        + "'components', recursively) — 'childCount' is the number of those subfixtures, while "
+        + "'submodelCount' is the unrelated number of model-tree groupings the fixture's own "
+        + "geometry splits into (e.g. a GridFixture's per-row/per-column submodels; it has 0 "
+        + "subfixtures but several submodels). Subfixture paths (e.g. "
+        + "/lx/structure/fixture/1/fixture/3) are addressable with get_parameter/set_parameter "
+        + "exactly like top-level fixtures — writes to a subfixture of a JsonFixture are "
+        + "rejected, since its values are computed from the .lxf and recomputed on reload. Use "
+        + "get_fixture on a single fixture's path for its full parameter list, submodels, and "
+        + "subfixture tree (with a depth limit).";
   }
 
   @Override
@@ -57,6 +65,11 @@ public final class ListFixtures implements LxTool {
     payload.put("isStatic", snapshot.isStatic());
     payload.put("totalPoints", snapshot.totalPoints());
     payload.put("outputError", snapshot.outputError());
+    if (!snapshot.subfixturesAvailable()) {
+      // Only surfaced on failure — a degraded run (reflective accessor unavailable) should
+      // be visible rather than silently reporting childCount 0 for every fixture.
+      payload.put("subfixturesAvailable", false);
+    }
     payload.put("fixtures", fixtures);
     return Result.ok(payload);
   }
@@ -77,6 +90,7 @@ public final class ListFixtures implements LxTool {
     entry.put("brightness", fixture.brightness());
     entry.put("tags", fixture.tags());
     entry.put("childCount", fixture.childCount());
+    entry.put("submodelCount", fixture.submodelCount());
 
     Map<String, Object> transform = new LinkedHashMap<>();
     transform.put("x", fixture.transform().x());
