@@ -106,7 +106,7 @@ const markup = {
             maxWidth: 900,
           },
           children:
-            'AI-accelerated light-show composition and performance. Chat with an agent that composes live inside Chromatik — and sees what it makes.',
+            'An agent inside the Chromatik runtime — it parses your scene, explains how it is wired, and composes into it while the show runs.',
         },
       },
       {
