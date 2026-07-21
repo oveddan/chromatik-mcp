@@ -24,6 +24,14 @@ e.g. package/src/main/resources/catalog/heronarts.lx.pattern.color.GradientPatte
 the runtime serves it from the classpath. **Only stock LX entries live here**: baking
 content-repo docs into the chromatik-mcp jar would couple its releases to every content package.
 
+*Temporary exception:* `apotheneum.*` entries (37 files) are bundled here too, as a stopgap
+until [Apotheneum#38](https://github.com/oveddan/Apotheneum/pull/38) ships its own catalog
+inside the Apotheneum jar (tier 2, below) and is released — at which point the bundled copies
+must be deleted. This is a deliberate, tracked violation of the rule above, not a precedent.
+Likewise the stock `heronarts.lx.*` entries here are dropped once
+[heronarts/LX#153](https://github.com/heronarts/LX/pull/153) ships in the pinned LX release
+and those entries move into the LX jar itself.
+
 At runtime the resolution order for a class's entry is:
 
 1. **`~/.chromatik-mcp/catalog/<fqcn>.md`** — the machine-local overlay. Where content-repo
@@ -35,7 +43,8 @@ At runtime the resolution order for a class's entry is:
    describe, and a drop-in jar arrives documented with zero chromatik-mcp involvement. Because
    Chromatik loads package jars in a child classloader, resolving through the class's
    *own* loader finds these — the same loader rule the bytecode hash uses.
-3. **The chromatik-mcp jar** — the stock LX entries generated in this repo.
+3. **The chromatik-mcp jar** — the stock LX entries generated in this repo, plus (temporarily,
+   see the exception noted above) the 37 `apotheneum.*` entries until Apotheneum#38 ships.
 
 A class with no entry at any tier is simply *undocumented* (`documented: false` over
 MCP) — never fabricate an entry for a class whose source is unavailable.
