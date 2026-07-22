@@ -8,8 +8,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.google.gson.JsonObject;
+
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
+import heronarts.lx.LXSerializable;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.model.LXModel;
 import heronarts.lx.parameter.AggregateParameter;
@@ -429,6 +432,275 @@ public final class Fixtures {
       fixtures.add(describeFixture(fixture));
     }
     return new ReloadResult(jsonTypes, errors, fixtures);
+  }
+
+  /** One {@code .lxf} type {@code lx.registry.jsonFixtures} advertises. */
+  public record JsonTypeInfo(String type, boolean isVisible) {}
+
+  /** What {@code add_fixture} can instantiate, and where {@code .lxf} files live on disk. */
+  public record AvailableFixtures(List<String> classes, List<JsonTypeInfo> jsonTypes,
+      List<JsonTypeError> errors, String fixturesDirectory) {}
+
+  /**
+   * What {@code add_fixture} can instantiate, and where {@code .lxf} files live on disk (an
+   * agent writing its own fixture file needs this path). Call on the engine thread.
+   */
+  public static AvailableFixtures describeAvailable(LX lx) {
+    List<String> classes = new ArrayList<>();
+    for (Class<? extends LXFixture> clazz : lx.registry.fixtures) {
+      classes.add(clazz.getSimpleName());
+    }
+    List<JsonTypeInfo> jsonTypes = new ArrayList<>();
+    for (var jsonType : lx.registry.jsonFixtures) {
+      jsonTypes.add(new JsonTypeInfo(jsonType.type, jsonType.isVisible));
+    }
+    List<JsonTypeError> errors = new ArrayList<>();
+    for (var error : lx.registry.jsonFixtureErrors) {
+      errors.add(new JsonTypeError(error.path, error.type,
+          (error.exception == null) ? null : error.exception.toString()));
+    }
+    return new AvailableFixtures(classes, jsonTypes, errors,
+        lx.getMediaFolder(LX.Media.FIXTURES).getAbsolutePath());
+  }
+
+  /**
+   * Resolve a fixture class by simple or full name against {@code lx.registry.fixtures} —
+   * the set {@code list_available_fixtures} advertises as {@code classes}.
+   *
+   * @throws Resolve.ResolveException {@code TYPE_MISMATCH} (mapped to {@code
+   *     invalid_argument}) for an unknown or ambiguous name
+   */
+  public static Class<? extends LXFixture> resolveFixtureClass(LX lx, String className) {
+    return Resolve.resolveClassName(lx.registry.fixtures, className, Resolve.Failure.TYPE_MISMATCH,
+        "Unknown fixture class: " + className + " (see list_available_fixtures)");
+  }
+
+  /**
+   * Validate {@code fixtureType} against {@code lx.registry.jsonFixtures} before an
+   * {@code AddFixture(String)} command — that command instantiates a {@link JsonFixture}
+   * unconditionally, even for an unknown type (it fails later, inside the .lxf load, in a
+   * way {@code perform()} would swallow), so this must run first.
+   *
+   * @throws Resolve.ResolveException {@code TYPE_MISMATCH} for an unknown {@code .lxf} type
+   */
+  public static void requireKnownJsonFixtureType(LX lx, String fixtureType) {
+    for (var jsonType : lx.registry.jsonFixtures) {
+      if (jsonType.type.equals(fixtureType)) {
+        return;
+      }
+    }
+    throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+        "Unknown fixture type: " + fixtureType + " (see list_available_fixtures)");
+  }
+
+  /**
+   * {@code lx.structure.addFixture/moveFixture/removeFixture} throw {@code
+   * IllegalStateException} when the structure is in static-model mode ({@code
+   * LXStructure.checkStaticModel}) — an exception {@code perform()} would otherwise swallow
+   * (clearing the undo/redo stack) and report generically. Every fixture-lifecycle
+   * primitive checks this first so the failure surfaces as a plain {@code invalid_argument}.
+   */
+  private static void requireDynamicStructure(LX lx) {
+    if (lx.structure.isStatic.isOn()) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "cannot modify fixtures: the structure is in static-model mode");
+    }
+  }
+
+  /** Clamps a caller-supplied insert index (or {@code fallback} when omitted) into [0, count]. */
+  private static int clampInsertIndex(int count, Integer index, int fallback) {
+    int target = (index == null) ? fallback : index;
+    return Math.max(0, Math.min(target, count));
+  }
+
+  /**
+   * Add a fixture by registered class, routed through {@code LXCommand.Structure.AddFixture}
+   * for undo. {@code label}/{@code params} (registered parameters only — reached by {@code
+   * fixture.getParameter(name)}) are applied as direct parameter writes AFTER the add
+   * completes, mirroring {@link Views#addView}: there is nothing left for a separate undo
+   * entry to cover, so one Cmd-Z removes the fully-configured fixture. If a param name is
+   * unknown or a value's type doesn't match, the just-added fixture is rolled back (via
+   * {@code lx.command.undo()}) before the typed failure is thrown, so a rejected call leaves
+   * the structure exactly as it was. Call on the engine thread.
+   *
+   * @throws Resolve.ResolveException {@code TYPE_MISMATCH}: static-model structure, unknown
+   *     param name, or a param value that doesn't match its parameter's type
+   */
+  public static FixtureInfo addFixtureByClass(LX lx, Class<? extends LXFixture> fixtureClass,
+      Integer index, String label, Map<String, Object> params) {
+    requireDynamicStructure(lx);
+    List<LXFixture> fixtures = lx.structure.fixtures;
+    int effectiveIndex = clampInsertIndex(fixtures.size(), index, fixtures.size());
+    int before = fixtures.size();
+    Commands.perform(lx, new LXCommand.Structure.AddFixture(fixtureClass, effectiveIndex));
+    if (fixtures.size() != before + 1) {
+      throw new IllegalStateException("AddFixture did not add a " + fixtureClass.getName());
+    }
+    return configureAdded(lx, fixtures.get(effectiveIndex), label, params);
+  }
+
+  /**
+   * Add a {@link JsonFixture} by {@code .lxf} type, routed through {@code
+   * LXCommand.Structure.AddFixture(String)} for undo — that constructor always appends at
+   * the end of the fixture list (it has no index parameter), so there is no way to place a
+   * {@code .lxf} fixture at a specific position in a single command; callers wanting a
+   * non-append position must add it here, then reposition with {@code move_fixture}. {@code
+   * label}/{@code params} apply the same as {@link #addFixtureByClass}. Call on the engine
+   * thread.
+   *
+   * @throws Resolve.ResolveException {@code TYPE_MISMATCH}: static-model structure, unknown
+   *     {@code .lxf} type, unknown param name, or a param value type mismatch
+   */
+  public static FixtureInfo addFixtureByType(LX lx, String fixtureType, String label,
+      Map<String, Object> params) {
+    requireDynamicStructure(lx);
+    requireKnownJsonFixtureType(lx, fixtureType);
+    List<LXFixture> fixtures = lx.structure.fixtures;
+    int before = fixtures.size();
+    Commands.perform(lx, new LXCommand.Structure.AddFixture(fixtureType));
+    if (fixtures.size() != before + 1) {
+      throw new IllegalStateException("AddFixture did not add fixture type " + fixtureType);
+    }
+    LXFixture fixture = fixtures.get(before);
+    return configureAdded(lx, fixture, label, params);
+  }
+
+  private static FixtureInfo configureAdded(
+      LX lx, LXFixture fixture, String label, Map<String, Object> params) {
+    try {
+      if (label != null) {
+        fixture.label.setValue(label);
+      }
+      if (params != null && !params.isEmpty()) {
+        applyRegisteredParamsDirectly(fixture, params);
+      }
+    } catch (RuntimeException e) {
+      lx.command.undo();
+      throw e;
+    }
+    return describeFixture(fixture);
+  }
+
+  private record DirectEdit(LXParameter parameter, Object coerced) {}
+
+  /**
+   * Write several of {@code fixture}'s REGISTERED parameters directly (no {@code LXCommand}
+   * — the caller, {@link #configureAdded}, folds this into the surrounding add's single undo
+   * entry). Unlike {@link #setParams}, this never reaches a {@code JsonFixture}'s
+   * {@code .lxf}-declared parameters (those only matter once the fixture is configured after
+   * the fact, via {@code set_fixture_params}) and never batches into {@code
+   * ArrangeFixtures} (there is no separate undo entry to batch for). Validation is atomic:
+   * every name is resolved and every value coerced before anything is written.
+   */
+  private static void applyRegisteredParamsDirectly(LXFixture fixture, Map<String, Object> params) {
+    List<DirectEdit> edits = new ArrayList<>();
+    for (Map.Entry<String, Object> entry : params.entrySet()) {
+      String name = entry.getKey();
+      LXParameter parameter = fixture.getParameter(name);
+      if (parameter == null) {
+        throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+            "No parameter named '" + name + "' on " + Resolve.canonicalPath(fixture)
+                + " (checked registered parameters only — set_fixture_params reaches "
+                + ".lxf-declared parameters too)");
+      }
+      Object value = entry.getValue();
+      Object coerced;
+      if (parameter instanceof StringParameter s) {
+        coerced = Parameters.requireString(s, value);
+      } else if (parameter instanceof heronarts.lx.parameter.TriggerParameter) {
+        throw Parameters.mismatch(parameter, "is a momentary trigger — use fire_trigger");
+      } else if (parameter instanceof BooleanParameter b) {
+        coerced = Parameters.requireBoolean(b, value);
+      } else if (parameter instanceof DiscreteParameter d) {
+        coerced = Parameters.requireDiscreteIndex(d, value);
+      } else if (parameter instanceof AggregateParameter a) {
+        throw Parameters.mismatch(a, "is an aggregate — set its components via the "
+            + a.subparameters.keySet().stream().map(key -> ".../" + key)
+                .collect(Collectors.joining(", ")) + " paths");
+      } else if (parameter instanceof FunctionalParameter) {
+        throw Parameters.mismatch(parameter, "is a computed read-only parameter and cannot be set");
+      } else {
+        coerced = Parameters.requireNumber(parameter, value);
+      }
+      edits.add(new DirectEdit(parameter, coerced));
+    }
+    for (DirectEdit edit : edits) {
+      if (edit.parameter() instanceof StringParameter s) {
+        s.setValue((String) edit.coerced());
+      } else if (edit.parameter() instanceof BooleanParameter b) {
+        b.setValue((Boolean) edit.coerced());
+      } else if (edit.parameter() instanceof DiscreteParameter d) {
+        d.setValue(((Number) edit.coerced()).intValue());
+      } else {
+        edit.parameter().setValue((Double) edit.coerced());
+      }
+    }
+  }
+
+  /**
+   * Remove a fixture, routed through {@code LXCommand.Structure.RemoveFixture} for undo.
+   * Call on the engine thread.
+   *
+   * @throws Resolve.ResolveException {@code TYPE_MISMATCH} for a static-model structure
+   */
+  public static void removeFixture(LX lx, LXFixture fixture) {
+    requireDynamicStructure(lx);
+    List<LXFixture> fixtures = lx.structure.fixtures;
+    int before = fixtures.size();
+    Commands.perform(lx, new LXCommand.Structure.RemoveFixture(fixture));
+    if (fixtures.size() != before - 1 || fixtures.contains(fixture)) {
+      throw new IllegalStateException("RemoveFixture did not remove the fixture");
+    }
+  }
+
+  /**
+   * Reposition a fixture within {@code lx.structure.fixtures}, routed through {@code
+   * LXCommand.Structure.MoveFixture} for undo. {@code index} is clamped into the valid
+   * [0, count-1] range — {@code LXStructure.moveFixture} has no such guard and would throw
+   * an unchecked {@code IndexOutOfBoundsException} that {@code perform()} would swallow.
+   * Call on the engine thread.
+   *
+   * @throws Resolve.ResolveException {@code TYPE_MISMATCH} for a static-model structure
+   */
+  public static FixtureInfo moveFixture(LX lx, LXFixture fixture, int index) {
+    requireDynamicStructure(lx);
+    int count = lx.structure.fixtures.size();
+    int target = Math.max(0, Math.min(index, count - 1));
+    Commands.perform(lx, new LXCommand.Structure.MoveFixture(fixture, target));
+    if (fixture.getIndex() != target) {
+      throw new IllegalStateException("MoveFixture did not move the fixture to " + target);
+    }
+    return describeFixture(fixture);
+  }
+
+  /**
+   * Clone {@code source} into a new fixture, routed through {@code
+   * LXCommand.Structure.AddFixture(Class, JsonObject, int)} for undo — the UI's clipboard
+   * path, minus the clipboard itself. Serialized with {@code stripIds=true}: {@code
+   * LXComponent.load} re-registers any id present in the JSON, and the source fixture's id
+   * is still live, so a same-id clone would collide (or, mid-project-load, silently remap)
+   * — a fresh id is what every other add primitive here produces anyway. {@code
+   * source.enabled} (output-enabled) is stripped so a duplicate never starts transmitting
+   * silently, matching the UI's own duplicate-fixture behavior. {@code index} defaults to
+   * right after {@code source} (matching the UI); explicit indices are clamped into
+   * [0, count]. Call on the engine thread.
+   *
+   * @throws Resolve.ResolveException {@code TYPE_MISMATCH} for a static-model structure
+   */
+  public static FixtureInfo duplicateFixture(LX lx, LXFixture source, Integer index) {
+    requireDynamicStructure(lx);
+    JsonObject obj = LXSerializable.Utils.toObject(lx, source, true);
+    LXSerializable.Utils.stripParameter(obj, source.enabled);
+
+    List<LXFixture> fixtures = lx.structure.fixtures;
+    int effectiveIndex = clampInsertIndex(fixtures.size(), index, source.getIndex() + 1);
+    int before = fixtures.size();
+    Commands.perform(lx,
+        new LXCommand.Structure.AddFixture(source.getClass(), obj, effectiveIndex));
+    if (fixtures.size() != before + 1) {
+      throw new IllegalStateException("AddFixture did not duplicate the fixture");
+    }
+    return describeFixture(fixtures.get(effectiveIndex));
   }
 
   private static String typeOf(LXFixture fixture) {

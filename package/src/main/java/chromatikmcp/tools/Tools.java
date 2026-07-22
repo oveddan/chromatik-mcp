@@ -60,7 +60,11 @@ public final class Tools {
           + "all. set_fixture_tags sets a fixture's model tags (the get_views selector "
           + "vocabulary) with pre-write validation, since LX itself silently drops invalid "
           + "tags. reload_fixtures picks up .lxf edits made on disk — nothing does so "
-          + "automatically. "
+          + "automatically. add_fixture/remove_fixture/move_fixture/duplicate_fixture "
+          + "instantiate, delete, reorder, and clone fixtures (list_available_fixtures "
+          + "reports what's addable); every fixture path is POSITIONAL "
+          + "(/lx/structure/fixture/N, 1-indexed) and shifts after any of these calls — "
+          + "re-list with list_fixtures rather than reuse a path from an earlier response. "
           + "get_tempo "
           + "reports the engine tempo (bpm, clock source, beat position) and its "
           + "launchQuantization: with quantization set, a fire_trigger on a quantized "
@@ -116,6 +120,11 @@ public final class Tools {
             new RemoveView(),
             new ListFixtures(),
             new GetFixture(),
+            new ListAvailableFixtures(),
+            new AddFixture(),
+            new RemoveFixture(),
+            new MoveFixture(),
+            new DuplicateFixture(),
             new SetFixtureParams(),
             new SetFixtureTags(),
             new ReloadFixtures(),

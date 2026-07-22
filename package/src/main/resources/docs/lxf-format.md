@@ -263,10 +263,17 @@ parameter.
 
 ## Using this with chromatik-mcp
 
-Today, chromatik-mcp has no tool that instantiates a brand-new `.lxf` fixture
-type from scratch — doing that still requires the Chromatik desktop UI, or
-hand-writing the file directly with your own file tools and reloading it (see
-below). The supported edit loop for an *existing* fixture file is:
+`add_fixture` instantiates a fixture by registered `class` (a built-in fixture
+type) or by `.lxf` `type` string — `list_available_fixtures` lists both
+(`classes` and `jsonTypes`) and reports `fixturesDirectory`, the absolute path
+where you write a new `.lxf` file with your own file tools. `index` (insert
+position) is supported with `class` only; `type` always appends, so reposition
+a newly-added `.lxf`-based fixture afterwards with `move_fixture` if needed.
+
+To instantiate a brand-new fixture *type* from scratch, write its `.lxf` file
+into `fixturesDirectory` yourself, then call `list_available_fixtures` (or
+`reload_fixtures`) to pick it up before adding it. The supported edit loop for
+an *existing* fixture file is:
 
 1. Edit the `.lxf` file on disk (with whatever file-editing tool your client
    has) — add/change `components`, `parameters`, or `outputs`.
