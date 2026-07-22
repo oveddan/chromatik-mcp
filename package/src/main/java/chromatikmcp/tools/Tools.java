@@ -92,6 +92,7 @@ public final class Tools {
             new ListModulations(),
             new FireTrigger(),
             new GetComponentDoc(),
+            new GetFixtureFormat(),
             new GetFrame(),
             new GetPalette(),
             new DescribeModel(),

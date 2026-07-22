@@ -192,7 +192,7 @@ class ToolsIntegrationTest {
             "list_available_effects", "list_available_modulators", "get_parameter",
             "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
-            "get_component_doc",
+            "get_component_doc", "get_fixture_format",
             "get_frame", "get_palette", "describe_model", "get_views", "add_view", "remove_view",
             "list_fixtures", "get_fixture", "set_fixture_params", "set_fixture_tags", "reload_fixtures",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
@@ -1064,6 +1064,20 @@ class ToolsIntegrationTest {
   void getComponentDocMissingArgIsRejected() {
     McpSchema.CallToolResult result = call("get_component_doc", Map.of());
     assertEquals(Boolean.TRUE, result.isError());
+  }
+
+  @Test
+  void getFixtureFormatReturnsBundledDoc() {
+    Map<String, Object> payload = structured(call("get_fixture_format", Map.of()));
+    Object markdownObj = payload.get("markdown");
+    assertInstanceOf(String.class, markdownObj);
+    String markdown = (String) markdownObj;
+    assertFalse(markdown.isEmpty(), "doc is non-empty");
+    // Sentinels proving the real bundled doc loaded from the classpath, not a stub.
+    assertTrue(markdown.contains("$instance"), "documents $instance");
+    assertTrue(markdown.contains("segments"), "documents output segments");
+    assertTrue(markdown.contains("kinet"), "documents the kinet protocol");
+    assertTrue(markdown.contains("strip"), "documents the strip component type");
   }
 
   @Test
