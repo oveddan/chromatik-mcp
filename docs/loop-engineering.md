@@ -136,6 +136,46 @@ implementer — the maker/checker split, so the maker never grades its own homew
 would let the dev loop run further unattended. Deferred by choice; revisit when the
 fan-out volume makes hand-spawning a reviewer per PR the bottleneck.
 
+## Formalized review step (2026-07-22)
+
+Motivated by Anthropic's harness-design article on agent evaluators: generator and
+evaluator are separate roles, self-review skews lenient (the maker grading its own
+homework), a separately tuned skeptical evaluator is tractable to build, and it's
+*conditional* — worth the cost at the edge of the implementer's capability, overhead
+inside it. That's the same self-preferential-bias failure mode already named above; this
+section is what we did about it.
+
+Decisions:
+
+- **Wrap the built-in `/code-review` rather than write a bespoke reviewer.** The
+  [`chromatik-mcp-review`](../.claude/skills/chromatik-mcp-review/SKILL.md) skill runs it
+  and layers the project's own checkpoints on top — no need to re-implement generic
+  review dimensions (correctness, security) that the built-in skill already covers.
+- **The orchestrator chooses model, effort, and isolation per slice**, not a fixed
+  policy — a small mechanical diff and a domain/`LXCommand`-touching slice don't warrant
+  the same review cost. See that skill's Orchestrator knobs section.
+- **Skeptical criteria + calibration examples live in
+  [`docs/review-criteria.md`](review-criteria.md)** — a checklist distilled from
+  `CLAUDE.md`/`tool-conventions.md`/`lx-coding-guidelines.md`, plus real findings mined
+  from merged "review fixes" PRs, so "is this a real finding" has a concrete bar instead
+  of being re-derived per review.
+- **The review step in the dev loop (step 6) is now mandated**, not "recommended" — skip
+  only for docs-only or purely mechanical-rename PRs, and say so in the PR description.
+- **A `simplify` quality pass runs per merge *wave*, not per PR.** Cross-PR reuse (the
+  "third caller" rule in `CLAUDE.md`) is only visible once several PRs have landed;
+  per-PR diffs are already convention-guarded by the review step, so a per-PR simplify
+  pass would be redundant overhead. The `chromatik-mcp-fix` dispatcher runs it at the
+  batch boundary, before rebuilding the jar for live re-verification.
+
+Two options recorded for the maintainer, not automated (both remain manual/opt-in):
+
+- **The managed GitHub Code Review app**, enabled on the repo, gives once-per-PR inline
+  comments tunable via a `REVIEW.md` — a zero-orchestration alternative/complement to the
+  skill-based pass above.
+- **User-triggered `/code-review ultra`** (a cloud-fleet run, roughly $5–25 and
+  user-billed) is reserved for high-risk slices right before a manual merge — not part of
+  the default loop, invoked by hand when a slice's blast radius warrants it.
+
 ### Pattern/effect comprehension agent
 
 A runtime agent that understands what a pattern *does* so an orchestrator can pick by

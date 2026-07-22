@@ -45,9 +45,14 @@ Load the project's persistent knowledge before touching code:
    validates them once PR-7b lands). This is what keeps agent-facing semantic docs from drifting:
    staleness is caught at the PR that caused it, when the diff is small, not discovered
    later by a confused agent.
-6. **Review (recommended).** Spawn a fresh-context review agent on the diff vs. the branch
-   base, briefed with the PR spec + `CLAUDE.md` + `qa-strategy.md`. Fix real findings;
-   re-run the gate. (Ad hoc by design — your judgment, not a mandated step.)
+6. **Review (mandated).** Before opening the PR, run the
+   [`chromatik-mcp-review`](../chromatik-mcp-review/SKILL.md) skill against the diff, which
+   wraps the built-in `/code-review` with the project checklist in
+   [`docs/review-criteria.md`](../../../docs/review-criteria.md). The orchestrator picks
+   model tier, effort level, and inline-vs-fresh-context-subagent per that skill's
+   Orchestrator knobs section. Skip only for docs-only diffs or purely mechanical
+   renames — and state that in the PR description when you do. Route findings to
+   `pr-fixer`; re-run the gate.
 7. **Open PR.** Squash to one commit, push, `gh pr create` with base = the stack parent.
    Body carries the gate result + review summary. The user merges.
 8. **Maintain the stack.** After a base PR is squash-merged, rebase the remaining

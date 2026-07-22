@@ -34,18 +34,28 @@ blocks on fixes, and fixes never wait on testing.
    expectations, gate via `package/scripts/build-gate.sh`, single squashed
    commit, push + `gh pr create`.
 4. **Return to testing immediately.** Do not wait on agents. Batch completed
-   PRs; at a natural testing pause: review each diff (session model), route
-   prescribed fixes to `pr-fixer` (or SendMessage the same implementer for
-   same-branch follow-ups), re-gate, squash-merge. The dispatcher merges.
+   PRs; at a natural testing pause: review each diff via the
+   [`chromatik-mcp-review`](../chromatik-mcp-review/SKILL.md) skill (per PR branch,
+   replacing unstructured session-model review), route prescribed fixes to
+   `pr-fixer` (or SendMessage the same implementer for same-branch follow-ups),
+   re-gate, squash-merge. The dispatcher merges.
 5. **Findings queue: `docs/live-findings.md`** (create if absent). One line
    per queued small finding: date, symptom, proposed fix, LX ref. When 3+
    related items accumulate, propose them as one batched slice. Delete lines
    when their fix merges.
-6. **Batch boundary.** Merged fixes reach the live instance only when the
-   user rebuilds/installs the jar and restarts Chromatik. On reconnect:
-   re-read `~/.chromatik-mcp/status.json`, re-initialize, re-list, then
-   **live-verify every fix in the batch first** before resuming exploratory
-   testing.
+6. **Batch-boundary quality pass.** After a merge wave lands and *before*
+   rebuilding the jar (step 7): record the pre-wave base sha when the wave
+   starts; run the built-in `simplify` skill over `<pre-wave-base>...main` in a
+   dedicated worktree; land its cleanups as ONE small cleanup PR (same
+   single-squashed-commit convention as everything else); then proceed to
+   rebuild + re-verify. Cadence rationale: cross-PR reuse (the "third caller"
+   rule) is only visible across a wave — per-PR diffs are already
+   convention-guarded by the review step above.
+7. **Batch boundary.** Merged fixes (and the wave's cleanup PR, if any) reach
+   the live instance only when the user rebuilds/installs the jar and
+   restarts Chromatik. On reconnect: re-read `~/.chromatik-mcp/status.json`,
+   re-initialize, re-list, then **live-verify every fix in the batch first**
+   before resuming exploratory testing.
 
 ## Rules
 
