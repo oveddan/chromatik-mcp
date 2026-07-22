@@ -64,6 +64,7 @@ export default defineConfig({
         { label: 'Connect your AI client', slug: 'connect' },
         { label: 'Usage examples', slug: 'examples' },
         { label: 'Tool reference', slug: 'tools' },
+        { label: 'Driving Chromatik well', slug: 'driving' },
         { label: 'Architecture', slug: 'architecture' },
       ],
     }),
