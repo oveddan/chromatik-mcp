@@ -27,8 +27,8 @@ public final class MovePattern implements LxTool {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("path", Schemas.string(
         "Canonical path of the pattern to move, e.g. /lx/mixer/channel/1/pattern/1"));
-    properties.put("index", Map.of("type", "integer", "description",
-        "0-based destination index within the channel's pattern list"));
+    properties.put("index", Schemas.integer(
+        "0-based destination index within the channel's pattern list", Integer.MIN_VALUE, Integer.MAX_VALUE));
     return Schemas.object(properties, List.of("path", "index"));
   }
 

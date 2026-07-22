@@ -25,9 +25,10 @@ public final class AddSnapshot implements LxTool {
 
   @Override
   public Map<String, Object> inputSchema() {
-    return Schemas.object(
-        Map.of("label", Schemas.string("Optional label for the new snapshot")),
-        List.of());
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("label", Schemas.string(
+        "Optional label for the new snapshot"));
+    return Schemas.object(properties, List.of());
   }
 
   @Override

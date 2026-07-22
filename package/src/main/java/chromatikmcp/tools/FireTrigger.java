@@ -28,9 +28,10 @@ public final class FireTrigger implements LxTool {
 
   @Override
   public Map<String, Object> inputSchema() {
-    return Schemas.object(
-        Map.of("path", Schemas.string("Canonical LX path of the trigger parameter")),
-        List.of("path"));
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("path", Schemas.string(
+        "Canonical LX path of the trigger parameter"));
+    return Schemas.object(properties, List.of("path"));
   }
 
   @Override

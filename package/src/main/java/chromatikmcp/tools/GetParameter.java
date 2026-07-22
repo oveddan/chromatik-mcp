@@ -1,5 +1,6 @@
 package chromatikmcp.tools;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,10 +25,10 @@ public final class GetParameter implements LxTool {
 
   @Override
   public Map<String, Object> inputSchema() {
-    return Schemas.object(
-        Map.of("path", Schemas.string(
-            "Canonical LX path of the parameter, as returned by the list/get tools")),
-        List.of("path"));
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("path", Schemas.string(
+        "Canonical LX path of the parameter, as returned by the list/get tools"));
+    return Schemas.object(properties, List.of("path"));
   }
 
   @Override

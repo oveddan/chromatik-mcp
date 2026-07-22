@@ -34,9 +34,10 @@ public final class SetParameter implements LxTool {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("path", Schemas.string(
         "Canonical LX path of the parameter, as returned by the list/get tools"));
-    properties.put("value", Map.of(
-        "description", "New value; its type must match the parameter (number, boolean, or string)",
-        "type", List.of("number", "boolean", "string")));
+    Map<String, Object> valueSchema = new LinkedHashMap<>();
+    valueSchema.put("type", List.of("number", "boolean", "string"));
+    valueSchema.put("description", "New value; its type must match the parameter (number, boolean, or string)");
+    properties.put("value", valueSchema);
     return Schemas.object(properties, List.of("path", "value"));
   }
 

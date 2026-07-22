@@ -35,10 +35,13 @@ public final class SetFixtureTags implements LxTool {
   public Map<String, Object> inputSchema() {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("path", Schemas.string("Canonical path of the fixture, e.g. /lx/structure/fixture/1"));
-    properties.put("tags", Map.of(
-        "type", "array",
-        "items", Map.of("type", "string"),
-        "description", "The fixture's new complete tag list — replaces the existing tags."));
+    Map<String, Object> tagsSchema = new LinkedHashMap<>();
+    tagsSchema.put("type", "array");
+    Map<String, Object> itemsSchema = new LinkedHashMap<>();
+    itemsSchema.put("type", "string");
+    tagsSchema.put("items", itemsSchema);
+    tagsSchema.put("description", "The fixture's new complete tag list — replaces the existing tags.");
+    properties.put("tags", tagsSchema);
     return Schemas.object(properties, List.of("path", "tags"));
   }
 

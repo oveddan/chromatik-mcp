@@ -50,10 +50,11 @@ public final class WireModulator implements LxTool {
         "Optional path of the engine hosting the wiring: a device path (its own engine) "
             + "or /lx/modulation (global — required to wire a device knob to a target "
             + "outside its device). Omitted, it is inferred from the source"));
-    properties.put("range", Map.of(
-        "type", "number",
-        "description", "Optional initial modulation depth, -1.0 to 1.0; without it the "
-            + "wiring starts at 0 and is inert"));
+    Map<String, Object> rangeSchema = new LinkedHashMap<>();
+    rangeSchema.put("type", "number");
+    rangeSchema.put("description", "Optional initial modulation depth, -1.0 to 1.0; without it the "
+        + "wiring starts at 0 and is inert");
+    properties.put("range", rangeSchema);
     return Schemas.object(properties, List.of("source", "target"));
   }
 

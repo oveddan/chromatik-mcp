@@ -72,8 +72,13 @@ public final class Tools {
 
   private Tools() {}
 
-  public static List<McpServerFeatures.SyncToolSpecification> specifications(
-      LX lx, EngineExecutor executor, GetStatus getStatus) {
+  /**
+   * The plain tool instances, independent of any live {@link LX} or executor — every
+   * constructor argument here is either stateless or (for {@code getStatus}) supplied by
+   * the caller. Used both to build MCP specifications and to dump the tool catalog for the
+   * docs site (see {@code chromatikmcp.ToolCatalogDump}).
+   */
+  public static List<LxTool> allTools(GetStatus getStatus) {
     return List.of(
             new GetProjectInfo(),
             getStatus,
@@ -123,8 +128,12 @@ public final class Tools {
             new AddSnapshot(),
             new RecallSnapshot(),
             new UpdateSnapshot(),
-            new RemoveSnapshot())
-        .stream()
+            new RemoveSnapshot());
+  }
+
+  public static List<McpServerFeatures.SyncToolSpecification> specifications(
+      LX lx, EngineExecutor executor, GetStatus getStatus) {
+    return allTools(getStatus).stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();
   }

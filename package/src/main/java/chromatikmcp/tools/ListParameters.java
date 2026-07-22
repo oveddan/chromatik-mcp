@@ -30,10 +30,10 @@ public final class ListParameters implements LxTool {
 
   @Override
   public Map<String, Object> inputSchema() {
-    return Schemas.object(
-        Map.of("path", Schemas.string(
-            "Canonical LX path of the component, as returned by the list/get tools")),
-        List.of("path"));
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("path", Schemas.string(
+        "Canonical LX path of the component, as returned by the list/get tools"));
+    return Schemas.object(properties, List.of("path"));
   }
 
   @Override

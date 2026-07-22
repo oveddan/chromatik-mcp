@@ -52,12 +52,13 @@ public final class GetFixture implements LxTool {
   public Map<String, Object> inputSchema() {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("path", Schemas.string("Canonical path of the fixture, e.g. /lx/structure/fixture/1"));
-    properties.put("depth", Map.of(
-        "type", "integer",
-        "description", "How many levels of subfixtures to include in 'children' (default 1, "
-            + "clamped to 10 max; negative is rejected). A real installation's fixture tree "
-            + "can be hundreds of nodes deep and wide (e.g. ~640 subfixtures on an "
-            + "Apotheneum-shaped rig), so this is capped rather than unbounded."));
+    Map<String, Object> depthSchema = new LinkedHashMap<>();
+    depthSchema.put("type", "integer");
+    depthSchema.put("description", "How many levels of subfixtures to include in 'children' (default 1, "
+        + "clamped to 10 max; negative is rejected). A real installation's fixture tree "
+        + "can be hundreds of nodes deep and wide (e.g. ~640 subfixtures on an "
+        + "Apotheneum-shaped rig), so this is capped rather than unbounded.");
+    properties.put("depth", depthSchema);
     return Schemas.object(properties, List.of("path"));
   }
 

@@ -26,10 +26,10 @@ public final class UpdateSnapshot implements LxTool {
 
   @Override
   public Map<String, Object> inputSchema() {
-    return Schemas.object(
-        Map.of("path", Schemas.string(
-            "Canonical path of the snapshot to update, as returned by add_snapshot/list_snapshots")),
-        List.of("path"));
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("path", Schemas.string(
+        "Canonical path of the snapshot to update, as returned by add_snapshot/list_snapshots"));
+    return Schemas.object(properties, List.of("path"));
   }
 
   @Override

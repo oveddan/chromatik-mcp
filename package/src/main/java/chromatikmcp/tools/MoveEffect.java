@@ -27,8 +27,8 @@ public final class MoveEffect implements LxTool {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("path", Schemas.string(
         "Canonical path of the effect to move, e.g. /lx/mixer/channel/1/effect/1"));
-    properties.put("index", Map.of("type", "integer", "description",
-        "0-based destination index within the effect list"));
+    properties.put("index", Schemas.integer(
+        "0-based destination index within the effect list", Integer.MIN_VALUE, Integer.MAX_VALUE));
     return Schemas.object(properties, List.of("path", "index"));
   }
 

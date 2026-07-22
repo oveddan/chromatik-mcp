@@ -36,12 +36,12 @@ public final class GetComponentDoc implements LxTool {
 
   @Override
   public Map<String, Object> inputSchema() {
-    return Schemas.object(
-        Map.of("class", Schemas.string(
-            "Class name, as returned by list_available_* tools — full class name "
-                + "(e.g. heronarts.lx.pattern.color.GradientPattern) or short name "
-                + "(e.g. GradientPattern)")),
-        List.of("class"));
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("class", Schemas.string(
+        "Class name, as returned by list_available_* tools — full class name "
+            + "(e.g. heronarts.lx.pattern.color.GradientPattern) or short name "
+            + "(e.g. GradientPattern)"));
+    return Schemas.object(properties, List.of("class"));
   }
 
   @Override

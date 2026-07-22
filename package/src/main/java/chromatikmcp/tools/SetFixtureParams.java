@@ -54,13 +54,16 @@ public final class SetFixtureParams implements LxTool {
   public Map<String, Object> inputSchema() {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("path", Schemas.string("Canonical path of the fixture, e.g. /lx/structure/fixture/1"));
-    properties.put("params", Map.of(
-        "type", "object",
-        "description", "Map of parameter name -> new value. Registered parameters are "
-            + "looked up first, then (for a JsonFixture) its .lxf-declared parameters by "
-            + "name. Value type must match the parameter: a number for numeric/discrete, "
-            + "a boolean for toggles, a string for text.",
-        "additionalProperties", Map.of("type", List.of("number", "boolean", "string"))));
+    Map<String, Object> additionalProps = new LinkedHashMap<>();
+    additionalProps.put("type", List.of("number", "boolean", "string"));
+    Map<String, Object> paramsSchema = new LinkedHashMap<>();
+    paramsSchema.put("type", "object");
+    paramsSchema.put("description", "Map of parameter name -> new value. Registered parameters are "
+        + "looked up first, then (for a JsonFixture) its .lxf-declared parameters by "
+        + "name. Value type must match the parameter: a number for numeric/discrete, "
+        + "a boolean for toggles, a string for text.");
+    paramsSchema.put("additionalProperties", additionalProps);
+    properties.put("params", paramsSchema);
     return Schemas.object(properties, List.of("path", "params"));
   }
 

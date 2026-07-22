@@ -34,8 +34,8 @@ public final class AddPattern implements LxTool {
     properties.put("type", Schemas.string(
         "Pattern class name, as returned by list_available_patterns — full class name or "
             + "short name"));
-    properties.put("index", Map.of("type", "integer", "description",
-        "0-based insertion index; omit to append at the end"));
+    properties.put("index", Schemas.integer(
+        "0-based insertion index; omit to append at the end", Integer.MIN_VALUE, Integer.MAX_VALUE));
     return Schemas.object(properties, List.of("channel", "type"));
   }
 

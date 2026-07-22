@@ -52,10 +52,11 @@ public final class DescribeModel implements LxTool {
     properties.put("path", Schemas.string(
         "Model node path (as emitted in this tool's own 'path' field); omit for the whole "
             + "installation's root"));
-    properties.put("depth", Map.of(
-        "type", "integer",
-        "description", "Levels of children to expand below the addressed node (default "
-            + DEFAULT_DEPTH + ", clamped to " + MAX_DEPTH + "; must be >= 0)"));
+    Map<String, Object> depthSchema = new LinkedHashMap<>();
+    depthSchema.put("type", "integer");
+    depthSchema.put("description", "Levels of children to expand below the addressed node (default "
+        + DEFAULT_DEPTH + ", clamped to " + MAX_DEPTH + "; must be >= 0)");
+    properties.put("depth", depthSchema);
     return Schemas.object(properties, List.of());
   }
 

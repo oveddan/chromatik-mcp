@@ -10,7 +10,11 @@ final class Schemas {
   private Schemas() {}
 
   static Map<String, Object> noArgs() {
-    return Map.of("type", "object", "properties", Map.of(), "additionalProperties", false);
+    Map<String, Object> schema = new LinkedHashMap<>();
+    schema.put("type", "object");
+    schema.put("properties", new LinkedHashMap<>());
+    schema.put("additionalProperties", false);
+    return schema;
   }
 
   static Map<String, Object> object(Map<String, Object> properties, List<String> required) {
@@ -23,19 +27,33 @@ final class Schemas {
   }
 
   static Map<String, Object> string(String description) {
-    return Map.of("type", "string", "description", description);
+    Map<String, Object> schema = new LinkedHashMap<>();
+    schema.put("type", "string");
+    schema.put("description", description);
+    return schema;
   }
 
   static Map<String, Object> enumString(String description, List<String> values) {
-    return Map.of("type", "string", "description", description, "enum", values);
+    Map<String, Object> schema = new LinkedHashMap<>();
+    schema.put("type", "string");
+    schema.put("description", description);
+    schema.put("enum", values);
+    return schema;
   }
 
   static Map<String, Object> integer(String description, int minimum, int maximum) {
-    return Map.of(
-        "type", "integer", "description", description, "minimum", minimum, "maximum", maximum);
+    Map<String, Object> schema = new LinkedHashMap<>();
+    schema.put("type", "integer");
+    schema.put("description", description);
+    schema.put("minimum", minimum);
+    schema.put("maximum", maximum);
+    return schema;
   }
 
   static Map<String, Object> bool(String description) {
-    return Map.of("type", "boolean", "description", description);
+    Map<String, Object> schema = new LinkedHashMap<>();
+    schema.put("type", "boolean");
+    schema.put("description", description);
+    return schema;
   }
 }

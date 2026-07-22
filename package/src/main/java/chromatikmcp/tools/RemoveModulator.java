@@ -27,10 +27,10 @@ public final class RemoveModulator implements LxTool {
 
   @Override
   public Map<String, Object> inputSchema() {
-    return Schemas.object(
-        Map.of("path", Schemas.string(
-            "Canonical path of the modulator, as returned by add_modulator")),
-        List.of("path"));
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("path", Schemas.string(
+        "Canonical path of the modulator, as returned by add_modulator"));
+    return Schemas.object(properties, List.of("path"));
   }
 
   @Override

@@ -9,21 +9,138 @@ noted.
 
 ## Discover
 
-| tool | what it returns |
-|---|---|
-| `get_status` | server identity + liveness: `serverVersion`, `buildTime` (detect a stale process after installing a new jar), uptime, connection state |
-| `get_project_info` | LX version, project file, channel count, OSC engine state, the **output** object (`/lx/output/enabled` — the "Live" toggle pixels won't reach fixtures without — plus brightness and gamma), and **engine globals** (`speed` playback-rate multiplier, `framesPerSecond`) |
-| `get_tempo` | the engine clock: bpm, clock source (internal / MIDI-synced / OSC-driven), beats-per-bar, launch quantization (why `fire_trigger` sometimes answers `pending: true`), tap/nudge paths, live beat position, and a beat-pulse path usable as a `wire_trigger` source |
-| `list_channels` | the mixer: channels (with `patternMode` playlist/blend and per-pattern `contributing`), master, and every effect chain — including **pattern-hosted effects**. Each channel carries a `controls` block (crossfade group, blend mode, auto-mute, cue/aux, pattern auto-cycle + transition settings) and the top-level `mixer` object holds the **crossfader** and cue/aux preview buses — all with settable paths |
-| `list_parameters` | every parameter on a component **plus its child components** (a pattern's effects, the palette's swatches) — walk the tree instead of guessing paths |
-| `list_available_patterns` / `_effects` / `_modulators` | instantiable classes from the LX registry (modulators carry `global`/`device` flags — where they may be added) |
-| `list_modulations` | one modulation engine's live modulators and wirings — global side panel by default, or a device's own chain via `scope` |
-| `get_parameter` | one parameter: value, type, range, options, units, and its **OSC address**. Parameters with live modulations report the effective `value` plus the knob's `baseValue` and `modulated: true` |
-| `get_palette` | the global color system: active swatch colors (mode + effective color), saved swatches with `recallPath`, auto-cycle state |
-| `list_snapshots` | saved snapshots (whole-look captures) plus the snapshot engine's recall-scoping and transition settings, all with settable paths |
-| `get_views` | model views: every view definition with live match counts, device usage, and the model's tag vocabulary |
-| `get_frame` | a PNG render of the current output (`include_image`/`grid`/`width` control token cost) — visual feedback without screen access |
-| `get_component_doc` | what a pattern/effect/modulator *does* — generated behavior docs from the semantic catalog, with a bytecode-hash `stale` flag so the answer is honest when code has changed. `list_available_*` entries carry `documented` flags |
+Full per-tool parameter tables (source-generated from the actual schemas — see
+[Keeping this page honest](#keeping-this-page-honest)):
+
+<!-- generated:start:discover -->
+
+### `get_status`
+
+_read-only_
+
+The embedded MCP server's own state: bind host/port/url, when it started, uptime, live connection info (whether a client is currently connected, open SSE stream count, last activity time), and the identity of the running server CODE (name, jar version, build time, LX version) — compare these against a freshly-installed jar to detect a stale process that needs a Chromatik restart. A successful call also proves the LX engine loop is draining tasks, since this handler runs on the engine thread like every other tool.
+
+No parameters.
+
+### `get_project_info`
+
+_read-only_
+
+The open LX project: LX version, project file path (absent if never saved), channel count, OSC engine state (receive/transmit ports and whether active), engine output state, and engine-global playback settings. output.enabled is the engine's "Live" toggle — when false, nothing reaches physical fixtures regardless of mixer state; set it via set_parameter on output.enabledPath. output.gamma/gammaMode control the output gamma curve. engine.speed is a global playback rate multiplier for animations (1.0 = normal); engine.framesPerSecond caps the render loop rate.
+
+No parameters.
+
+### `get_tempo`
+
+_read-only_
+
+The engine tempo: bpm (settable via set_parameter on bpm.path), clockSource (INTERNAL = free-running clock driven by bpm, MIDI = synced to an external MIDI clock, OSC = driven by incoming OSC tempo messages — bpm is read-only under MIDI/OSC), beatsPerBar (time signature), enabled (tempo trigger modulation on/off), and launchQuantization (governs quantized pattern/clip launches — a fire_trigger call on a quantized trigger under a non-NONE quantization reports pending:true and defers to the next tempo boundary rather than firing immediately). tapPath is a momentary trigger: fire it with fire_trigger repeatedly, in rhythm, to learn bpm from the timing between taps. nudgeUpPath/nudgeDownPath are momentary triggers that temporarily bend the tempo while held. triggerSourcePath is a beat pulse usable as a wire_trigger source. beatCount/barCount/beatCountWithinBar/basis report the current position in the running tempo clock.
+
+No parameters.
+
+### `list_channels`
+
+_read-only_
+
+List the mixer's channels with their patterns and effects, plus the master bus. Every entry carries its canonical LX path for use with other tools. Channels have two pattern modes ('patternMode'): 'playlist' plays one pattern at a time — the one with active=true; 'blend' composites all patterns simultaneously — a pattern shows iff enabled=true AND compositeLevel > 0 ('active' is not meaningful in blend mode). In playlist mode 'enabled' only affects auto-cycle eligibility — it does not hide the active pattern. The per-pattern 'contributing' field applies the correct rule for the channel's mode. A contributing pattern is still invisible if its channel is disabled or its fader is 0, or if engine output is off (see get_project_info). Patterns can host their own effect chains — each pattern entry carries its own effects list (e.g. a Gradient Mask living inside a pattern rather than on the channel). The top-level 'mixer' object is the crossfader performance surface: 'crossfader' runs 0 (full A) to 1 (full B) — only channels whose 'controls.crossfadeGroup' is 'A' or 'B' (not 'BYPASS') are affected by it, blended via 'crossfaderBlendMode'. 'cueA'/'cueB'/'auxA'/'auxB' toggle the crossfade-group preview buses: cue is the primary preview output, aux is a secondary/independent preview output — neither affects the main program output. Per-channel and per-pattern-engine blend-mode option lists are identical across channels, so they are reported once at 'mixer.blendModeOptions' / 'mixer.transitionBlendModeOptions' rather than repeated on every channel. Each channel's 'controls' block carries its crossfade-group assignment, blend mode, auto-mute state, and cue/aux preview toggles; 'controls.patternEngine' (playlist/blend channels only — absent on groups) carries auto-cycle and pattern-transition settings, with 'set_parameter' as the mutation path for any of these fields via the accompanying canonical 'path'.
+
+No parameters.
+
+### `list_parameters`
+
+_read-only_
+
+List every parameter on the component at a canonical LX path (channel, pattern, effect, modulator, or engine component like the output engine) — names, types, ranges, current values, and each parameter's own canonical path for get_parameter/set_parameter. Use this instead of guessing parameter names. Parameters with live modulations additionally carry baseValue and modulated=true (value is the effective reading). Also lists the component's child components (a pattern's effects, the palette's swatches, a channel's patterns) with their canonical paths — use it to walk the component tree instead of guessing paths.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical LX path of the component, as returned by the list/get tools |
+
+### `list_available_patterns`
+
+_read-only_
+
+List every pattern class registered with LX and available to instantiate, with display name, category, and tags.
+
+No parameters.
+
+### `list_available_effects`
+
+_read-only_
+
+List every effect class registered with LX and available to instantiate, with display name, category, and tags.
+
+No parameters.
+
+### `list_available_modulators`
+
+_read-only_
+
+List every modulator class registered with LX and available to instantiate, with display name, category, and tags.
+
+No parameters.
+
+### `list_modulations`
+
+_read-only_
+
+List one modulation engine's live modulators and wirings: modulator instances (with OSC addresses), continuous modulations (with range/polarity and the rangePath to adjust depth via set_parameter), and trigger wirings. Defaults to the global engine; pass scope (a device path) for a pattern/effect's own chain. Knob paths derive from a modulator's path (e.g. <path>/macro1).
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `scope` | string | no | — | Optional canonical path of a device (its own engine) or a modulation engine; omit for the global engine |
+
+### `get_parameter`
+
+_read-only_
+
+Read one parameter by its canonical LX path (e.g. /lx/mixer/channel/1/fader): value, type, range, options, and units. For a parameter with live modulations, value is the current effective (modulated) reading, baseValue is the knob's set position, and modulated=true; set_parameter changes the base.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical LX path of the parameter, as returned by the list/get tools |
+
+### `get_palette`
+
+_read-only_
+
+The global color palette: the active swatch's colors (with current effective color, mode, and the primary/secondary component paths — set hue/saturation/brightness via e.g. <primaryPath>/hue), the saved swatches with their labels and recall trigger paths, and transition/auto-cycle settings. Recall a saved swatch with fire_trigger on its recallPath; with transitions enabled the change interpolates over transitionTimeSecs (poll get_palette and watch transition.transitionProgress return to 0 to see it land). Recall is NOT undoable. Palette-linked patterns and effects (color mode 'Palette') follow these colors automatically.
+
+No parameters.
+
+### `list_snapshots`
+
+_read-only_
+
+List saved snapshots — whole-look captures of mixer/pattern/effect/modulation state, in recall order — plus the snapshot engine's settings. The settings include the recallMixer/recallPattern/recallEffect/recallModulation/recallMaster/recallOutput booleans, which scope what a recall_snapshot call is allowed to touch, and transitionEnabled/transitionTimeSecs, which govern whether and how long a recall fades between the current state and the snapshot's saved state. Adjust any of them via set_parameter on the returned paths.
+
+No parameters.
+
+### `get_frame`
+
+_read-only_
+
+Preview the rendered output: reads back the last completed engine frame and returns a compact summary (non-black fraction, mean brightness, dominant colors, NxN mean-color grid). Pass include_image=true to also get a PNG rendering of the point cloud — use sparingly, image content is token-expensive.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `view` | string | no | one of: `front`, `top`, `side` | Orthographic view plane (default front: x/y as seen from the front; top: x/z; side: z/y) |
+| `width` | integer | no | 64–1024 | Image width in pixels (default 256); height follows the model's aspect ratio |
+| `bus` | string | no | one of: `main`, `cue`, `aux` | Which composited buffer to read (default main) |
+| `include_image` | boolean | no | — | Include the PNG rendering (default false — image content is token-expensive; request it explicitly when you need to see the frame) |
+| `grid` | integer | no | 1–16 | Grid resolution N for the NxN mean-color summary matrix (default 3) |
+
+### `get_component_doc`
+
+_read-only_
+
+Return the semantic catalog entry for an LX pattern, effect, or modulator class: visual summary, parameter interactions, usage tips, and staleness metadata. Accepts either the full class name or the short name returned by the list_available_* tools (a short name ambiguous across patterns/effects/modulators is rejected, naming the candidates). Registered but undocumented classes return documented:false (not an error).
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `class` | string | yes | — | Class name, as returned by list_available_* tools — full class name (e.g. heronarts.lx.pattern.color.GradientPattern) or short name (e.g. GradientPattern) |
+
+<!-- generated:end -->
 
 ## Read & set parameters
 
@@ -40,41 +157,303 @@ Type arguments everywhere (`add_pattern`, `add_effect`, `add_modulator`,
 `get_component_doc`) accept either the full class name or the short `name` the
 `list_available_*` tools return; an ambiguous short name errors listing the candidates.
 
+<!-- generated:start:parameters -->
+
+### `set_parameter`
+
+_mutating_
+
+Set a parameter by its canonical LX path (e.g. /lx/mixer/channel/1/fader). The value's type must match the parameter: a number for numeric/bounded, a boolean for toggles, a string for text. Discrete/selector parameters accept either the in-range integer value or an option name string (e.g. a device's 'view' selector accepts the target view's label) — an unknown or ambiguous option name is rejected with the valid options listed. Aggregate parameters (color, MIDI filter) are set via their component paths (e.g. .../hue, .../saturation, .../brightness); momentary triggers fire via fire_trigger. Undoable in Chromatik with Cmd-Z. On a parameter with live modulations the response's value is the effective (modulated) reading — baseValue echoes the value you set.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical LX path of the parameter, as returned by the list/get tools |
+| `value` | number \| boolean \| string | yes | — | New value; its type must match the parameter (number, boolean, or string) |
+
+<!-- generated:end -->
+
 ## Build structure: channels, patterns, effect chains
 
-| tool | what it does |
-|---|---|
-| `add_channel {pattern?}` / `remove_channel {path}` | mixer channels, optionally seeded with a first pattern (LX moves UI focus to a new channel) |
-| `add_pattern {channel, type, index?}` / `remove_pattern` / `move_pattern {path, index}` | manage a channel's pattern list |
-| `activate_pattern {path}` | switch the active pattern (PLAYLIST mode; BLEND-mode channels layer patterns via their `enabled` params instead) |
-| `add_effect {container, type}` / `remove_effect` / `move_effect {path, index}` | effect chains — run serially in list order — on channels, the master bus, or an individual pattern |
-
-Structural paths are 1-based and reindex on remove/insert — re-list rather than
+Effect chains run serially in list order, on channels, the master bus, or an individual
+pattern. Structural paths are 1-based and reindex on remove/insert — re-list rather than
 reusing cached paths.
+
+<!-- generated:start:structure -->
+
+### `add_channel`
+
+_mutating_
+
+Add a new channel to the mixer. Optionally seed it with a first pattern by passing a fully-qualified class name (from list_available_patterns). Returns the new channel's path, id, label, and 0-based index. Note: LX also moves UI focus/selection to the new channel. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `pattern` | string | no | — | Optional pattern class name (from list_available_patterns) to seed the channel with |
+
+### `remove_channel`
+
+_mutating_
+
+Remove a channel (or group) from the mixer by its canonical path. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the channel to remove, e.g. /lx/mixer/channel/1 |
+
+### `add_pattern`
+
+_mutating_
+
+Add a pattern to a channel by class name (from list_available_patterns) — either the full class name or the short name it lists. Pass an optional 0-based index to insert at a specific position; omit to append. The first pattern added to an empty channel auto-activates. Targets channels only (not PatternRacks). Inserting shifts the 1-based paths of later sibling patterns — re-list rather than reusing cached paths. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `channel` | string | yes | — | Canonical path of the channel, e.g. /lx/mixer/channel/1 |
+| `type` | string | yes | — | Pattern class name, as returned by list_available_patterns — full class name or short name |
+| `index` | integer | no | -2147483648–2147483647 | 0-based insertion index; omit to append at the end |
+
+### `remove_pattern`
+
+_mutating_
+
+Remove a pattern by its canonical path. Remaining sibling patterns reindex (their 1-based paths shift), so cached paths go stale — re-list after removal. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the pattern, e.g. /lx/mixer/channel/1/pattern/1 |
+
+### `move_pattern`
+
+_mutating_
+
+Move a pattern to a new 0-based index within its channel. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the pattern to move, e.g. /lx/mixer/channel/1/pattern/1 |
+| `index` | integer | yes | -2147483648–2147483647 | 0-based destination index within the channel's pattern list |
+
+### `activate_pattern`
+
+_mutating_
+
+Activate (go to) a pattern on its channel. Only valid when the channel is in PLAYLIST composite mode — callers on BLEND channels receive invalid_argument (toggle the pattern's enabled parameter instead). With a transition blend configured the switch starts as a transition (active: false until it lands). Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the pattern to activate, e.g. /lx/mixer/channel/1/pattern/2 |
+
+### `add_effect`
+
+_mutating_
+
+Add an effect by class name (from list_available_effects — either the full class name or the short name it lists) to a channel, master bus, or pattern. The container must be a channel path (e.g. /lx/mixer/channel/1), the master bus path, or a pattern path (e.g. /lx/mixer/channel/1/pattern/1). Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `container` | string | yes | — | Canonical path of the channel, master bus, or pattern to add the effect to |
+| `type` | string | yes | — | Effect class name, as returned by list_available_effects — full class name or short name |
+
+### `remove_effect`
+
+_mutating_
+
+Remove an effect from its container by canonical path. Returns invalid_argument if the effect is locked. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the effect to remove, e.g. /lx/mixer/channel/1/effect/1 |
+
+### `move_effect`
+
+_mutating_
+
+Move an effect to a new 0-based index within its container (channel, bus, or pattern). Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the effect to move, e.g. /lx/mixer/channel/1/effect/1 |
+| `index` | integer | yes | -2147483648–2147483647 | 0-based destination index within the effect list |
+
+<!-- generated:end -->
 
 ## Map macro knobs (and any modulation)
 
-| tool | what it does |
-|---|---|
-| `add_modulator {type, scope?}` | add e.g. a `MacroKnobs` bank or a `VariableLFO` — to the global side panel, or inside a pattern/effect's own chain via `scope`. Response lists every parameter with its path and OSC address |
-| `remove_modulator {path}` | delete a modulator; wirings it sources are removed with it (one undoable step) |
-| `wire_modulator {source, target, scope?, range?}` | undoable continuous mapping, e.g. `macro1 → fader` or `LFO → twist`. Pass `range` (-1..1) to give the wiring depth immediately — **a wiring without range is inert** |
-| `wire_trigger {source, target, scope?}` | boolean pulse wiring (e.g. a `MacroTriggers` macro → a toggle) |
-| `remove_modulation {path}` | unwire either kind by the path the wire call returned |
-| `fire_trigger {path}` | pulse a momentary trigger (not undoable — it's an action, and the value auto-resets). Under launch quantization the response says `pending: true`; don't re-fire |
+<!-- generated:start:modulation -->
+
+### `add_modulator`
+
+_mutating_
+
+Add a modulator by class name (from list_available_modulators) — e.g. heronarts.lx.modulator.MacroKnobs for a bank of eight mappable knobs, or the short name it lists (e.g. VariableLFO for heronarts.lx.modulator.VariableLFO). By default it lands in the global modulation engine (the Chromatik side panel); pass scope to add it inside a pattern/effect's own chain. The response lists every parameter with its canonical path and OSC address. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `type` | string | yes | — | Modulator class name, as returned by list_available_modulators — full class name (e.g. heronarts.lx.modulator.VariableLFO) or short name (e.g. VariableLFO) |
+| `scope` | string | no | — | Optional canonical path of a pattern/effect to host the modulator in its own chain; omit for the global engine |
+
+### `remove_modulator`
+
+_mutating_
+
+Remove a modulator added by add_modulator, by the canonical path returned when it was added (or by list_modulations). Any wirings (modulations or triggers) sourced from the modulator are removed with it. Remaining modulators in the same engine reindex afterwards, so held paths can go stale. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the modulator, as returned by add_modulator |
+
+### `wire_modulator`
+
+_mutating_
+
+Wire a continuous modulation from a source parameter (e.g. a macro knob's macro1) onto a target parameter. To use an oscillator/envelope modulator's own running value as the source, pass the modulator's own canonical path (it is itself a parameter) — not one of its input sub-parameters like an LFO's basisIn, which only takes effect when that modulator's manualBasis is enabled and otherwise silently does nothing. The target must be a compound parameter (most device/mixer knobs are). Scope is inferred from the source — a knob inside a device chain wires within that device; pass scope explicitly to override. The wiring starts with zero depth and has no visible effect until depth is set — pass the optional range argument (e.g. 1.0 for full depth) to apply it immediately, or set_parameter on the returned rangePath afterwards. Adjust direction via polarityPath. Undoable in Chromatik with Cmd-Z, though a wiring created with range takes two undo steps (depth first, then the wiring). Caution: a wiring LX rejects (circular dependency) clears Chromatik's undo history.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `source` | string | yes | — | Canonical path of the source parameter (e.g. a MacroKnobs macro1) |
+| `target` | string | yes | — | Canonical path of the target compound parameter |
+| `scope` | string | no | — | Optional path of the engine hosting the wiring: a device path (its own engine) or /lx/modulation (global — required to wire a device knob to a target outside its device). Omitted, it is inferred from the source |
+| `range` | number | no | — | Optional initial modulation depth, -1.0 to 1.0; without it the wiring starts at 0 and is inert |
+
+### `wire_trigger`
+
+_mutating_
+
+Wire a trigger modulation: when the boolean source fires (e.g. a MacroTriggers macro1), the boolean target is pulsed. Both ends must be boolean parameters. Scope is inferred from the source like wire_modulator. Undoable in Chromatik with Cmd-Z. Caution: a wiring LX rejects (circular dependency) clears Chromatik's undo history.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `source` | string | yes | — | Canonical path of the boolean source parameter |
+| `target` | string | yes | — | Canonical path of the boolean target parameter |
+| `scope` | string | no | — | Optional path of the engine hosting the wiring: a device path (its own engine) or /lx/modulation (global — required to wire a device trigger to a target outside its device). Omitted, it is inferred from the source |
+
+### `remove_modulation`
+
+_mutating_
+
+Remove a modulation (continuous or trigger) by the canonical path returned when it was wired (e.g. /lx/modulation/modulation/1). Remaining modulations in the same engine reindex afterwards, so held paths can go stale. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the modulation, as returned by wire_modulator/wire_trigger |
+
+### `fire_trigger`
+
+_mutating_
+
+Fire a momentary trigger by its canonical path — a TriggerParameter, or a momentary boolean like a MacroTriggers macro (the pulse's rising edge fires any wired trigger modulations). The value auto-resets to false. If launch quantization defers the fire (pattern/clip launch), the response has pending=true and it fires at the next tempo boundary — do NOT re-fire, that queues a duplicate. Firing is an action with side effects, not undoable state; use set_parameter for toggles and values.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical LX path of the trigger parameter |
+
+<!-- generated:end -->
 
 ## Palette & snapshots
 
-| tool | what it does |
-|---|---|
-| `save_swatch` | capture the active swatch's current colors as a new saved swatch (returns its path) |
-| `set_swatch {path}` | apply a saved swatch onto the active colors — same effect as firing its `recallPath` (including the transition fade), but undoable |
-| `remove_swatch {path}` / `move_swatch {path, index}` | manage the saved-swatch list |
-| `add_color` / `remove_color` | add/remove a color slot on a swatch (active swatch by default); a swatch always keeps at least one color |
-| `add_snapshot {label?}` | capture the current mixer/pattern/effect/modulation state as a snapshot |
-| `recall_snapshot {path, immediate?}` | restore a snapshot — fades over the engine's transition time unless `immediate`. Caution (LX behavior): Cmd-Z after a recall does not restore the previous parameter values |
-| `update_snapshot {path}` | recapture the current state into an existing snapshot |
-| `remove_snapshot {path}` | delete a snapshot |
+<!-- generated:start:palette -->
+
+### `save_swatch`
+
+_mutating_
+
+Capture the active swatch's current colors as a new saved swatch, appended to the end of get_palette's swatches list. Returns the new swatch's canonical path — pass it to set_swatch to recall it later, or move_swatch/remove_swatch to manage it. Undoable in Chromatik with Cmd-Z.
+
+No parameters.
+
+### `set_swatch`
+
+_mutating_
+
+Apply a saved swatch's colors onto the active swatch, by its canonical path (as returned by save_swatch or listed in get_palette's swatches). Same effective change as firing the swatch's recallPath with fire_trigger — including transitionEnabled/transitionTimeSecs interpolation — but undoable in Chromatik with Cmd-Z, unlike the trigger.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the saved swatch to apply, e.g. /lx/palette/swatches/swatch/1 |
+
+### `remove_swatch`
+
+_mutating_
+
+Remove a saved swatch by its canonical path (as returned by save_swatch, or listed in get_palette's swatches). The active swatch's current colors are unaffected. Remaining swatches reindex afterwards, so held paths can go stale. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the saved swatch to remove, e.g. /lx/palette/swatches/swatch/1 |
+
+### `move_swatch`
+
+_mutating_
+
+Move a saved swatch to a new 0-based index within get_palette's swatches list. Returns invalid_argument if the index is out of range. Other swatches reindex around it, so held paths can go stale. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the saved swatch to move, e.g. /lx/palette/swatches/swatch/1 |
+| `index` | integer | yes | -2147483648–2147483647 | 0-based destination index within the saved swatch list |
+
+### `add_color`
+
+_mutating_
+
+Add a color slot to a swatch, appended at the end — targets the active swatch (get_palette's activeSwatch) by default, or a saved swatch if swatch is given. Set the new color's hue/saturation/brightness via set_parameter on the returned primaryPath. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `swatch` | string | no | — | Optional canonical path of a saved swatch (as returned by save_swatch); defaults to the active swatch |
+
+### `remove_color`
+
+_mutating_
+
+Remove the last color slot from a swatch — targets the active swatch (get_palette's activeSwatch) by default, or a saved swatch if swatch is given. A swatch's first color can never be removed (LX requires at least one); this returns invalid_argument on a single-color swatch. Remaining colors reindex, so held paths can go stale. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `swatch` | string | no | — | Optional canonical path of a saved swatch (as returned by save_swatch); defaults to the active swatch |
+
+### `add_snapshot`
+
+_mutating_
+
+Capture the current mixer/pattern/effect/modulation state as a new snapshot, appended to the end of the list. The optional label overrides LX's default 'Snapshot-N' name. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `label` | string | no | — | Optional label for the new snapshot |
+
+### `recall_snapshot`
+
+_mutating_
+
+Recall a snapshot's captured state, restoring the mixer/pattern/effect/modulation values it holds. By default the recall follows the snapshot engine's own transitionEnabled/transitionTimeSecs settings (see list_snapshots) — when transitions are enabled, values fade in over transitionTimeSecs; pass immediate=true to force an instant recall for this call regardless of that setting. The engine's recallMixer/recallPattern/recallEffect/recallModulation/recallMaster/recallOutput booleans (also from list_snapshots) limit which categories of state the recall is allowed to touch. It lands on the Chromatik undo stack, but Cmd-Z after a recall does not reliably restore plain parameter values to their pre-recall state (an LX-side ordering quirk in how it builds the undo entry) — recall_snapshot again, or another snapshot, to get back to a known state instead of relying on undo here.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the snapshot, as returned by add_snapshot/list_snapshots |
+| `immediate` | boolean | no | — | Force an instant recall, bypassing transitionEnabled/transitionTimeSecs for this call; defaults to false (follow the engine's transition setting) |
+
+### `update_snapshot`
+
+_mutating_
+
+Recapture the current mixer/pattern/effect/modulation state into an existing snapshot, overwriting its previously saved values. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the snapshot to update, as returned by add_snapshot/list_snapshots |
+
+### `remove_snapshot`
+
+_mutating_
+
+Remove a snapshot by canonical path (as returned by add_snapshot/list_snapshots). Snapshots are addressed by a 1-based structural path (e.g. /lx/snapshots/snapshot/2) — remaining snapshots reindex afterwards, so held paths can go stale; re-list before reusing one. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the snapshot, as returned by add_snapshot/list_snapshots |
+
+<!-- generated:end -->
 
 ## Model views: spatial composition
 
@@ -82,12 +461,6 @@ Views are named subsets of the model ("Cube Interior", "Faces Exterior"), define
 tag selector; every channel, pattern, and effect has a `view` parameter that clips its
 rendering to one. This is how one project paints different geometry with different
 content.
-
-| tool | what it does |
-|---|---|
-| `get_views` | every view definition (selector, enabled/priority, normalization/orientation, **live match counts**), which devices currently use each view, and the model's tag vocabulary |
-| `add_view {label, selector, normalization?, orientation?}` | create a view; the response's `numGroups`/`numFixtures` immediately show what the selector matched (a `warning` flags zero matches) |
-| `remove_view {path}` | delete a view. Caution (LX behavior, undo does not fix it): devices mapped to the removed view silently reassign — remap them to `Default` first |
 
 Selectors are a small CSS-like language over model tags — space for descendant, `,`
 union, `&` intersect, `;` separate groups, `*` group-by, `tag[n-m]` index ranges (full
@@ -98,6 +471,118 @@ add_view {label: "Front+Back", selector: "cubeFrontExterior ; cubeBackExterior",
 set_parameter {path: /lx/mixer/channel/1/pattern/1/view, value: "Front+Back"}
 ```
 
+<!-- generated:start:views -->
+
+### `get_views`
+
+_read-only_
+
+Named model subsets ('views', at /lx/structure/views/view/<n>) that a device's 'view' selector can clip its rendering to. A device left on 'Default' inherits its view from its parent (effect -> pattern -> channel -> master -> whole model); assigning a named view clips that device to only the matched points. 'selector' matches model tags (see modelTags for the vocabulary this project's fixtures expose) with a small grammar: a bare tag ('cube') selects everything tagged with it; space is a descendant match ('cube face' = faces inside cubes); ',' unions ('cube, sphere'); '&' intersects with the preceding match ('cube & active'); '>' requires a direct child ('cube > face'); ';' separates independent groups within one selector; '*' groups by the left side and sub-selects within each group on the right ('cube * face'); and a tag can carry an index range in brackets — 'cube[0]', 'cube[2-5]', 'cube[even]', 'cube[odd]', 'cube[:2]' (every 2nd), 'cube[1:2]' (every 2nd starting at 1). 'numGroups'/'numFixtures' are live match feedback: they update automatically after editing 'selector' via set_parameter on its path, so re-read the view (or get_views again) to check whether an edited selector matched anything. Fire 'cuePath' (a momentary trigger, via fire_trigger) to preview a view in the Chromatik UI — only one view cues at a time. 'assignments' lists which devices currently reference each view (devices left on Default are omitted, since they aren't referencing any view definition).
+
+No parameters.
+
+### `add_view`
+
+_mutating_
+
+Compose a new named model subset ('view', at /lx/structure/views/view/<n>), matched by a tag selector — see get_views for the selector grammar and the modelTags vocabulary this project's fixtures expose. 'numFixtures'/'numGroups' in the response are immediate match feedback: 0 fixtures is legal (an empty view) but usually means a selector typo — cross-check against get_views' modelTags. Map a device to the new view by setting its 'view' parameter (set_parameter) to the view's label.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `label` | string | yes | — | Display label for the new view, e.g. 'Cubes' |
+| `selector` | string | yes | — | Tag selector matched against the model, e.g. 'cube' or 'cube & active' — see get_views for the full grammar |
+| `normalization` | string | no | one of: `relative`, `absolute` | Whether point coordinates renormalize to the view's own bounds ('relative', default) or keep the whole model's absolute bounds ('absolute') |
+| `orientation` | string | no | one of: `global`, `group` | Whether view points orient in absolute/global space ('global', default) or relative to their matching group's own orientation ('group') |
+
+### `remove_view`
+
+_mutating_
+
+Remove a view by its canonical path (as returned by add_view/get_views). Devices selecting a different, surviving view are unaffected. But a device whose 'view' selector pointed at the removed view is NOT reset to Default — LX only clamps the selector's stored index into the shrunk view list, so it silently reassigns to whichever view (or Default) now sits at that index. Re-check device 'view' assignments (get_views' assignments) after removing a view rather than assuming they reset — undo does not fix this trap either; remap affected devices to Default before removing a view they still reference.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the view to remove, e.g. /lx/structure/views/view/1 |
+
+<!-- generated:end -->
+
+## Model & fixtures
+
+`describe_model` walks the model tree those view selectors match against (depth-limited;
+re-call with a child's path or a higher depth to keep descending) — its
+`pointIndexRange` fields index the same global color buffer `get_frame` reports.
+`list_fixtures`/`get_fixture` report the physical wiring layer beneath that model tree —
+output protocol (universe/channel/host) and geometry transform, one entry per fixture.
+`set_fixture_params` is the batched, undo-grouped way to set several fixture parameters at
+once, and the only way to reach a JSON fixture's `.lxf`-declared `jsonParameters` (e.g.
+controller IP strings), which have no canonical path. `set_fixture_tags` sets a fixture's
+model tags (the `get_views` selector vocabulary) with pre-write validation. `reload_fixtures`
+picks up `.lxf` edits made on disk — nothing does so automatically.
+
+<!-- generated:start:fixtures -->
+
+### `describe_model`
+
+_read-only_
+
+The model tree: the geometry hierarchy the rig renders onto, from the whole installation down to individual points. Each node reports 'tags' (the same vocabulary get_views' selectors match against — e.g. a selector 'cube' matches every node tagged 'cube'), 'size' (point count), 'pointIndexRange' ([firstIndex, lastIndex], the bounding range of this node's point indices in the same global color buffer get_frame reads back — NOT a claim that the node owns every index in that range; check 'contiguous' before slicing the buffer), 'contiguous' (true when the node's indices form an unbroken run equal to 'size', so the range is exactly its points; false when they're interleaved with other nodes' indices, as for a grid column submodel — both fields are omitted for an empty node), 'bounds'/'center' (spatial extent), and 'childCount' (how many submodels sit below, even when 'children' itself is absent). Pass 'path' (a model node path, as emitted in this tool's own 'path' field — not a component canonical path, since LXModel isn't addressable through the component tree) to describe a submodel instead of the whole installation; omit it for the root, which also reports 'modelName', 'isStatic', 'totalPoints', 'fixtureCount', and 'tagVocabulary' (every distinct tag in the project with its occurrence count). 'depth' (default 2, max 10) bounds how many levels of children are expanded below the addressed node — real installations can have thousands of submodels, so an unbounded dump would blow a client's context. When 'childCount' is nonzero but 'children' is missing, depth ran out; re-call with 'path' set to one of the reported child paths (or a higher 'depth') to keep descending.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | no | — | Model node path (as emitted in this tool's own 'path' field); omit for the whole installation's root |
+| `depth` | integer | no | — | Levels of children to expand below the addressed node (default 2, clamped to 10; must be >= 0) |
+
+### `list_fixtures`
+
+_read-only_
+
+The fixture layer: the physical wiring beneath the model tree describe_model reports — each fixture's geometry transform, output protocol wiring, and (for a JsonFixture, loaded from a .lxf file) its load status. 'pointIndexRange' ([firstIndex, lastIndex]) indexes the same global color buffer get_frame and describe_model report against. Every fixture parameter is settable via set_parameter on '<path>/<param>' — e.g. '<path>/artNetUniverse', '<path>/x' — this is the primary way to configure a fixture's wiring and placement once it exists. Top-level 'outputError' reports universe/channel collisions LX detected between fixtures' output segments (empty when clean). 'output' is present only for a protocol-driven fixture (protocol 'NONE' when no output is configured); a JsonFixture's outputs are declared inside its .lxf file instead, so it has no 'output' key — see 'fixturePath'/'error'/'warnings' there instead. A fixture can itself contain subfixtures (e.g. a JsonFixture's .lxf 'components', recursively) — 'childCount' is the number of those subfixtures, while 'submodelCount' is the unrelated number of model-tree groupings the fixture's own geometry splits into (e.g. a GridFixture's per-row/per-column submodels; it has 0 subfixtures but several submodels). A deactivated fixture (see 'deactivate') has no built model until it is reactivated and the structure regenerates — for such a fixture 'modelAvailable' is reported as false (omitted, meaning true, otherwise), 'tags' falls back to the .lxf-declared subset only, and 'submodelCount' is 0. Subfixture paths (e.g. /lx/structure/fixture/1/fixture/3) are addressable with get_parameter/set_parameter exactly like top-level fixtures — writes to a subfixture of a JsonFixture are rejected, since its values are computed from the .lxf and recomputed on reload. Use get_fixture on a single fixture's path for its full parameter list, submodels, and subfixture tree (with a depth limit).
+
+No parameters.
+
+### `get_fixture`
+
+_read-only_
+
+One fixture's full detail: everything list_fixtures reports for it, plus 'parameters' (every parameter it owns — including type-specific ones like a GridFixture's numRows/numColumns or an ArcFixture's degrees — settable via set_parameter on its own path, same as any other component parameter), 'submodels' (the fixture's own child model nodes, e.g. a GridFixture's per-row and per-column groupings — each with path/tags/size/pointIndexRange/contiguous/metaData, same node shape as describe_model; empty when the fixture is deactivated and has no built model — see 'modelAvailable' in list_fixtures), 'children' (the fixture's subfixture tree — e.g. a JsonFixture's .lxf-declared 'components', recursively — depth-limited by the 'depth' argument; each node uses the same shape as a list_fixtures row, itself with a nested 'children' if depth allows further recursion; 'childCount' there is the number of direct subfixtures, distinct from 'submodelCount'), and for a JsonFixture, 'jsonParameters' (the knobs its .lxf file declares — these have no canonical path, so they carry no 'path' field here and are NOT reachable via set_parameter; set them by name via set_fixture_params). Subfixture paths (e.g. '<path>/fixture/3') are addressable with get_parameter/set_parameter/get_fixture exactly like top-level fixtures — writes to a subfixture of a JsonFixture are rejected, since its values are computed from the .lxf and recomputed on reload. 'depth' is silently clamped to its max (real installations can have hundreds of subfixtures nested deep) rather than erroring — only a negative depth is rejected.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the fixture, e.g. /lx/structure/fixture/1 |
+| `depth` | integer | no | — | How many levels of subfixtures to include in 'children' (default 1, clamped to 10 max; negative is rejected). A real installation's fixture tree can be hundreds of nodes deep and wide (e.g. ~640 subfixtures on an Apotheneum-shaped rig), so this is capped rather than unbounded. |
+
+### `set_fixture_params`
+
+_mutating_
+
+Set several of a fixture's parameters in one call — both its registered parameters (x/y/z/yaw/pitch/roll/scale, enabled, brightness, numPoints, artNetUniverse, host, and any type-specific ones, e.g. a GridFixture's numRows — otherwise settable one at a time via set_parameter) and, for a JsonFixture (a fixture loaded from a .lxf file), the knobs its 'parameters' block declares (e.g. controller IP strings, per-controller booleans, geometry floats) — these JSON parameters have no canonical path, so set_parameter cannot reach them; this tool is their only write path, addressed by name (see get_fixture's 'jsonParameters'). Every name is resolved and every value type-checked before anything is written — an unknown name or a type mismatch on any one entry leaves the fixture completely untouched, nothing partially applies. The WRITE itself is not atomic across a mixed numeric+string call, though: the numeric/boolean edits (batched into a single undo entry) are always performed before the string edits (one undo entry each, reported in 'undoEntries'), so if a string write fails partway through, earlier writes stay applied — and LX clears its entire undo/redo stack when any command fails, not just that entry. Batch related edits into one call rather than calling this repeatedly regardless. Each parameter change triggers a full model rebuild (re-point, re-normalize, rebuild every view, plus a synchronous System.gc()), and a JSON parameter write additionally re-reads the fixture's .lxf from disk — another reason to batch. Never drive a continuous control (e.g. an LFO) into a fixture parameter this way; it is metrics/placement/tag data, not a render input. Rejected on a subfixture of a JsonFixture (its values are computed from the .lxf and recomputed on reload — edit the .lxf and call reload_fixtures instead); a top-level .lxf fixture's own parameters (registered or JSON) are the intended edit surface. Registered parameters are resolved before same-named .lxf-declared ones — a .lxf may legally declare a parameter with the same name as a registered one (e.g. 'scale'), in which case the registered parameter is written and the JSON one is left untouched; such names are reported in 'shadowedJsonParams' (present only when non-empty).
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the fixture, e.g. /lx/structure/fixture/1 |
+| `params` | object | yes | — | Map of parameter name -> new value. Registered parameters are looked up first, then (for a JsonFixture) its .lxf-declared parameters by name. Value type must match the parameter: a number for numeric/discrete, a boolean for toggles, a string for text. |
+
+### `set_fixture_tags`
+
+_mutating_
+
+Set a fixture's model tags — the vocabulary get_views' selectors match against (see get_views). Replaces the fixture's whole tag list. Every token is validated against LX's tag regex ([A-Za-z0-9_.\-/]+) before anything is written: LX itself silently drops any tag that fails this check (and silently restores the fixture's *default* tags if every token fails), so an unvalidated write can look successful while quietly breaking view addressing — this tool rejects the whole call instead, naming the offending token, and writes nothing. Returns the resulting tag list so the caller sees what actually landed. Rejected on a subfixture of a JsonFixture, same as set_fixture_params.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the fixture, e.g. /lx/structure/fixture/1 |
+| `tags` | array<string> | yes | — | The fixture's new complete tag list — replaces the existing tags. |
+
+### `reload_fixtures`
+
+_mutating_
+
+Pick up .lxf fixture files edited on disk with your own file tools — nothing watches the Fixtures folder, so a .lxf edit is otherwise invisible until this is called. Two steps: re-walks the Fixtures folder to refresh the available fixture type list ('jsonTypes'/'errors'), then reloads every instantiated top-level JsonFixture from its .lxf and regenerates the model exactly once — the only batched regeneration path in LX, so this is cheaper than N individual set_fixture_params calls. Also the only way to pick up a changed fixture *type* on a live fixture (changing its type otherwise has no effect, since loading only happens once). A JSON parameter's value survives the reload only if a parameter of the same name still exists in the new .lxf; otherwise it reverts to the file's declared default. Not undoable. Returns the refreshed type list plus every fixture's error/errorMessage/warnings after the reload, so failures in the edited file are visible immediately.
+
+No parameters.
+
+<!-- generated:end -->
+
 ## OSC
 
 Parameter payloads carry the address an OSC controller must send to. For most
@@ -105,3 +590,10 @@ parameters it equals the canonical path, but **modulator knobs answer at label-b
 addresses** (`/lx/modulation/Knobs/macro1`, not `.../modulator/1/macro1`) — renaming a
 modulator moves its OSC address. Ports are in `get_project_info` (defaults: 3030
 receive / 4040 transmit).
+
+## Keeping this page honest
+
+The tables above are generated from the same JSON-Schema `inputSchema` every tool
+advertises over MCP (`site/src/data/tools.json`, produced by
+`package/scripts/dump-tool-catalog.sh`) — never hand-transcribed, so they can't drift from
+what a client actually sees.

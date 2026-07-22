@@ -28,11 +28,11 @@ public final class AddColor implements LxTool {
 
   @Override
   public Map<String, Object> inputSchema() {
-    return Schemas.object(
-        Map.of("swatch", Schemas.string(
-            "Optional canonical path of a saved swatch (as returned by save_swatch); "
-                + "defaults to the active swatch")),
-        List.of());
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("swatch", Schemas.string(
+        "Optional canonical path of a saved swatch (as returned by save_swatch); "
+                + "defaults to the active swatch"));
+    return Schemas.object(properties, List.of());
   }
 
   @Override
