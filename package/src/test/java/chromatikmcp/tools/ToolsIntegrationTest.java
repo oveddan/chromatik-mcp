@@ -194,7 +194,7 @@ class ToolsIntegrationTest {
             "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
             "get_component_doc", "get_fixture_format",
             "get_frame", "get_palette", "describe_model", "get_views", "add_view", "remove_view",
-            "list_fixtures", "get_fixture", "list_available_fixtures", "add_fixture",
+            "list_fixtures", "get_fixture", "get_output_map", "list_available_fixtures", "add_fixture",
             "remove_fixture", "move_fixture", "duplicate_fixture",
             "set_fixture_params", "set_fixture_tags", "reload_fixtures",
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
@@ -1290,6 +1290,33 @@ class ToolsIntegrationTest {
     // before path resolution — a bad depth is rejected regardless of what path was given.
     McpSchema.CallToolResult result = call("get_fixture",
         Map.of("path", "/lx/structure/fixture/1", "depth", -1));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void getOutputMapWithNoFixturesReturnsEmptyList() {
+    // The shared LX's model is static-immutable (see the field javadoc), so there is nothing
+    // to add — mutation-based happy paths (a real ARTNET/JsonFixture footprint) live in
+    // FixturesTest against a dynamic-structure LX.
+    Map<String, Object> payload = structured(call("get_output_map", Map.of()));
+    assertNotNull(payload.get("note"));
+    assertNotNull(payload.get("outputError"));
+    assertTrue(((List<Map<String, Object>>) payload.get("fixtures")).isEmpty());
+  }
+
+  @Test
+  void getOutputMapUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result = call("get_output_map", Map.of("path", "/lx/structure/fixture/1"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  void getOutputMapNonFixturePathIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("get_output_map", Map.of("path", channel.getCanonicalPath()));
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));

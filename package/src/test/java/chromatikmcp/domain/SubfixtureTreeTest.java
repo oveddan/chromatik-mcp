@@ -218,6 +218,27 @@ class SubfixtureTreeTest extends HeadlessLxTest {
   }
 
   @Test
+  void outputMapReportsDirectOutputCountNotAFabricatedUniverseForAJsonFixture(@TempDir Path mediaRoot)
+      throws IOException {
+    LX lx = buildThreeLevelTree(mediaRoot);
+    JsonFixture parent = topLevelFixture(lx);
+
+    Fixtures.OutputMapEntry entry = Fixtures.outputMap(lx, parent).fixtures().get(0);
+    assertEquals(Resolve.canonicalPath(parent), entry.path());
+    // TestGrid/TestChild declare no "output" block, so outputsDirect is empty — but it's
+    // still a JsonFixture, so directOutputCount/outputsNote are reported (0, with the note)
+    // rather than silently omitted, and no universe/channel is fabricated for it.
+    assertEquals(0, entry.directOutputCount());
+    assertNotNull(entry.outputsNote());
+    assertNull(entry.protocol(), "JsonFixture is not an LXProtocolFixture");
+    assertNull(entry.universe());
+    assertNull(entry.estimatedUniverseSpan());
+    assertEquals(5, entry.childCount());
+    assertNotNull(entry.children(), "depth defaults deep enough to cover a 3-level tree");
+    assertEquals(5, entry.children().size());
+  }
+
+  @Test
   void childrenOnAFixtureWithNoSubfixturesReturnsEmptyListAndNeverThrows() {
     // A direct, exhaustive test of the reflection fallback (an induced failure isn't
     // cleanly forceable from a test without swapping the classloader) is not attempted

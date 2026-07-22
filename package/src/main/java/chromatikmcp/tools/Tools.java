@@ -51,7 +51,11 @@ public final class Tools {
           + "child's path or a higher depth to keep descending) — its pointIndexRange fields "
           + "index the same global color buffer get_frame reports. list_fixtures/get_fixture "
           + "report the physical wiring layer beneath that model tree — one entry per fixture, "
-          + "with its output protocol (universe/channel/host) and geometry transform; a "
+          + "with its output protocol (universe/channel/host) and geometry transform; "
+          + "get_output_map is the diagnostic companion, reporting a declared/derived "
+          + "universe/channel footprint per fixture (disclosed in its own description as "
+          + "NOT LX's resolved allocation) plus LX's own collision report — useful after "
+          + "add_fixture/set_fixture_params wiring changes; a "
           + "registered fixture parameter (wiring, placement, or a fixture-type-specific one "
           + "like a GridFixture's numRows) is settable via set_parameter on "
           + "'<fixture path>/<param>', but set_fixture_params is the batched, undo-grouped way "
@@ -120,6 +124,7 @@ public final class Tools {
             new RemoveView(),
             new ListFixtures(),
             new GetFixture(),
+            new GetOutputMap(),
             new ListAvailableFixtures(),
             new AddFixture(),
             new RemoveFixture(),

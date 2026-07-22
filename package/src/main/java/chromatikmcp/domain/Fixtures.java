@@ -15,6 +15,7 @@ import heronarts.lx.LXComponent;
 import heronarts.lx.LXSerializable;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.model.LXModel;
+import heronarts.lx.output.LXBufferOutput;
 import heronarts.lx.parameter.BooleanParameter;
 import heronarts.lx.parameter.DiscreteParameter;
 import heronarts.lx.parameter.LXParameter;
@@ -171,6 +172,168 @@ public final class Fixtures {
       submodels.add(Model.describeNode(child, 0));
     }
     return submodels;
+  }
+
+  /**
+   * One fixture's DECLARED/DERIVED output wiring — see {@link #outputMap}. For an
+   * {@link LXProtocolFixture} with a protocol other than {@code NONE}, {@code protocol}
+   * through {@code numChannels} report the same values {@link #describeOutput} computes,
+   * plus {@code estimatedUniverseSpan} (universe-based protocols only — ARTNET/SACN/KINET;
+   * {@code null} for OPC/DDP, which use a data-length model instead of universes). For a
+   * protocol of {@code NONE}, only {@code protocol} is set — the fixture emits nothing of
+   * its own. {@code directOutputCount}/{@code outputsNote} are set instead of (or alongside)
+   * the protocol fields when the fixture (typically a {@link JsonFixture}) declares raw
+   * {@code outputsDirect} datagrams, whose universe/channel LX exposes no public accessor
+   * for — see the class-level note on {@link #outputMap}.
+   */
+  public record OutputMapEntry(String path, String type, Integer firstIndex, Integer lastIndex,
+      String protocol, String host, Integer port, Integer universe, Integer channel,
+      String byteOrder, Integer numChannels, List<Integer> estimatedUniverseSpan,
+      Integer directOutputCount, String outputsNote,
+      int childCount, List<OutputMapEntry> children) {}
+
+  /** {@code note} restates, in the wire payload itself, the estimate/collision caveats
+   * documented on {@link #outputMap} — so a client reading only the JSON (not the tool
+   * description) still sees them. */
+  public record OutputMapSnapshot(String outputError, List<OutputMapEntry> fixtures, String note) {}
+
+  private static final int OUTPUT_MAP_MAX_DEPTH = 10;
+
+  private static final String OUTPUT_MAP_NOTE =
+      "This is a DECLARED/DERIVED map, not LX's resolved output allocation: LXStructureOutput's "
+          + "actual per-packet layout (generatedOutputs/Packet) is private and not readable "
+          + "through any public API. Per-fixture protocol/universe/channel fields are read "
+          + "straight from the fixture's own parameters; estimatedUniverseSpan approximates a "
+          + "single contiguous DMX segment per fixture by mirroring LX's universe-overflow math "
+          + "(LXStructureOutput.checkUniverseOverflow) — it ignores serpentine wiring, segment "
+          + "stride, and cross-fixture packet packing, so it can diverge from LX's real "
+          + "allocation on complex rigs. outputError, when non-empty, is a real collision LX "
+          + "itself computed (lx.structure.outputError) and should be trusted over the estimate.";
+
+  private static final String OUTPUTS_DIRECT_NOTE =
+      "This fixture's output wiring is declared inside its .lxf file as direct output "
+          + "datagrams (outputsDirect) rather than the protocol/universe/channel parameters "
+          + "LXProtocolFixture exposes — LX has no public accessor for a direct output's "
+          + "resolved universe/channel, so only the declared output count is reported here; no "
+          + "universe/channel is estimated for it.";
+
+  /**
+   * The declared/derived output wiring for {@code root} (or every top-level fixture when
+   * {@code root} is {@code null}) and its subfixture tree, depth-limited like {@link
+   * #describeTree} (real rigs can be hundreds of nodes deep). See the field docs on {@link
+   * OutputMapEntry} and the caveats in {@link #OUTPUT_MAP_NOTE}. Call on the engine thread.
+   */
+  public static OutputMapSnapshot outputMap(LX lx, LXFixture root) {
+    List<LXFixture> roots = (root != null) ? List.of(root) : lx.structure.fixtures;
+    List<OutputMapEntry> fixtures = new ArrayList<>();
+    for (LXFixture fixture : roots) {
+      fixtures.add(outputMapEntry(fixture, OUTPUT_MAP_MAX_DEPTH));
+    }
+    String outputError = lx.structure.outputError.getString();
+    return new OutputMapSnapshot(
+        (outputError == null) ? "" : outputError, fixtures, OUTPUT_MAP_NOTE);
+  }
+
+  private static OutputMapEntry outputMapEntry(LXFixture fixture, int depth) {
+    int totalSize = fixture.totalSize();
+    Integer firstIndex = null;
+    Integer lastIndex = null;
+    if (totalSize > 0) {
+      firstIndex = fixture.getIndexBufferOffset();
+      lastIndex = firstIndex + totalSize - 1;
+    }
+
+    // LXFixture.size() (own point count, excluding subfixtures) is `protected` — unreachable
+    // from here, same gap `describeFixture` works around by reporting `totalSize()` instead.
+    // totalSize() = own size + every child's totalSize() (LXFixture.java:1285), so subtracting
+    // the children's totalSize() back out recovers the own-point count publicly.
+    List<LXFixture> kids = children(fixture);
+    int ownSize = totalSize;
+    for (LXFixture child : kids) {
+      ownSize -= child.totalSize();
+    }
+
+    String protocol = null;
+    String host = null;
+    Integer port = null;
+    Integer universe = null;
+    Integer channel = null;
+    String byteOrder = null;
+    Integer numChannels = null;
+    List<Integer> estimatedUniverseSpan = null;
+
+    if (fixture instanceof LXProtocolFixture protocolFixture) {
+      LXFixture.Protocol proto = protocolFixture.protocol.getEnum();
+      protocol = proto.name();
+      if (proto != LXFixture.Protocol.NONE) {
+        host = protocolFixture.host.getString();
+        port = protocolPort(protocolFixture);
+        universe = protocolUniverse(protocolFixture);
+        channel = protocolChannel(protocolFixture);
+        LXBufferOutput.ByteOrder order = protocolFixture.byteOrder.getEnum();
+        byteOrder = order.name();
+        numChannels = ownSize * order.getNumBytes();
+        if (isUniverseBasedProtocol(proto)) {
+          estimatedUniverseSpan = estimateUniverseSpan(proto, universe, channel, numChannels);
+        }
+      }
+    }
+
+    Integer directOutputCount = null;
+    String outputsNote = null;
+    if (fixture instanceof JsonFixture || !fixture.outputsDirect.isEmpty()) {
+      directOutputCount = fixture.outputsDirect.size();
+      outputsNote = OUTPUTS_DIRECT_NOTE;
+    }
+
+    List<OutputMapEntry> childEntries = null;
+    if (depth > 0) {
+      childEntries = new ArrayList<>();
+      for (LXFixture child : kids) {
+        childEntries.add(outputMapEntry(child, depth - 1));
+      }
+    }
+
+    return new OutputMapEntry(
+        Resolve.canonicalPath(fixture),
+        typeOf(fixture),
+        firstIndex,
+        lastIndex,
+        protocol,
+        host,
+        port,
+        universe,
+        channel,
+        byteOrder,
+        numChannels,
+        estimatedUniverseSpan,
+        directOutputCount,
+        outputsNote,
+        kids.size(),
+        childEntries);
+  }
+
+  private static boolean isUniverseBasedProtocol(LXFixture.Protocol protocol) {
+    return protocol == LXFixture.Protocol.ARTNET
+        || protocol == LXFixture.Protocol.SACN
+        || protocol == LXFixture.Protocol.KINET;
+  }
+
+  /**
+   * Mirrors {@code LXStructureOutput.checkUniverseOverflow}: {@code maxChannels} channels
+   * fill a universe (indices {@code [0, maxChannels)}); the {@code numChannels}-th channel
+   * from {@code startChannel} lands {@code (startChannel + numChannels - 1) / maxChannels}
+   * universes past {@code startUniverse}. Assumes one contiguous segment starting exactly at
+   * {@code startChannel} — the simplification {@link #OUTPUT_MAP_NOTE} discloses.
+   */
+  private static List<Integer> estimateUniverseSpan(
+      LXFixture.Protocol protocol, int startUniverse, int startChannel, int numChannels) {
+    if (numChannels <= 0) {
+      return List.of(startUniverse, startUniverse);
+    }
+    int lastChannelOffset = startChannel + numChannels - 1;
+    int endUniverse = startUniverse + (lastChannelOffset / protocol.maxChannels);
+    return List.of(startUniverse, endUniverse);
   }
 
   // Reflective accessor for LXFixture.children (structure/LXFixture.java:406), which is

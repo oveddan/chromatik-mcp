@@ -102,6 +102,75 @@ class FixturesTest extends HeadlessLxTest {
   }
 
   @Test
+  void outputMapReportsDeclaredWiringAndAUniverseCrossingSpan() {
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+    fixture.numRows.setValue(10);
+    fixture.numColumns.setValue(10);
+    fixture.protocol.setValue(LXFixture.Protocol.ARTNET);
+    fixture.artNetUniverse.setValue(2);
+    fixture.dmxChannel.setValue(300);
+
+    Fixtures.OutputMapSnapshot snapshot = Fixtures.outputMap(lx, null);
+    assertEquals(1, snapshot.fixtures().size());
+    assertNotNull(snapshot.note());
+    Fixtures.OutputMapEntry entry = snapshot.fixtures().get(0);
+
+    assertEquals(Resolve.canonicalPath(fixture), entry.path());
+    assertEquals("ARTNET", entry.protocol());
+    assertEquals(2, entry.universe());
+    assertEquals(300, entry.channel());
+    assertEquals("RGB", entry.byteOrder());
+    // 100 points (10x10) x 3 bytes/pixel (RGB) = 300 channels.
+    assertEquals(300, entry.numChannels());
+    // Hand-computed: last channel offset (300 start + 300 - 1 = 599) falls one full 512-channel
+    // universe past the start (599 / 512 == 1), so the footprint spans universes [2, 3].
+    assertEquals(List.of(2, 3), entry.estimatedUniverseSpan());
+    assertNull(entry.directOutputCount(), "not a JsonFixture / no outputsDirect");
+
+    // outputMap(lx, fixture) — scoping to a single root — returns the same entry.
+    Fixtures.OutputMapSnapshot scoped = Fixtures.outputMap(lx, fixture);
+    assertEquals(1, scoped.fixtures().size());
+    assertEquals(entry.path(), scoped.fixtures().get(0).path());
+  }
+
+  @Test
+  void outputMapReportsNoUniverseMathForProtocolNone() {
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+    fixture.protocol.setValue(LXFixture.Protocol.NONE);
+
+    Fixtures.OutputMapEntry entry = Fixtures.outputMap(lx, fixture).fixtures().get(0);
+    assertEquals("NONE", entry.protocol());
+    assertNull(entry.host());
+    assertNull(entry.universe());
+    assertNull(entry.channel());
+    assertNull(entry.numChannels());
+    assertNull(entry.estimatedUniverseSpan());
+  }
+
+  @Test
+  void outputMapReportsNullSpanForOpcAndDdp() {
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+    fixture.protocol.setValue(LXFixture.Protocol.OPC);
+
+    Fixtures.OutputMapEntry entry = Fixtures.outputMap(lx, fixture).fixtures().get(0);
+    assertEquals("OPC", entry.protocol());
+    assertNotNull(entry.numChannels(), "channel footprint is still reported");
+    assertNull(entry.estimatedUniverseSpan(), "OPC is a data-length model, not universes");
+  }
+
+  @Test
+  void outputMapPassesThroughOutputError() {
+    LX lx = track(new LX());
+    addGridFixture(lx);
+    // The shared LX's outputError is unset (null) by default; the primitive normalizes that
+    // to "" — asserted here rather than a real collision, which needs live protocol threads.
+    assertEquals("", Fixtures.outputMap(lx, null).outputError());
+  }
+
+  @Test
   void deactivatedFixtureWithRegeneratedGeometryDescribesWithoutThrowing() {
     // LXFixture.getModel() is nulled inside regenerate() and only restored by toModel(),
     // which LXStructure.regenerateModel() skips for deactivated fixtures — so a fixture
