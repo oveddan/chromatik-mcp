@@ -26,8 +26,6 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-{/* TODO: embed demo video here once recorded — Claude Code driving a live Chromatik show. */}
-
 ```sh
 curl -L --create-dirs -o ~/Chromatik/Packages/chromatik-mcp.jar \
   https://github.com/oveddan/chromatik-mcp/releases/latest/download/chromatik-mcp.jar
@@ -36,9 +34,8 @@ claude mcp add --transport http chromatik "http://127.0.0.1:$(jq -r .port ~/.chr
 ```
 
 Any MCP client — Claude Code, Claude Desktop, Cursor, your own orchestrator —
-connects straight into the running engine. No project-file editing, no reload
-cycle, no separate server: the agent reads and mutates the same running
-instance your console renders, and you see every change on the rig as it lands.
+connects straight into the running engine: the agent reads and mutates the
+same instance your console renders, no project-file editing or reload cycle.
 
 ## Parse the scene
 
@@ -86,147 +83,25 @@ agent walks the whole tree and tells you.
   </div>
 </div>
 
-## Compose
-
-Describe a look and it builds the structure; ask for motion and it wires the
-modulation. The difference between a static change and a musical one is a
-sentence.
-
-<div class="chat-demo not-content">
-  <div class="chat-line human">
-    <span class="chat-who">you</span>
-    <p>Build a smooth wash over the whole structure — soft sparkles riding
-    on top, and drift to a new color every minute.</p>
-  </div>
-  <div class="chat-line agent">
-    <span class="chat-who">agent</span>
-    <p>Done: a gradient wash breathing on a slow LFO, a sparkle layer that's
-    silent at rest and shimmers on the beat pulse, and the palette
-    auto-cycling through four saved swatches — sixty seconds each,
-    five-second blends. The wash follows the palette, so the whole look
-    drifts together.</p>
-  </div>
-  <div class="chat-line human">
-    <span class="chat-who">you</span>
-    <p>Give the edge trace a pulse on every kick, and dip the brightness
-    when the clap hits.</p>
-  </div>
-  <div class="chat-line agent">
-    <span class="chat-who">agent</span>
-    <p>Wired the kick follower to position at full depth, and the clap onto
-    brightness with negative depth — full at rest, a 30% dip on each
-    hit.</p>
-  </div>
-  <div class="chat-line human">
-    <span class="chat-who">you</span>
-    <p>Softer. It should breathe, not blink.</p>
-  </div>
-  <div class="chat-line agent">
-    <span class="chat-who">agent</span>
-    <p>Halved both depths and eased the envelope release — it sways now
-    instead of snapping.</p>
-  </div>
-  <div class="chat-caption">
-    Structure, motion, and palette in one conversation.
-  </div>
-</div>
-
-## Wire up the controls
-
-Ask for control and the agent builds it — macro knobs bound to your
-controller, tempo locked to the deck, one-shot triggers that clean up after
-themselves. Mapping is the slowest part of putting a show together, and it
-comes back done.
-
-<div class="chat-demo not-content">
-  <div class="chat-line human">
-    <span class="chat-who">you</span>
-    <p>Map the first knob on my controller to a global intensity — and give
-    every pattern its own take on what intensity means.</p>
-  </div>
-  <div class="chat-line agent">
-    <span class="chat-who">agent</span>
-    <p>Added an Intensity macro and wired your knob to it. Then, per
-    pattern: on the wash it drives brightness and sparkle density; on the
-    tunnel, speed and trail length; on the grid, contrast with a touch of
-    strobe. One knob, eight interpretations — pull it up and the whole show
-    leans in.</p>
-  </div>
-  <div class="chat-line human">
-    <span class="chat-who">you</span>
-    <p>Sync the tempo to the CDJs and put the beat in the strobes.</p>
-  </div>
-  <div class="chat-line agent">
-    <span class="chat-who">agent</span>
-    <p>Clock source switched to OSC — locked to the deck. The strobes are
-    tempo-synced now, quarter notes; say the word and I'll halve them at the
-    build.</p>
-  </div>
-  <div class="chat-line human">
-    <span class="chat-who">you</span>
-    <p>Fire the drop once so I can see it.</p>
-  </div>
-  <div class="chat-line agent">
-    <span class="chat-who">agent</span>
-    <p>Fired — watch the rig. It's a one-shot; it cleans up after itself.
-    The trigger is on your pad now, so you can drive it yourself from
-    here.</p>
-  </div>
-  <div class="chat-caption">
-    The mapping is part of the composition.
-  </div>
-</div>
-
-## Debug
-
-Something looks wrong on the rig and the cause is four panels deep. The agent
-reads the same state you do, without clicking through it.
-
-<div class="chat-demo not-content">
-  <div class="chat-line human">
-    <span class="chat-who">you</span>
-    <p>Nothing's showing. Why?</p>
-  </div>
-  <div class="chat-line agent">
-    <span class="chat-who">agent</span>
-    <p>Output is live and your fader's up — but the pattern's surface
-    selector is set to Cylinder. You're staring at the cube. Switched it:
-    there's your trace.</p>
-  </div>
-  <div class="chat-line human">
-    <span class="chat-who">you</span>
-    <p>Why is the second channel washing out the first?</p>
-  </div>
-  <div class="chat-line agent">
-    <span class="chat-who">agent</span>
-    <p>It's blending Add at a full fader, so nothing underneath survives.
-    Switched it to Screen and pulled it to 70% — the wash reads through
-    now.</p>
-  </div>
-  <div class="chat-caption">
-    Debugging and discovery are the same conversation.
-  </div>
-</div>
+## Start here
 
 <CardGrid stagger>
-  <Card title="Nothing to wire up" icon="seti:image">
-    One jar in `~/Chromatik/Packages`. The plugin writes its port to
-    `~/.chromatik-mcp/status.json` on startup, so a client finds the running
-    instance without configuration.
+  <Card title="Getting started" icon="rocket">
+    [Install the jar and find the port.](getting-started/)
   </Card>
-  <Card title="It knows the instruments" icon="open-book">
-    A generated semantic catalog describes what every pattern, effect, and
-    modulator actually does — color modes, parameter interactions — with
-    bytecode-hash staleness flags so it never bluffs about changed code.
+  <Card title="Connect your AI client" icon="setting">
+    [Per-client MCP setup — Claude Code, Claude Desktop, Cursor, more.](connect/)
   </Card>
-  <Card title="It builds the rig you play" icon="rocket">
-    Tempo and beat-pulse wiring, macro knob banks, snapshots for whole looks,
-    cue/aux preview buses, spatial views over the model's geometry — the
-    performance surface, assembled on request.
+  <Card title="Tool reference" icon="open-book">
+    [The full MCP tool surface — every tool, its args, and its wire shape.](tools/)
   </Card>
-  <Card title="You keep the console" icon="approve-check">
-    Mutations route through Chromatik's own undo system — an agent's session
-    unwinds step by step with Cmd-Z. Concurrent agents are safe, and the show
-    file is untouched until you save.
+  <Card title="Driving Chromatik well" icon="approve-check">
+    [Discovery etiquette and verification loop, written for the agent in the loop.](driving/)
+  </Card>
+  <Card title="Architecture" icon="puzzle">
+    [The contract an integrator builds against — threading, undo, state lifecycle.](architecture/)
+  </Card>
+  <Card title="Usage examples" icon="seti:image">
+    [Task recipes — building structure, chaining effects, mapping macros.](examples/)
   </Card>
 </CardGrid>

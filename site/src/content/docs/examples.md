@@ -1,22 +1,15 @@
 ---
 title: Usage examples
-description: Concrete agent flows — understanding a project, building show structure, chaining effects, macro mapping, multi-agent patterns.
+description: Task recipes — understanding a project, building show structure, chaining effects, macro mapping, multi-agent patterns.
 ---
 
-What an MCP-connected agent can do with chromatik-mcp, as concrete tool-call flows. Each
-example is a goal, the call sequence, and the wrinkles the tool descriptions warn
-about. Everything mutating is undoable in Chromatik with Cmd-Z unless noted.
+Task recipes for chromatik-mcp: a goal, the tool-call sequence, and the wrinkles the
+tool descriptions warn about. Everything mutating is undoable in Chromatik with Cmd-Z
+unless noted. Discovery etiquette (canonical paths, re-listing after structural
+changes, batching) is covered once on [Driving Chromatik well](../driving/) — read that
+first if you're the agent executing these.
 
-Ground rules that apply to every flow:
-
-- **Address by canonical path** (`/lx/mixer/channel/1/fader`), always obtained from a
-  discovery call — paths of siblings shift when items are removed/inserted (1-based
-  indices), so re-list rather than reusing cached paths after structural changes.
-- **Discover before you mutate**: `get_project_info` → `list_channels` →
-  `list_available_*` is the standard opening. `get_component_doc` tells you what a
-  pattern/effect actually does before you add it.
-
-## 1. Understand the project
+## 1. Understand an inherited project
 
 ```
 get_project_info                        → LX version, channels, OSC ports
@@ -33,7 +26,7 @@ the response means the component's code changed since the doc was written — tr
 live parameters over the prose. `documented: false` means no entry exists; fall back
 to the class's `description` fields from `list_available_*` and the parameter tree.
 
-## 2. Build a show structure
+## 2. Build a channel with patterns
 
 ```
 add_channel {pattern: heronarts.lx.pattern.color.GradientPattern}
@@ -88,7 +81,7 @@ set_parameter {path: <bank>/macro1, value: 0.75}            → turn the knob
   create them; `remove_modulation {path}` unwires. `wire_trigger` + `fire_trigger`
   cover boolean pulse wiring and momentary triggers (`set_parameter` rejects those).
 
-## 5. See what you made
+## 5. Verify the render
 
 ```
 get_frame                               → non-black fraction, mean brightness,
@@ -97,8 +90,8 @@ get_frame {include_image: true}         → plus a PNG the model literally looks
 ```
 
 The summary is cheap; the PNG is token-expensive — use it at checkpoints, not in
-tight loops (`grid` / `width` tune the cost). This closes the loop: mutate → look →
-adjust, against the actual render instead of a mental model.
+tight loops (`grid` / `width` tune the cost). For the mutate → look → adjust
+verification loop, see [Driving Chromatik well](../driving/).
 
 ## 6. Multi-agent patterns
 
