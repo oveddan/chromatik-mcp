@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 
 import heronarts.lx.LX;
-import heronarts.lx.model.LXModel;
 import heronarts.lx.structure.JsonFixture;
 import heronarts.lx.structure.LXFixture;
 
@@ -89,17 +88,14 @@ public final class GetFixture implements LxTool {
     Map<String, Object> payload = ListFixtures.toMap(Fixtures.describeFixture(fixture));
 
     List<Map<String, Object>> parameters = new ArrayList<>();
-    for (Parameters.ParameterInfo parameter : Parameters.listFor(lx, path).parameters()) {
+    for (Parameters.ParameterInfo parameter : Parameters.listFor(fixture).parameters()) {
       parameters.add(parameter.toMap());
     }
     payload.put("parameters", parameters);
 
     List<Map<String, Object>> submodels = new ArrayList<>();
-    LXModel model = fixture.getModel();
-    if (model != null) {
-      for (LXModel child : model.children) {
-        submodels.add(submodelMap(Model.describeNode(child, 0)));
-      }
+    for (Model.NodeInfo node : Fixtures.submodels(fixture)) {
+      submodels.add(submodelMap(node));
     }
     payload.put("submodels", submodels);
 

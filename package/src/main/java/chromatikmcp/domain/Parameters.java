@@ -171,6 +171,15 @@ public final class Parameters {
       }
       throw e;
     }
+    return listFor(component);
+  }
+
+  /**
+   * List every parameter directly on {@code component} — same as {@link #listFor(LX, String)},
+   * for a caller that already holds the resolved component (skips a second path walk). Call
+   * on the engine thread.
+   */
+  public static ComponentParameters listFor(LXComponent component) {
     List<ParameterInfo> parameters = component.getParameters().stream()
         .map(Parameters::describe)
         .collect(Collectors.toList());
@@ -229,22 +238,56 @@ public final class Parameters {
   public static ParameterInfo set(LX lx, String path, Object value) {
     LXParameter parameter = Resolve.parameter(lx, path);
     requireWritable(parameter);
+    Coerced coerced = classify(parameter, value);
+    switch (coerced.kind()) {
+      case STRING -> Commands.perform(lx, new LXCommand.Parameter.SetString(
+          (StringParameter) coerced.parameter(), (String) coerced.value()));
+      case BOOLEAN -> Commands.perform(lx, new LXCommand.Parameter.SetNormalized(
+          (BooleanParameter) coerced.parameter(), (Boolean) coerced.value()));
+      case DISCRETE -> Commands.perform(lx, new LXCommand.Parameter.SetValue(
+          (DiscreteParameter) coerced.parameter(), (Integer) coerced.value()));
+      case NUMERIC -> Commands.perform(lx, new LXCommand.Parameter.SetValue(
+          parameter, (Double) coerced.value()));
+    }
+    return describe(parameter);
+  }
+
+  /** How a {@link Coerced} value should be written — the write mechanism (immediate {@code
+   * LXCommand}, batched {@code ArrangeFixtures}, or direct {@code setValue}) varies by caller;
+   * this only tags which one applies. */
+  enum Kind { STRING, BOOLEAN, DISCRETE, NUMERIC }
+
+  /** {@code value} is boxed to match {@code kind}: {@code String} for STRING, {@code Boolean}
+   * for BOOLEAN, {@code Integer} for DISCRETE, {@code Double} for NUMERIC. */
+  record Coerced(Kind kind, LXParameter parameter, Object value) {}
+
+  /**
+   * Classify {@code parameter}'s runtime type and coerce {@code value} to match — the one
+   * place that decides which parameter kinds are settable and how each is coerced. Shared by
+   * {@link #set}, {@code Fixtures.setParams}, and {@code Fixtures.applyRegisteredParamsDirectly}:
+   * those differ only in how a {@link Coerced} result is ultimately written, not in this
+   * decision.
+   *
+   * @throws Resolve.ResolveException {@code TYPE_MISMATCH} for an unsettable parameter
+   *     (trigger, aggregate, computed) or a value that doesn't match the parameter's type
+   */
+  static Coerced classify(LXParameter parameter, Object value) {
     if (parameter instanceof StringParameter s) {
-      Commands.perform(lx, new LXCommand.Parameter.SetString(s, requireString(parameter, value)));
+      return new Coerced(Kind.STRING, s, requireString(s, value));
     } else if (parameter instanceof TriggerParameter) {
       // Fires side effects and synchronously resets to false — the snapshot would echo
       // value=false for a set(true) (inviting client retries that re-fire the trigger)
       // and the undo entry would be a false->false no-op.
       throw mismatch(parameter, "is a momentary trigger — use fire_trigger");
     } else if (parameter instanceof BooleanParameter b) {
-      Commands.perform(lx, new LXCommand.Parameter.SetNormalized(b, requireBoolean(parameter, value)));
+      return new Coerced(Kind.BOOLEAN, b, requireBoolean(b, value));
     } else if (parameter instanceof DiscreteParameter d) {
-      Commands.perform(lx, new LXCommand.Parameter.SetValue(d, requireDiscreteIndex(d, value)));
+      return new Coerced(Kind.DISCRETE, d, requireDiscreteIndex(d, value));
     } else if (parameter instanceof AggregateParameter a) {
       // No command sets a packed aggregate double sanely (colors: SetColor covers only
       // hue+saturation; MIDI filters bit-unpack the raw double into six subparameters);
       // the subparameters are individually addressable, so route the caller there.
-      throw mismatch(parameter, "is an aggregate — set its components via the "
+      throw mismatch(a, "is an aggregate — set its components via the "
           + a.subparameters.keySet().stream()
               .map(key -> ".../" + key).collect(Collectors.joining(", "))
           + " paths");
@@ -253,9 +296,8 @@ public final class Parameters {
       // (silently wiping the undo stack) and we'd return a false success — reject up front.
       throw mismatch(parameter, "is a computed read-only parameter and cannot be set");
     } else {
-      Commands.perform(lx, new LXCommand.Parameter.SetValue(parameter, requireNumber(parameter, value)));
+      return new Coerced(Kind.NUMERIC, parameter, requireNumber(parameter, value));
     }
-    return describe(parameter);
   }
 
   /** {@code pending}: launch quantization deferred the fire to the next tempo boundary. */

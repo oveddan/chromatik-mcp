@@ -15,10 +15,8 @@ import heronarts.lx.LXComponent;
 import heronarts.lx.LXSerializable;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.model.LXModel;
-import heronarts.lx.parameter.AggregateParameter;
 import heronarts.lx.parameter.BooleanParameter;
 import heronarts.lx.parameter.DiscreteParameter;
-import heronarts.lx.parameter.FunctionalParameter;
 import heronarts.lx.parameter.LXParameter;
 import heronarts.lx.parameter.StringParameter;
 import heronarts.lx.structure.JsonFixture;
@@ -157,6 +155,24 @@ public final class Fixtures {
     return new FixtureNode(describeFixture(fixture), children);
   }
 
+  /**
+   * The fixture's own direct child model nodes (e.g. a {@code GridFixture}'s per-row/
+   * per-column submodels) — distinct from {@link #children}, which are subfixtures, not
+   * model nodes. Empty when the fixture's model isn't currently built (see {@code
+   * modelAvailable} on {@link FixtureInfo}). Call on the engine thread.
+   */
+  public static List<Model.NodeInfo> submodels(LXFixture fixture) {
+    LXModel model = fixture.getModel();
+    if (model == null) {
+      return List.of();
+    }
+    List<Model.NodeInfo> submodels = new ArrayList<>();
+    for (LXModel child : model.children) {
+      submodels.add(Model.describeNode(child, 0));
+    }
+    return submodels;
+  }
+
   // Reflective accessor for LXFixture.children (structure/LXFixture.java:406), which is
   // `protected final`. Subfixtures are attached via child.setParent(this)
   // (LXFixture.java:577), which does NOT register them in LXComponent.children or
@@ -231,8 +247,6 @@ public final class Fixtures {
   public record SetParamsResult(int undoEntries, Map<String, Object> values,
       List<String> shadowedJsonParams) {}
 
-  private record ParamEdit(String name, LXParameter parameter, Object coerced) {}
-
   /**
    * Set several of {@code fixture}'s parameters — registered ones (reachable via {@code
    * fixture.getParameter(name)}) and, for a {@link JsonFixture}, its {@code .lxf}-declared
@@ -265,8 +279,8 @@ public final class Fixtures {
 
     JsonFixture jsonFixture = (fixture instanceof JsonFixture jf) ? jf : null;
 
-    List<ParamEdit> numericOrBooleanEdits = new ArrayList<>();
-    List<ParamEdit> stringEdits = new ArrayList<>();
+    List<Parameters.Coerced> numericOrBooleanEdits = new ArrayList<>();
+    List<Parameters.Coerced> stringEdits = new ArrayList<>();
     List<String> shadowedJsonParams = new ArrayList<>();
     for (Map.Entry<String, Object> entry : params.entrySet()) {
       String name = entry.getKey();
@@ -277,42 +291,32 @@ public final class Fixtures {
         // parameter untouched — surface it rather than let the caller assume it was written.
         shadowedJsonParams.add(name);
       }
-      Object value = entry.getValue();
-      if (parameter instanceof StringParameter s) {
-        stringEdits.add(new ParamEdit(name, s, Parameters.requireString(s, value)));
-      } else if (parameter instanceof heronarts.lx.parameter.TriggerParameter) {
-        throw Parameters.mismatch(parameter, "is a momentary trigger — use fire_trigger");
-      } else if (parameter instanceof BooleanParameter b) {
-        numericOrBooleanEdits.add(new ParamEdit(name, b, Parameters.requireBoolean(b, value)));
-      } else if (parameter instanceof DiscreteParameter d) {
-        numericOrBooleanEdits.add(new ParamEdit(name, d, (double) Parameters.requireDiscreteIndex(d, value)));
-      } else if (parameter instanceof AggregateParameter a) {
-        throw Parameters.mismatch(a, "is an aggregate — set its components via the "
-            + a.subparameters.keySet().stream().map(key -> ".../" + key)
-                .collect(Collectors.joining(", ")) + " paths");
-      } else if (parameter instanceof FunctionalParameter) {
-        throw Parameters.mismatch(parameter, "is a computed read-only parameter and cannot be set");
+      Parameters.Coerced coerced = Parameters.classify(parameter, entry.getValue());
+      if (coerced.kind() == Parameters.Kind.STRING) {
+        stringEdits.add(coerced);
       } else {
-        numericOrBooleanEdits.add(new ParamEdit(name, parameter, Parameters.requireNumber(parameter, value)));
+        numericOrBooleanEdits.add(coerced);
       }
     }
 
     int undoEntries = 0;
     if (!numericOrBooleanEdits.isEmpty()) {
       LXCommand.Structure.ArrangeFixtures arrange = new LXCommand.Structure.ArrangeFixtures();
-      for (ParamEdit edit : numericOrBooleanEdits) {
+      for (Parameters.Coerced edit : numericOrBooleanEdits) {
         if (edit.parameter() instanceof BooleanParameter b) {
-          arrange.add(b, (Boolean) edit.coerced());
+          arrange.add(b, (Boolean) edit.value());
+        } else if (edit.kind() == Parameters.Kind.DISCRETE) {
+          arrange.add(edit.parameter(), (double) (Integer) edit.value());
         } else {
-          arrange.add(edit.parameter(), (Double) edit.coerced());
+          arrange.add(edit.parameter(), (Double) edit.value());
         }
       }
       Commands.perform(lx, arrange);
       ++undoEntries;
     }
-    for (ParamEdit edit : stringEdits) {
+    for (Parameters.Coerced edit : stringEdits) {
       Commands.perform(lx, new LXCommand.Parameter.SetString(
-          (StringParameter) edit.parameter(), (String) edit.coerced()));
+          (StringParameter) edit.parameter(), (String) edit.value()));
       ++undoEntries;
     }
 
@@ -422,16 +426,11 @@ public final class Fixtures {
     for (var jsonType : lx.registry.jsonFixtures) {
       jsonTypes.add(jsonType.type);
     }
-    List<JsonTypeError> errors = new ArrayList<>();
-    for (var error : lx.registry.jsonFixtureErrors) {
-      errors.add(new JsonTypeError(error.path, error.type,
-          (error.exception == null) ? null : error.exception.toString()));
-    }
     List<FixtureInfo> fixtures = new ArrayList<>();
     for (LXFixture fixture : lx.structure.fixtures) {
       fixtures.add(describeFixture(fixture));
     }
-    return new ReloadResult(jsonTypes, errors, fixtures);
+    return new ReloadResult(jsonTypes, describeJsonTypeErrors(lx), fixtures);
   }
 
   /** One {@code .lxf} type {@code lx.registry.jsonFixtures} advertises. */
@@ -454,13 +453,17 @@ public final class Fixtures {
     for (var jsonType : lx.registry.jsonFixtures) {
       jsonTypes.add(new JsonTypeInfo(jsonType.type, jsonType.isVisible));
     }
+    return new AvailableFixtures(classes, jsonTypes, describeJsonTypeErrors(lx),
+        lx.getMediaFolder(LX.Media.FIXTURES).getAbsolutePath());
+  }
+
+  private static List<JsonTypeError> describeJsonTypeErrors(LX lx) {
     List<JsonTypeError> errors = new ArrayList<>();
     for (var error : lx.registry.jsonFixtureErrors) {
       errors.add(new JsonTypeError(error.path, error.type,
           (error.exception == null) ? null : error.exception.toString()));
     }
-    return new AvailableFixtures(classes, jsonTypes, errors,
-        lx.getMediaFolder(LX.Media.FIXTURES).getAbsolutePath());
+    return errors;
   }
 
   /**
@@ -581,8 +584,6 @@ public final class Fixtures {
     return describeFixture(fixture);
   }
 
-  private record DirectEdit(LXParameter parameter, Object coerced) {}
-
   /**
    * Write several of {@code fixture}'s REGISTERED parameters directly (no {@code LXCommand}
    * — the caller, {@link #configureAdded}, folds this into the surrounding add's single undo
@@ -593,7 +594,7 @@ public final class Fixtures {
    * every name is resolved and every value coerced before anything is written.
    */
   private static void applyRegisteredParamsDirectly(LXFixture fixture, Map<String, Object> params) {
-    List<DirectEdit> edits = new ArrayList<>();
+    List<Parameters.Coerced> edits = new ArrayList<>();
     for (Map.Entry<String, Object> entry : params.entrySet()) {
       String name = entry.getKey();
       LXParameter parameter = fixture.getParameter(name);
@@ -603,36 +604,14 @@ public final class Fixtures {
                 + " (checked registered parameters only — set_fixture_params reaches "
                 + ".lxf-declared parameters too)");
       }
-      Object value = entry.getValue();
-      Object coerced;
-      if (parameter instanceof StringParameter s) {
-        coerced = Parameters.requireString(s, value);
-      } else if (parameter instanceof heronarts.lx.parameter.TriggerParameter) {
-        throw Parameters.mismatch(parameter, "is a momentary trigger — use fire_trigger");
-      } else if (parameter instanceof BooleanParameter b) {
-        coerced = Parameters.requireBoolean(b, value);
-      } else if (parameter instanceof DiscreteParameter d) {
-        coerced = Parameters.requireDiscreteIndex(d, value);
-      } else if (parameter instanceof AggregateParameter a) {
-        throw Parameters.mismatch(a, "is an aggregate — set its components via the "
-            + a.subparameters.keySet().stream().map(key -> ".../" + key)
-                .collect(Collectors.joining(", ")) + " paths");
-      } else if (parameter instanceof FunctionalParameter) {
-        throw Parameters.mismatch(parameter, "is a computed read-only parameter and cannot be set");
-      } else {
-        coerced = Parameters.requireNumber(parameter, value);
-      }
-      edits.add(new DirectEdit(parameter, coerced));
+      edits.add(Parameters.classify(parameter, entry.getValue()));
     }
-    for (DirectEdit edit : edits) {
-      if (edit.parameter() instanceof StringParameter s) {
-        s.setValue((String) edit.coerced());
-      } else if (edit.parameter() instanceof BooleanParameter b) {
-        b.setValue((Boolean) edit.coerced());
-      } else if (edit.parameter() instanceof DiscreteParameter d) {
-        d.setValue(((Number) edit.coerced()).intValue());
-      } else {
-        edit.parameter().setValue((Double) edit.coerced());
+    for (Parameters.Coerced edit : edits) {
+      switch (edit.kind()) {
+        case STRING -> ((StringParameter) edit.parameter()).setValue((String) edit.value());
+        case BOOLEAN -> ((BooleanParameter) edit.parameter()).setValue((Boolean) edit.value());
+        case DISCRETE -> ((DiscreteParameter) edit.parameter()).setValue((Integer) edit.value());
+        case NUMERIC -> edit.parameter().setValue((Double) edit.value());
       }
     }
   }
