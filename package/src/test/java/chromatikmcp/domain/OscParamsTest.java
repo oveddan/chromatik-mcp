@@ -42,6 +42,40 @@ class OscParamsTest extends HeadlessLxTest {
   }
 
   @Test
+  void stringParameterEntriesCarryTheirValue() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.label.setValue("My Channel");
+    String labelOscAddress = LXOscEngine.getOscAddress(channel.label);
+
+    List<Map<String, Object>> params = OscParams.list(lx);
+
+    Map<String, Object> label = params.stream()
+        .filter(p -> labelOscAddress.equals(p.get("oscAddress")))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("label OSC address not found in " + params));
+
+    assertEquals("StringParameter", label.get("type"));
+    assertEquals("My Channel", label.get("value"));
+  }
+
+  @Test
+  void nonStringParameterEntriesDoNotCarryAValue() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    String faderOscAddress = LXOscEngine.getOscAddress(channel.fader);
+
+    List<Map<String, Object>> params = OscParams.list(lx);
+
+    Map<String, Object> fader = params.stream()
+        .filter(p -> faderOscAddress.equals(p.get("oscAddress")))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("fader OSC address not found in " + params));
+
+    assertFalse(fader.containsKey("value"), "non-string entries must not carry a value field");
+  }
+
+  @Test
   void everyEntryHasANonNullOscAddress() {
     LX lx = newHeadlessLx();
     lx.engine.mixer.addChannel();

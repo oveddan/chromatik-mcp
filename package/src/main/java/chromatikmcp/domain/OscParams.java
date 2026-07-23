@@ -10,6 +10,7 @@ import java.util.Set;
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
 import heronarts.lx.parameter.LXParameter;
+import heronarts.lx.parameter.StringParameter;
 
 /**
  * Flat enumeration of every OSC-addressable parameter in the running engine, for external
@@ -28,8 +29,11 @@ public final class OscParams {
    * wire-shape maps. Call on the engine thread.
    *
    * <p>May be polled by an external OSC sender, so this deliberately computes only static
-   * metadata ({@link Parameters#describeMeta}) — no live value reads, no modulation scan, no
-   * formatting — to avoid doing avoidable work on the thread that renders a live show.
+   * metadata ({@link Parameters#describeMeta}) — no modulation scan, no formatting — to avoid
+   * doing avoidable work on the thread that renders a live show. The one exception is
+   * {@link heronarts.lx.parameter.StringParameter} values, included below because they are a
+   * cheap field read with no formatting/modulation cost, and consumers have no other way to
+   * read them (e.g. a macro modulator's user-given knob names).
    */
   public static List<Map<String, Object>> list(LX lx) {
     List<Map<String, Object>> out = new ArrayList<>();
@@ -68,6 +72,14 @@ public final class OscParams {
       }
       if (meta.max() != null) {
         entry.put("max", meta.max());
+      }
+      // String values are the one exception to the "no live value reads" rule above: a plain
+      // field read with no formatting/modulation work, and consumers need it. Macro knob
+      // display names (e.g. from Bitwig) live in a modulator's label1..label8 StringParameter
+      // VALUES, not in any static metadata field — without reading it here, a consumer can't
+      // show the user-given name for a macro knob at all.
+      if (parameter instanceof StringParameter s && s.getString() != null) {
+        entry.put("value", s.getString());
       }
       out.add(entry);
     }
