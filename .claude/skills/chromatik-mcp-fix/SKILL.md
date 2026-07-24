@@ -75,8 +75,7 @@ blocks on fixes, and fixes never wait on testing.
 ## Cost posture
 
 Tiering per memory `[[subagent-model-policy]]`: implementers Sonnet, fixers
-Haiku, reviews on the session model. Recommended dispatcher session model:
-**Opus** (/fast is fine — live driving is tool-call-heavy, not judgment-heavy);
-switch to Fable only for design-heavy review passes. Fresh agent per
-independent finding; resume (SendMessage) only for follow-ups on the same
-branch.
+Haiku, reviews on the orchestrator model. **Opus is the default orchestrator**
+(set via `model` in user settings) — `/fast` is fine, live driving is
+tool-call-heavy rather than judgment-heavy. Fresh agent per independent
+finding; resume (SendMessage) only for follow-ups on the same branch.

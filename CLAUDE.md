@@ -28,7 +28,7 @@ A single Java package (`package/`) — drop-in LX jar (Maven). The jar embeds an
 
 The only filesystem touchpoint is `~/.chromatik-mcp/status.json`, which the plugin writes on startup so clients can discover the HTTP port.
 
-Reference LX source at `/Users/danoved/Source/LX/`. The scaffolding convention mirrors `/Users/danoved/Source/Apotheneum/` (Java 21, `com.heronarts:lx:1.2.1` as `provided`, `lx.package` JSON descriptor in `src/main/resources/` with Maven token filtering, install profile copies the jar to `~/Chromatik/Packages/`).
+Reference LX source at `/Users/danoved/Source/LX/`; the scaffolding convention mirrors `/Users/danoved/Source/Apotheneum/` (see its `pom.xml` and `lx.package`).
 
 ## Composability is the prime directive
 
@@ -50,69 +50,31 @@ tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutati
 - **Domain primitives** (`package/src/main/java/chromatikmcp/domain/*.java`): the only place that knows how the mutation is actually applied. Each is one focused function.
 - **MCP plumbing** (`package/src/main/java/chromatikmcp/mcp/*.java`): server lifecycle, HTTP transport, status-file writing. Tool handlers and domain primitives never reach into MCP plumbing.
 
-### Concrete example — "add a global modulator"
-
-Bad (inline, not swappable):
-```java
-// tool handler
-public Result<ModulatorInfo> handle(AddMacroKnobArgs args) {
-  lx.command.perform(new LXCommand.Modulation.AddModulator(lx.engine.modulation, MacroKnobs.class));
-  var mods = lx.engine.modulation.modulators;
-  return Result.ok(ModulatorInfo.from(mods.get(mods.size() - 1)));
-}
-```
-
-Good (composed primitive, single point of swap):
-```java
-// domain/Modulators.java
-public static LXModulator addGlobalModulator(LX lx, Class<? extends LXModulator> kind) {
-  var mods = lx.engine.modulation.modulators;
-  int before = mods.size();
-  lx.command.perform(new LXCommand.Modulation.AddModulator(lx.engine.modulation, kind));
-  // perform() swallows command failures — verify the mutation applied (docs/tool-conventions.md)
-  if (mods.size() != before + 1) {
-    throw new IllegalStateException("AddModulator did not add a " + kind.getName());
-  }
-  return mods.get(before);
-}
-
-// tools/AddMacroKnob.java
-public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-  LXModulator m = Modulators.addGlobalModulator(lx, MacroKnobs.class);
-  return Result.ok(Map.of("path", m.getCanonicalPath(), "label", m.getLabel()));
-}
-```
-
-`addGlobalModulator` is reused by every tool that adds a global modulator (MacroKnobs, MacroSwitches, MacroTriggers, LFOs, envelopes). The handler calls one primitive and shapes the payload — no `LXCommand` knowledge. If we ever need to swap the implementation (e.g., add validation, switch from `LXCommand` to direct edit, fan out a notification), only the primitive changes.
-
 ### When primitives multiply
 
 If three tools each need to "find the channel by id, then walk to a parameter, then set it," extract a `setParameterByPath(lx, oscPath, value)` primitive. Don't duplicate. But: only extract when the third caller appears — two callers is coincidence, three is a pattern.
 
 ### What this does **not** mean
 
-- Don't pre-build abstraction layers that aren't used. No factories, registries, or strategy interfaces until two real implementations exist.
-- Don't wrap every two-line operation in a function. Composability is about *mutation primitives* — not formatting helpers or one-shot string assembly.
-- Don't introduce dependency injection containers. Plain static methods plus the `LX` reference passed at server-start time are enough.
+Scoped to *mutation primitives*: no speculative abstraction layers until two real implementations exist, and no wrapping of formatting helpers or one-shot string assembly. No DI container — plain static methods plus the `LX` reference passed at server-start time are enough.
 
 ## Code style
 
-- Java: standard Maven layout, target the LX version pinned in `lx.package`. Keep modulator/plugin lifecycle clean — register/unregister listeners symmetrically.
-- Result-shaped errors at tool boundaries — return a tagged `Result<T>` (or equivalent sealed type) rather than throwing across the MCP handler boundary. Map exceptions to `Result.error(...)` at the seam.
+- Keep modulator/plugin lifecycle clean — register/unregister listeners symmetrically.
+- Tool handlers return `Result<T>` and don't catch — domain primitives throw, and `Tools` maps exceptions to `Result.error(...)` at the seam.
 - Comments: only when the *why* is non-obvious. Don't narrate the *what*.
-- Tests: every domain primitive gets a JUnit test against a constructed `LX` instance or a fixture. Tool handlers get an integration test that exercises the MCP schema + the primitive. The detailed QA strategy lives in `docs/qa-strategy.md` (produced by PR-1c).
-- Build gate: run `package/scripts/build-gate.sh` instead of raw `mvn -f package/pom.xml package` — it keeps the full log on disk and prints a one-line pass/fail summary (or the extracted failing tests/errors), so agents don't flood their context with the full surefire output.
-- LX idioms: follow [docs/lx-coding-guidelines.md](docs/lx-coding-guidelines.md) — model variants with `enum`s (not maps/magic constants), share an `interface` across implementations, use framework helpers (`setColors`, `EnumParameter` labels) instead of reinventing them, don't allocate in render loops, and keep diffs minimal. Distilled from upstream review feedback so we don't relearn it per PR.
-- Tool surface: follow [docs/tool-conventions.md](docs/tool-conventions.md) — naming, canonical-path addressing, `Result` wire shape, engine-thread rule. Decided once in PR-3; don't re-decide per tool.
+- Tests: every domain primitive gets a unit test against a headless `LX`; every tool handler gets an integration test. Template and do→undo→assert pattern in [docs/qa-strategy.md](docs/qa-strategy.md).
+- Build gate: run `package/scripts/build-gate.sh` instead of raw `mvn -f package/pom.xml package` — it keeps the full log on disk and prints a one-line pass/fail summary, so agents don't flood their context with surefire output.
+- Conventions decided once, not re-decided per PR: [docs/tool-conventions.md](docs/tool-conventions.md) (tool surface, canonical-path addressing, `Result` wire shape, engine-thread rule), [docs/lx-coding-guidelines.md](docs/lx-coding-guidelines.md) (LX idioms, distilled from upstream review).
 
 ## Driving a live instance
 
-When an AI session connects to a running Chromatik (port from `~/.chromatik-mcp/status.json`, the one by-design filesystem touchpoint) to test or perform:
+Port comes from `~/.chromatik-mcp/status.json` — the one by-design filesystem touchpoint.
 
-- **Never answer live-state questions from cached responses.** Re-query the API; a saved response file is only for parsing one large payload, not a source of truth minutes later.
-- **On connection failure, assume Chromatik restarted**: re-read `~/.chromatik-mcp/status.json`, re-initialize the MCP session, and re-list before reusing any held canonical paths (indices shift, state resets — e.g. `output/enabled` comes back off).
-- **Consult `get_component_doc` before reasoning about a pattern/effect's behavior** — catalog entries exist for most stock LX effects/patterns and cover exactly the semantics (color modes, parameter interactions) that otherwise get guessed wrong.
-- **Reading LX source to answer a live question is a server-gap signal.** An end consumer can't do it. Work around it once, then file the gap (tool payload, description, or catalog entry) as a build-plan follow-up instead of leaving the knowledge in the session.
+- **Never answer live-state questions from cached responses.** Re-query; a saved response file is for parsing one large payload, not a source of truth minutes later.
+- **Connection failure ⇒ Chromatik restarted**: re-read `status.json`, re-initialize the session, re-list before reusing any held canonical path (indices shift and project state resets — e.g. `output/enabled` comes back off).
+- **Consult `get_component_doc` before reasoning about a pattern/effect's behavior** — entries exist for most stock LX components and cover the semantics that otherwise get guessed wrong.
+- **Reading LX source to answer a live question is a server-gap signal.** An end consumer can't do it: work around it once, then queue the gap (payload, description, or catalog entry) in `docs/live-findings.md` rather than leaving the knowledge in the session.
 
 ## References
 
