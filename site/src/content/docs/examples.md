@@ -13,7 +13,8 @@ first if you're the agent executing these.
 
 ```
 get_project_info                        → LX version, channels, OSC ports
-list_channels                           → mixer tree: channels, patterns, effects, paths
+list_channels                           → mixer summary: channels, pattern/effect counts, paths
+list_channels {detail: full}            → same tree with full per-pattern/effect detail
 list_available_patterns                 → what's installable (documented flags included)
 get_component_doc {class: heronarts.lx.pattern.texture.NoisePattern}
                                         → what it renders, how its knobs interact

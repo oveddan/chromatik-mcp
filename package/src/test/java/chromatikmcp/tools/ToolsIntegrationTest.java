@@ -28,6 +28,7 @@ import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.midi.MidiControlChange;
 import heronarts.lx.mixer.LXChannel;
+import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.modulator.MacroTriggers;
@@ -441,7 +442,7 @@ class ToolsIntegrationTest {
         "source", triggerBank.get("path") + "/macro1",
         "target", channel.enabled.getCanonicalPath())));
 
-    Map<String, Object> payload = structured(call("list_modulations", Map.of()));
+    Map<String, Object> payload = structured(call("list_modulations", Map.of("detail", "full")));
     List<Map<String, Object>> modulators = (List<Map<String, Object>>) payload.get("modulators");
     assertTrue(modulators.stream().anyMatch(m -> knobs.get("path").equals(m.get("path"))),
         "the added bank is discoverable");
@@ -458,6 +459,68 @@ class ToolsIntegrationTest {
 
     structured(call("remove_modulation", Map.of("path", wiredTrigger.get("path"))));
     structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listModulationsDefaultSummaryOmitsDepthFields() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+    Map<String, Object> wired = structured(call("wire_modulator", Map.of(
+        "source", knobs.get("path") + "/macro1",
+        "target", channel.fader.getCanonicalPath())));
+
+    try {
+      Map<String, Object> payload = structured(call("list_modulations", Map.of()));
+      List<Map<String, Object>> modulators = (List<Map<String, Object>>) payload.get("modulators");
+      Map<String, Object> modulatorEntry = modulators.stream()
+          .filter(m -> knobs.get("path").equals(m.get("path"))).findFirst().orElseThrow();
+      assertFalse(modulatorEntry.containsKey("id"));
+      assertFalse(modulatorEntry.containsKey("running"));
+      assertFalse(modulatorEntry.containsKey("oscAddress"));
+      assertNotNull(modulatorEntry.get("label"));
+      assertNotNull(modulatorEntry.get("class"));
+
+      String sourcePath = knobs.get("path") + "/macro1";
+      List<Map<String, Object>> modulations = (List<Map<String, Object>>) payload.get("modulations");
+      Map<String, Object> modulationEntry = modulations.stream()
+          .filter(m -> sourcePath.equals(m.get("sourcePath"))).findFirst().orElseThrow();
+      assertFalse(modulationEntry.containsKey("range"));
+      assertFalse(modulationEntry.containsKey("polarity"));
+      assertFalse(modulationEntry.containsKey("rangePath"));
+      assertFalse(modulationEntry.containsKey("id"));
+      assertNotNull(modulationEntry.get("path"), "summary includes path for drill-down/mutation");
+      assertNotNull(modulationEntry.get("sourcePath"));
+      assertEquals(channel.fader.getCanonicalPath(), modulationEntry.get("targetPath"));
+    } finally {
+      structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listModulationsFullIncludesDepthFields() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+    Map<String, Object> wired = structured(call("wire_modulator", Map.of(
+        "source", knobs.get("path") + "/macro1",
+        "target", channel.fader.getCanonicalPath())));
+
+    try {
+      Map<String, Object> payload = structured(call("list_modulations", Map.of("detail", "full")));
+      List<Map<String, Object>> modulations = (List<Map<String, Object>>) payload.get("modulations");
+      Map<String, Object> entry = modulations.stream()
+          .filter(m -> wired.get("path").equals(m.get("path"))).findFirst().orElseThrow();
+      assertNotNull(entry.get("range"));
+      assertNotNull(entry.get("polarity"));
+      assertNotNull(entry.get("rangePath"));
+
+      assertFalse(payload.containsKey("modulatorCount"), "full detail matches today's shape except isAutoMuted.path is now omitted");
+      assertFalse(payload.containsKey("modulationCount"));
+      assertFalse(payload.containsKey("triggerCount"));
+    } finally {
+      structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+    }
   }
 
   @Test
@@ -577,7 +640,7 @@ class ToolsIntegrationTest {
       assertEquals(before + 1, lx.engine.mixer.channels.size());
 
       // Verify pattern seeded — the channel's patterns list should have one entry
-      Map<String, Object> channels = structured(call("list_channels", Map.of()));
+      Map<String, Object> channels = structured(call("list_channels", Map.of("detail", "full")));
       List<Map<String, Object>> channelList = (List<Map<String, Object>>) channels.get("channels");
       Map<String, Object> newChannel = channelList.stream()
           .filter(c -> channelPath.equals(c.get("path")))
@@ -755,7 +818,7 @@ class ToolsIntegrationTest {
   @Test
   @SuppressWarnings("unchecked")
   void listChannelsDescribesMixer() {
-    Map<String, Object> payload = structured(call("list_channels", Map.of()));
+    Map<String, Object> payload = structured(call("list_channels", Map.of("detail", "full")));
     List<Map<String, Object>> channels = (List<Map<String, Object>>) payload.get("channels");
     assertEquals(lx.engine.mixer.channels.size(), channels.size());
 
@@ -790,7 +853,7 @@ class ToolsIntegrationTest {
   @Test
   @SuppressWarnings("unchecked")
   void listChannelsMixerControlsExposeCrossfaderAndCuePreview() {
-    Map<String, Object> payload = structured(call("list_channels", Map.of()));
+    Map<String, Object> payload = structured(call("list_channels", Map.of("detail", "full")));
     Map<String, Object> mixer = (Map<String, Object>) payload.get("mixer");
     assertNotNull(mixer, "the top-level mixer object carries the crossfader performance surface");
 
@@ -823,7 +886,8 @@ class ToolsIntegrationTest {
           "channel", channelPath, "type", GradientPattern.class.getName()))).get("path");
 
       // Assert empty effects list before adding effect
-      Map<String, Object> beforeAddEffectPayload = structured(call("list_channels", Map.of()));
+      Map<String, Object> beforeAddEffectPayload =
+          structured(call("list_channels", Map.of("detail", "full")));
       List<Map<String, Object>> beforeAddEffectChannels = (List<Map<String, Object>>) beforeAddEffectPayload.get("channels");
       Map<String, Object> beforeAddEffectChannelEntry = beforeAddEffectChannels.stream()
           .filter(c -> channelPath.equals(c.get("path")))
@@ -841,7 +905,7 @@ class ToolsIntegrationTest {
           "container", patternPath, "type", BlurEffect.class.getName())));
       String effectPath = (String) effect.get("path");
 
-      Map<String, Object> payload = structured(call("list_channels", Map.of()));
+      Map<String, Object> payload = structured(call("list_channels", Map.of("detail", "full")));
       List<Map<String, Object>> channels = (List<Map<String, Object>>) payload.get("channels");
       Map<String, Object> channelEntry = channels.stream()
           .filter(c -> channelPath.equals(c.get("path")))
@@ -881,7 +945,7 @@ class ToolsIntegrationTest {
       structured(call("set_parameter", Map.of("path", p2path + "/enabled", "value", true)));
       structured(call("set_parameter", Map.of("path", p2path + "/compositeLevel", "value", 0.8)));
 
-      Map<String, Object> payload = structured(call("list_channels", Map.of()));
+      Map<String, Object> payload = structured(call("list_channels", Map.of("detail", "full")));
       Map<String, Object> entry = ((List<Map<String, Object>>) payload.get("channels")).stream()
           .filter(c -> channelPath.equals(c.get("path")))
           .findFirst().orElseThrow();
@@ -903,6 +967,133 @@ class ToolsIntegrationTest {
           "enabled pattern with compositeLevel > 0 contributes in blend mode");
     } finally {
       structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listChannelsDefaultsToSummaryShape() {
+    Map<String, Object> payload = structured(call("list_channels", Map.of()));
+    List<Map<String, Object>> channels = (List<Map<String, Object>>) payload.get("channels");
+    Map<String, Object> entry = channels.get(channel.getIndex());
+
+    assertFalse(entry.containsKey("controls"), "summary omits the controls block");
+    assertFalse(entry.containsKey("patterns"), "summary omits the full patterns array");
+    assertFalse(entry.containsKey("effects"), "summary omits the effects array");
+    assertNotNull(entry.get("patternCount"));
+    assertNotNull(entry.get("effectCount"));
+    assertNotNull(entry.get("path"));
+    assertNotNull(entry.get("label"));
+    assertEquals("playlist", entry.get("patternMode"));
+
+    Map<String, Object> master = (Map<String, Object>) payload.get("master");
+    assertFalse(master.containsKey("effects"), "master summary omits the effects array");
+    assertNotNull(master.get("effectCount"));
+
+    Map<String, Object> mixer = (Map<String, Object>) payload.get("mixer");
+    assertFalse(mixer.containsKey("blendModeOptions"), "summary drops the shared option arrays");
+    assertFalse(mixer.containsKey("transitionBlendModeOptions"));
+    assertFalse(mixer.containsKey("cueA"), "summary drops the cue/aux toggles");
+    assertNotNull(mixer.get("crossfader"), "summary keeps the performance-critical crossfader");
+
+    // Same object shape as full detail, minus only the options array — a key whose JSON type
+    // varied with `detail` would silently break clients reading .current or .path.
+    Map<String, Object> blendMode = (Map<String, Object>) mixer.get("crossfaderBlendMode");
+    assertEquals(lx.engine.mixer.crossfaderBlendMode.getObject().getLabel(),
+        blendMode.get("current"));
+    assertNotNull(blendMode.get("path"), "summary keeps the settable path");
+    assertFalse(blendMode.containsKey("options"), "summary drops the long options array");
+  }
+
+  @Test
+  void listChannelsSummaryIncludesGroupMembership() {
+    // Regression: channelSummary omitted `group` while channelFull emitted it — the drift
+    // that parallel hand-written summary/full builders invite. Group membership matters
+    // when surveying a mixer, so both shapes carry it. Builds a real group: asserting only
+    // that summary and full agree would pass vacuously when no channel is grouped.
+    class MutableGroupHolder {
+      LXChannel grouped;
+      LXGroup group;
+    }
+    final MutableGroupHolder holder = new MutableGroupHolder();
+
+    // Setup: add channel and group on engine thread.
+    lx.engine.addTask(() -> {
+      holder.grouped = lx.engine.mixer.addChannel();
+      holder.group = lx.engine.mixer.addGroup(List.of(holder.grouped));
+    });
+    lx.engine.run();
+
+    try {
+      String groupPath = holder.group.getCanonicalPath();
+      String channelPath = holder.grouped.getCanonicalPath();
+
+      assertEquals(groupPath,
+          channelEntry(structured(call("list_channels", Map.of())), channelPath).get("group"),
+          "summary carries group membership");
+      assertEquals(groupPath,
+          channelEntry(structured(call("list_channels", Map.of("detail", "full"))), channelPath)
+              .get("group"));
+    } finally {
+      // Teardown: remove group and channel on engine thread.
+      lx.engine.addTask(() -> {
+        if (lx.engine.mixer.channels.contains(holder.group)) {
+          lx.engine.mixer.removeChannel(holder.group);
+        }
+        if (lx.engine.mixer.channels.contains(holder.grouped)) {
+          lx.engine.mixer.removeChannel(holder.grouped);
+        }
+      });
+      lx.engine.run();
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> channelEntry(Map<String, Object> payload, String path) {
+    for (Map<String, Object> entry : (List<Map<String, Object>>) payload.get("channels")) {
+      if (path.equals(entry.get("path"))) {
+        return entry;
+      }
+    }
+    throw new AssertionError("no channel at " + path + " in list_channels payload");
+  }
+
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listChannelsSummaryIsDramaticallySmallerThanFull() {
+    List<String> channelPaths = new java.util.ArrayList<>();
+    try {
+      for (int i = 0; i < 4; i++) {
+        String channelPath = (String) structured(call("add_channel",
+            Map.of("pattern", GradientPattern.class.getName()))).get("path");
+        channelPaths.add(channelPath);
+        structured(call("add_pattern", Map.of(
+            "channel", channelPath, "type", GradientPattern.class.getName())));
+        structured(call("add_effect", Map.of(
+            "container", channelPath, "type", BlurEffect.class.getName())));
+      }
+
+      String summaryJson = jsonSize(structured(call("list_channels", Map.of())));
+      String fullJson = jsonSize(structured(call("list_channels", Map.of("detail", "full"))));
+
+      assertTrue(summaryJson.length() < fullJson.length() * 0.4,
+          "summary (" + summaryJson.length() + " bytes) should be well under 40% of full ("
+              + fullJson.length() + " bytes)");
+    } finally {
+      // Paths are index-based and shift on removal — remove last-added first so earlier
+      // paths stay valid.
+      for (int i = channelPaths.size() - 1; i >= 0; i--) {
+        structured(call("remove_channel", Map.of("path", channelPaths.get(i))));
+      }
+    }
+  }
+
+  private static String jsonSize(Map<String, Object> payload) {
+    try {
+      return new tools.jackson.databind.ObjectMapper().writeValueAsString(payload);
+    } catch (RuntimeException e) {
+      throw new IllegalStateException("Failed to serialize payload for size comparison", e);
     }
   }
 
@@ -2090,5 +2281,38 @@ class ToolsIntegrationTest {
   void recallSnapshotUnknownPathIsNotFound() {
     McpSchema.CallToolResult result = call("recall_snapshot", Map.of("path", "/lx/snapshots/snapshot/99"));
     assertEquals(Boolean.TRUE, result.isError());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listChannelsPayloadContainsNoNullPaths() {
+    // Regression: unregistered parameters (e.g. isAutoMuted) have paths that contain "/null"
+    // (LXPath.java:85-93). This test walks the entire payload recursively and asserts that
+    // no string value equals or contains "/null" — catches the next unregistered parameter
+    // without touching dozens of call sites.
+    Map<String, Object> payload = structured(call("list_channels", Map.of("detail", "full")));
+    StringBuilder errors = new StringBuilder();
+    walkForNullPaths(payload, "", errors);
+    assertEquals("", errors.toString(),
+        "payload contains no unregistered-parameter \"/null\" paths: " + errors);
+  }
+
+  private static void walkForNullPaths(Object obj, String path, StringBuilder errors) {
+    if (obj instanceof String str) {
+      if (str.equals("/null") || str.contains("/null")) {
+        errors.append("  ").append(path).append(": \"").append(str).append("\"\n");
+      }
+    } else if (obj instanceof Map<?, ?> map) {
+      for (Map.Entry<?, ?> entry : map.entrySet()) {
+        String key = entry.getKey().toString();
+        String newPath = path.isEmpty() ? key : path + "." + key;
+        walkForNullPaths(entry.getValue(), newPath, errors);
+      }
+    } else if (obj instanceof List<?> list) {
+      for (int i = 0; i < list.size(); i++) {
+        String newPath = path + "[" + i + "]";
+        walkForNullPaths(list.get(i), newPath, errors);
+      }
+    }
   }
 }

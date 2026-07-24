@@ -5,6 +5,18 @@ into slices when related items accumulate; lines deleted when their fix merges.
 
 ## Queued
 
+- 2026-07-20 — **status.json stale while the server was up.** Live session
+  found the running Chromatik (pid 42911) serving MCP on port 55230 while BOTH
+  discovery files disagreed: legacy `~/.lx-mcp/status.json` (dead pid 75845,
+  port 52429, pre-rename) and `~/.chromatik-mcp/status.json` (pid 46296, port
+  55342 — also not the running instance). Discovery only worked by `lsof`-ing
+  the process. Plugin writes the file on startup only; the running instance
+  either failed the write or holds a pre-rename jar. Fix ideas: rewrite on a
+  heartbeat (mtime doubles as liveness), or verify-on-read (probe pid/port
+  before trusting); at minimum log the write failure loudly. Also: delete or
+  tombstone the legacy `~/.lx-mcp/` file post-rename so old clients fail fast
+  instead of reading stale data. Root-cause before slicing.
+
 - 2026-07-16 — **v2: auth token for non-loopback binds.** `~/.chromatik-mcp/config.json`
   already supports `host`/`port` (remote works today, with a security warning
   logged at startup — ChromatikMcpPlugin.java:42-47). V2: require a bearer token when

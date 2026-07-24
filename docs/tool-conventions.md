@@ -40,6 +40,27 @@ them is a cross-cutting change that touches every tool — propose it as its own
   validation semantics for `isError` results against a declared schema are unverified.
   Revisit at the SDK GA bump (tracker follow-up in `docs/build-plan.md`).
 
+## List tool detail levels
+
+- `list_*` tools accept an optional `detail` argument with values `summary` (default) or
+  `full`. **`summary` is the default** — an agent that never reads the docs gets the cheap
+  path.
+- `summary` omits expensive per-entry data (full `patterns`/`effects` arrays,
+  `controls` blocks, range/polarity metadata on wirings) but includes per-entry
+  **metadata** (path, id, label, index, type) and **count keys** only where the full
+  array is omitted (e.g. `patternCount`/`effectCount` in a channel summary, but never
+  bare counts for arrays that are emitted). A summary entry is a lean survey; counts
+  tell agents "there are more details available via `detail: full`" without doubling the
+  payload size.
+- `full` emits the complete per-entry shape — all arrays, all parameter objects, all
+  option lists.
+- **A key that appears in both modes keeps the same JSON type.** Narrowing an object to
+  a bare string in summary (e.g. emitting `crossfaderBlendMode` as a label instead of
+  `{current, path}`) silently breaks any client reading a subfield, and drops the
+  settable path that `set_parameter` needs. Drop the *expensive part* of a value —
+  a long `options` array — not the value's shape. The count keys are the deliberate
+  exception: they exist only in summary, precisely because the array they count does not.
+
 ## Image-bearing results (PR-8)
 
 - A tool that returns media uses `Result.okImage(payload, pngSupplier)` — the seam adds

@@ -398,7 +398,10 @@ public final class Channels {
         new EnumField(channel.crossfadeGroup.getOption(), null, channel.crossfadeGroup.getCanonicalPath()),
         new EnumField(channel.blendMode.getObject().getLabel(), null, channel.blendMode.getCanonicalPath()),
         new Field<>(channel.autoMute.isOn(), channel.autoMute.getCanonicalPath()),
-        new Field<>(channel.isAutoMuted.isOn(), channel.isAutoMuted.getCanonicalPath()),
+        // isAutoMuted is a read-only derived flag that isn't path-registered
+        // (LXAbstractChannel.java:113) — getCanonicalPath() would yield "/null", so
+        // report the value only, with no path.
+        new Field<>(channel.isAutoMuted.isOn(), null),
         new Field<>(channel.cueActive.isOn(), channel.cueActive.getCanonicalPath()),
         new Field<>(channel.auxActive.isOn(), channel.auxActive.getCanonicalPath()),
         patternEngineControls);
