@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -127,6 +129,13 @@ class CatalogTest {
     assertEquals(h1, h2, "hash is cached and stable");
   }
 
+  @Test
+  void computeBytesHashReturnsNullForBootstrapLoadedClass() {
+    // Bootstrap-loaded classes have a null ClassLoader; must not NPE.
+    String hash = Catalog.computeBytesHash(String.class);
+    assertNull(hash, "bootstrap-loaded class bytecode is not readable");
+  }
+
   // ── overlay tier shadows classpath entry ────────────────────────────────────
 
   @Test
@@ -169,6 +178,42 @@ class CatalogTest {
           tempDir.resolve("heronarts.lx.pattern.color.GradientPattern.md"));
       Files.deleteIfExists(tempDir);
     }
+  }
+
+  // ── plugin-jar tier: stock LX classes loaded by LXClassLoader's *parent* ──────
+  //
+  // In production, Chromatik loads every package jar in one LXClassLoader whose
+  // parent loaded heronarts.lx.* — so a stock LX class's own loader can never see
+  // catalog/*.md bundled in this jar. A single-classpath test JVM can't reproduce
+  // that asymmetry on its own, so these tests fake it with an isolated loader that
+  // (like the real parent) cannot see catalog/ resources.
+
+  @Test
+  void locateEntryFallsBackToPluginJarWhenClassOwnLoaderCannotSeeIt() throws IOException {
+    try (URLClassLoader isolated = new URLClassLoader(new URL[0], null)) {
+      Catalog.CatalogEntry entry =
+          Catalog.locateEntry(GradientPattern.class.getName(), isolated);
+      assertNotNull(entry, "plugin-jar tier resolves entries the class's own loader can't see");
+      assertEquals("plugin-jar", entry.source());
+    }
+  }
+
+  @Test
+  void locateEntryStillNullForUndocumentedClassViaIsolatedLoader() throws IOException {
+    // SinLFO has no catalog entry anywhere — the plugin-jar fallback must not invent one.
+    try (URLClassLoader isolated = new URLClassLoader(new URL[0], null)) {
+      assertNull(Catalog.locateEntry(SinLFO.class.getName(), isolated));
+    }
+  }
+
+  @Test
+  void locateEntryResolvesPluginJarForNullClassLoader() {
+    // Bootstrap classes report null from getClassLoader(); must not NPE and must still
+    // fall through to the plugin-jar tier.
+    Catalog.CatalogEntry entry =
+        Catalog.locateEntry(GradientPattern.class.getName(), null);
+    assertNotNull(entry);
+    assertEquals("plugin-jar", entry.source());
   }
 
   // ── findClass and hasEntry ───────────────────────────────────────────────────

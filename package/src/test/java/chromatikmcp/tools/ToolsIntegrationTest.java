@@ -1183,7 +1183,11 @@ class ToolsIntegrationTest {
     // If bytes differ (fresh rebuild), assert that the stale value is a boolean.
     Object stale = catalog.get("stale");
     assertTrue(stale instanceof Boolean, "stale is a boolean when bytecode is readable");
-    assertEquals("class-jar", catalog.get("source"));
+    // Single-classpath test JVM resolves stock classes at tier 2; deployed runtime
+    // resolves them at tier 3 via the plugin jar.
+    assertTrue(
+        Set.of("class-jar", "plugin-jar").contains(catalog.get("source")),
+        "source is either class-jar (tier 2) or plugin-jar (tier 3)");
   }
 
   @Test

@@ -25,8 +25,9 @@ import heronarts.lx.pattern.LXPattern;
  * entries for LX patterns, effects, and modulators.
  *
  * <p>Entries are markdown files with flat frontmatter and three fixed body sections.
- * Resolution follows a three-tier order (overlay dir → class's own classloader jar →
- * absent); see {@code docs/catalog-format.md} for the full spec.
+ * Resolution follows a four-tier order (overlay dir → class's own classloader jar →
+ * this jar's own classloader → absent); see {@code docs/catalog-format.md} for the
+ * full spec.
  */
 public final class Catalog {
 
@@ -88,15 +89,25 @@ public final class Catalog {
   }
 
   /**
-   * Locates the catalog entry for {@code clazz} via three-tier resolution:
+   * Locates the catalog entry for {@code clazz} via four-tier resolution:
    * <ol>
    *   <li>~/.chromatik-mcp/catalog/&lt;fqcn&gt;.md (overlay — wins if present)</li>
    *   <li>clazz.getClassLoader().getResourceAsStream("catalog/&lt;fqcn&gt;.md") (class's jar)</li>
+   *   <li>this jar's own classloader (bundled stock LX entries)</li>
    *   <li>absent → returns null (class is undocumented)</li>
    * </ol>
    */
   public static CatalogEntry locateEntry(Class<?> clazz) {
-    String filename = clazz.getName() + ".md";
+    return locateEntry(clazz.getName(), clazz.getClassLoader());
+  }
+
+  /**
+   * Package-private seam: {@code classLoader} is the documented class's own loader.
+   * Tests pass a loader that cannot see {@code catalog/} to exercise tier 3 — the case
+   * a single-classpath test JVM never reproduces on its own.
+   */
+  static CatalogEntry locateEntry(String fqcn, ClassLoader classLoader) {
+    String filename = fqcn + ".md";
 
     // Tier 1: overlay file (machine-local, always wins)
     Path overlay = overlayDir.resolve(filename);
@@ -110,17 +121,36 @@ public final class Catalog {
       }
     }
 
-    // Tier 2: class's own classloader — finds entries in the class's jar and in the
-    // chromatik-mcp jar (stock LX entries ship there; the classloader resolves both)
-    try (InputStream in = clazz.getClassLoader().getResourceAsStream("catalog/" + filename)) {
-      if (in != null) {
-        String content = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        return parseEntry(content, "class-jar");
-      }
-    } catch (IOException e) {
-      LX.error(e, "Unreadable catalog class-jar resource: catalog/" + filename);
+    // Tier 2: class's own classloader — a package jar that ships entries for its own classes
+    CatalogEntry entry = readFromClassLoader(classLoader, filename, "class-jar");
+    if (entry != null) {
+      return entry;
     }
 
+    // Tier 3: this jar's classloader. Chromatik loads every package jar in one
+    // LXClassLoader whose *parent* loaded heronarts.lx.*, so a stock LX class's own
+    // loader cannot see resources bundled here — only this one can.
+    // This loader is captured at classload time; a Chromatik content reload that
+    // disposes the LXClassLoader leaves tier 3 resolving nothing until restart (see #121).
+    ClassLoader own = Catalog.class.getClassLoader();
+    if (own == classLoader) {
+      return null;
+    }
+    return readFromClassLoader(own, filename, "plugin-jar");
+  }
+
+  private static CatalogEntry readFromClassLoader(
+      ClassLoader classLoader, String filename, String source) {
+    if (classLoader == null) {
+      return null;
+    }
+    try (InputStream in = classLoader.getResourceAsStream("catalog/" + filename)) {
+      if (in != null) {
+        return parseEntry(new String(in.readAllBytes(), StandardCharsets.UTF_8), source);
+      }
+    } catch (IOException e) {
+      LX.error(e, "Unreadable catalog " + source + " resource: catalog/" + filename);
+    }
     return null;
   }
 
@@ -158,7 +188,12 @@ public final class Catalog {
     if (cached != null) return cached;
 
     String resourcePath = fqcn.replace('.', '/') + ".class";
-    try (InputStream in = clazz.getClassLoader().getResourceAsStream(resourcePath)) {
+    ClassLoader loader = clazz.getClassLoader();
+    if (loader == null) {
+      unreadableCache.add(fqcn);
+      return null;
+    }
+    try (InputStream in = loader.getResourceAsStream(resourcePath)) {
       if (in == null) {
         unreadableCache.add(fqcn);
         return null;
