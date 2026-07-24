@@ -9,6 +9,7 @@ import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
 
 import chromatikmcp.domain.Catalog;
+import chromatikmcp.domain.Resolve;
 
 /**
  * {@code get_component_doc}: returns the semantic catalog entry for an LX pattern,
@@ -28,10 +29,12 @@ public final class GetComponentDoc implements LxTool {
   public String description() {
     return "Return the semantic catalog entry for an LX pattern, effect, or modulator class: "
         + "visual summary, parameter interactions, usage tips, and staleness metadata. "
-        + "Accepts either the full class name or the short name returned by the "
-        + "list_available_* tools (a short name ambiguous across patterns/effects/modulators "
-        + "is rejected, naming the candidates). Registered but undocumented classes return "
-        + "documented:false (not an error).";
+        + "Accepts exactly one of 'class' (the full class name or the short name returned "
+        + "by the list_available_* tools — a short name ambiguous across "
+        + "patterns/effects/modulators is rejected, naming the candidates) or 'path' (the "
+        + "canonical path of a live component instance, e.g. "
+        + "/lx/mixer/channel/1/pattern/1 — its class is looked up and documented). "
+        + "Registered but undocumented classes return documented:false (not an error).";
   }
 
   @Override
@@ -40,8 +43,12 @@ public final class GetComponentDoc implements LxTool {
     properties.put("class", Schemas.string(
         "Class name, as returned by list_available_* tools — full class name "
             + "(e.g. heronarts.lx.pattern.color.GradientPattern) or short name "
-            + "(e.g. GradientPattern)"));
-    return Schemas.object(properties, List.of("class"));
+            + "(e.g. GradientPattern). Exactly one of 'class' or 'path' is required."));
+    properties.put("path", Schemas.string(
+        "Canonical path of a live component instance (e.g. "
+            + "/lx/mixer/channel/1/pattern/1) whose class is documented. Exactly one of "
+            + "'class' or 'path' is required."));
+    return Schemas.object(properties, List.of());
   }
 
   @Override
@@ -51,18 +58,54 @@ public final class GetComponentDoc implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("class") instanceof String className) || className.isEmpty()) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required non-empty string argument: class");
+    Object classArg = args.get("class");
+    Object pathArg = args.get("path");
+    boolean hasClass = classArg != null;
+    boolean hasPath = pathArg != null;
+    if (hasClass == hasPath) {
+      if (hasClass) {
+        return Result.error(Result.INVALID_ARGUMENT,
+            "Exactly one of 'class' or 'path' is required; both were given");
+      } else {
+        return Result.error(Result.INVALID_ARGUMENT,
+            "Exactly one of 'class' or 'path' is required; neither was given");
+      }
+    }
+    // Defensive type checks: the SDK validates inputSchema server-side before the handler runs
+    // (see docs/tool-conventions.md "Input validation" section), so these are unreachable via MCP.
+    // They persist here because handlers may be invoked directly in unit tests (e.g.,
+    // SubfixtureTreeTest calls handlers directly without MCP marshalling).
+    if (hasClass && !(classArg instanceof String)) {
+      return Result.error(Result.INVALID_ARGUMENT, "class must be a string");
+    }
+    if (hasPath && !(pathArg instanceof String)) {
+      return Result.error(Result.INVALID_ARGUMENT, "path must be a string");
+    }
+    if (hasClass && ((String) classArg).isBlank()) {
+      return Result.error(Result.INVALID_ARGUMENT, "class must not be empty");
+    }
+    if (hasPath && ((String) pathArg).isBlank()) {
+      return Result.error(Result.INVALID_ARGUMENT, "path must not be empty");
     }
 
-    // Throws ResolveException(NOT_FOUND) for unknown classes; seam maps to not_found
-    Class<? extends LXComponent> clazz = Catalog.findClass(lx, className);
+    Class<? extends LXComponent> clazz;
+    if (hasPath) {
+      // Throws ResolveException(NOT_FOUND/TYPE_MISMATCH/INVALID_PATH); seam maps to wire codes
+      LXComponent component = Resolve.component(lx, (String) pathArg);
+      clazz = component.getClass();
+      // Verify the component's class is a documentable kind (pattern/effect/modulator).
+      // Catalog.findClass throws NOT_FOUND if not registered; mirror that error.
+      Catalog.findClass(lx, clazz.getName());
+    } else {
+      // Throws ResolveException(NOT_FOUND) for unknown classes; seam maps to not_found
+      clazz = Catalog.findClass(lx, (String) classArg);
+    }
 
     List<String> tags = Optional.ofNullable(lx.registry.getTags(clazz))
         .map(List::copyOf).orElse(List.of());
 
     Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("class", className);
+    payload.put("class", clazz.getName());
     payload.put("name", LXComponent.getComponentName(clazz));
     payload.put("category", LXComponent.getCategory(clazz));
     payload.put("tags", tags);

@@ -26,10 +26,16 @@ public final class GetFrame implements LxTool {
 
   @Override
   public String description() {
-    return "Preview the rendered output: reads back the last completed engine frame and returns "
-        + "a compact summary (non-black fraction, mean brightness, dominant colors, NxN "
-        + "mean-color grid). Pass include_image=true to also get a PNG rendering of the point "
-        + "cloud — use sparingly, image content is token-expensive.";
+    return "See what the model is rendering by reading the composited output buffer. "
+        + "Pass include_image=true to get an actual PNG image of the current frame — use "
+        + "this whenever you need to visually inspect the render (e.g. confirming a "
+        + "pattern/effect change looks right, debugging the mapping, or answering 'what "
+        + "does this look like'). The API always returns a cheap numeric summary "
+        + "(non-black fraction, mean brightness, dominant colors, and an NxN mean-color "
+        + "grid) — the PNG is additional when requested. Image content is token-expensive, "
+        + "so default to the numeric summary and only request the PNG when actually looking "
+        + "at the picture matters. Supports orthographic front/top/side views and main/cue/aux "
+        + "output buses.";
   }
 
   @Override

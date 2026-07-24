@@ -185,8 +185,8 @@ class ToolSeamTest extends HeadlessLxTest {
 
     Result<Map<String, Object>> result = new WireModulator()
         .handle(this.lx, Map.of(
-            "source", knobs.macro1.getCanonicalPath(),
-            "target", channel.fader.getCanonicalPath(),
+            "sourcePath", knobs.macro1.getCanonicalPath(),
+            "targetPath", channel.fader.getCanonicalPath(),
             "range", Double.NaN));
     Result.Error<Map<String, Object>> error =
         assertInstanceOf(Result.Error.class, result);

@@ -18,9 +18,9 @@ public final class AddEffect implements LxTool {
 
   @Override
   public String description() {
-    return "Add an effect by class name (from list_available_effects — either the full "
-        + "class name or the short name it lists) to a channel, master bus, or pattern. "
-        + "The container must be a channel path (e.g. /lx/mixer/channel/1), the master bus "
+    return "Add an effect ('class', from list_available_effects — either the full class "
+        + "name or the short name it lists) to a channel, master bus, or pattern. "
+        + "'containerPath' must be a channel path (e.g. /lx/mixer/channel/1), the master bus "
         + "path, or a pattern path (e.g. /lx/mixer/channel/1/pattern/1). Undoable in "
         + "Chromatik with Cmd-Z.";
   }
@@ -28,12 +28,12 @@ public final class AddEffect implements LxTool {
   @Override
   public Map<String, Object> inputSchema() {
     Map<String, Object> properties = new LinkedHashMap<>();
-    properties.put("container", Schemas.string(
+    properties.put("containerPath", Schemas.string(
         "Canonical path of the channel, master bus, or pattern to add the effect to"));
-    properties.put("type", Schemas.string(
+    properties.put("class", Schemas.string(
         "Effect class name, as returned by list_available_effects — full class name or "
             + "short name"));
-    return Schemas.object(properties, List.of("container", "type"));
+    return Schemas.object(properties, List.of("containerPath", "class"));
   }
 
   @Override
@@ -43,11 +43,11 @@ public final class AddEffect implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("container") instanceof String containerPath)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: container");
+    if (!(args.get("containerPath") instanceof String containerPath)) {
+      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: containerPath");
     }
-    if (!(args.get("type") instanceof String typeName)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: type");
+    if (!(args.get("class") instanceof String typeName)) {
+      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: class");
     }
     Class<? extends LXEffect> effectClass = Channels.resolveEffectClass(lx, typeName);
     LXEffect effect = Channels.addEffect(lx, containerPath, effectClass);

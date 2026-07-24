@@ -123,7 +123,7 @@ No parameters.
 
 _read-only_
 
-Preview the rendered output: reads back the last completed engine frame and returns a compact summary (non-black fraction, mean brightness, dominant colors, NxN mean-color grid). Pass include_image=true to also get a PNG rendering of the point cloud — use sparingly, image content is token-expensive.
+See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Supports orthographic front/top/side views and main/cue/aux output buses.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
@@ -137,11 +137,12 @@ Preview the rendered output: reads back the last completed engine frame and retu
 
 _read-only_
 
-Return the semantic catalog entry for an LX pattern, effect, or modulator class: visual summary, parameter interactions, usage tips, and staleness metadata. Accepts either the full class name or the short name returned by the list_available_* tools (a short name ambiguous across patterns/effects/modulators is rejected, naming the candidates). Registered but undocumented classes return documented:false (not an error).
+Return the semantic catalog entry for an LX pattern, effect, or modulator class: visual summary, parameter interactions, usage tips, and staleness metadata. Accepts exactly one of 'class' (the full class name or the short name returned by the list_available_* tools — a short name ambiguous across patterns/effects/modulators is rejected, naming the candidates) or 'path' (the canonical path of a live component instance, e.g. /lx/mixer/channel/1/pattern/1 — its class is looked up and documented). Registered but undocumented classes return documented:false (not an error).
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
-| `class` | string | yes | — | Class name, as returned by list_available_* tools — full class name (e.g. heronarts.lx.pattern.color.GradientPattern) or short name (e.g. GradientPattern) |
+| `class` | string | no | — | Class name, as returned by list_available_* tools — full class name (e.g. heronarts.lx.pattern.color.GradientPattern) or short name (e.g. GradientPattern). Exactly one of 'class' or 'path' is required. |
+| `path` | string | no | — | Canonical path of a live component instance (e.g. /lx/mixer/channel/1/pattern/1) whose class is documented. Exactly one of 'class' or 'path' is required. |
 
 <!-- generated:end -->
 
@@ -156,7 +157,7 @@ momentary triggers (see `fire_trigger`). Discrete/selector parameters also accep
 index lookup needed. The response echoes the **base** value, so set-then-verify works
 even while modulation rides on top.
 
-Type arguments everywhere (`add_pattern`, `add_effect`, `add_modulator`,
+`class` arguments everywhere (`add_pattern`, `add_effect`, `add_modulator`,
 `get_component_doc`) accept either the full class name or the short `name` the
 `list_available_*` tools return; an ambiguous short name errors listing the candidates.
 
@@ -187,11 +188,11 @@ reusing cached paths.
 
 _mutating_
 
-Add a new channel to the mixer. Optionally seed it with a first pattern by passing a fully-qualified class name (from list_available_patterns). Returns the new channel's path, id, label, and 0-based index. Note: LX also moves UI focus/selection to the new channel. Undoable in Chromatik with Cmd-Z.
+Add a new channel to the mixer. Optionally seed it with a first pattern by passing 'class' (from list_available_patterns). Returns the new channel's path, id, label, and 0-based index. Note: LX also moves UI focus/selection to the new channel. Undoable in Chromatik with Cmd-Z.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
-| `pattern` | string | no | — | Optional pattern class name (from list_available_patterns) to seed the channel with |
+| `class` | string | no | — | Optional pattern class name (from list_available_patterns) to seed the channel with |
 
 ### `remove_channel`
 
@@ -207,12 +208,12 @@ Remove a channel (or group) from the mixer by its canonical path. Undoable in Ch
 
 _mutating_
 
-Add a pattern to a channel by class name (from list_available_patterns) — either the full class name or the short name it lists. Pass an optional 0-based index to insert at a specific position; omit to append. The first pattern added to an empty channel auto-activates. Targets channels only (not PatternRacks). Inserting shifts the 1-based paths of later sibling patterns — re-list rather than reusing cached paths. Undoable in Chromatik with Cmd-Z.
+Add a pattern ('class', from list_available_patterns — either the full class name or the short name it lists) to a channel ('containerPath'). Pass an optional 0-based index to insert at a specific position; omit to append. The first pattern added to an empty channel auto-activates. Targets channels only (not PatternRacks). Inserting shifts the 1-based paths of later sibling patterns — re-list rather than reusing cached paths. Undoable in Chromatik with Cmd-Z.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
-| `channel` | string | yes | — | Canonical path of the channel, e.g. /lx/mixer/channel/1 |
-| `type` | string | yes | — | Pattern class name, as returned by list_available_patterns — full class name or short name |
+| `containerPath` | string | yes | — | Canonical path of the channel, e.g. /lx/mixer/channel/1 |
+| `class` | string | yes | — | Pattern class name, as returned by list_available_patterns — full class name or short name |
 | `index` | integer | no | -2147483648–2147483647 | 0-based insertion index; omit to append at the end |
 
 ### `remove_pattern`
@@ -250,12 +251,12 @@ Activate (go to) a pattern on its channel. Only valid when the channel is in PLA
 
 _mutating_
 
-Add an effect by class name (from list_available_effects — either the full class name or the short name it lists) to a channel, master bus, or pattern. The container must be a channel path (e.g. /lx/mixer/channel/1), the master bus path, or a pattern path (e.g. /lx/mixer/channel/1/pattern/1). Undoable in Chromatik with Cmd-Z.
+Add an effect ('class', from list_available_effects — either the full class name or the short name it lists) to a channel, master bus, or pattern. 'containerPath' must be a channel path (e.g. /lx/mixer/channel/1), the master bus path, or a pattern path (e.g. /lx/mixer/channel/1/pattern/1). Undoable in Chromatik with Cmd-Z.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
-| `container` | string | yes | — | Canonical path of the channel, master bus, or pattern to add the effect to |
-| `type` | string | yes | — | Effect class name, as returned by list_available_effects — full class name or short name |
+| `containerPath` | string | yes | — | Canonical path of the channel, master bus, or pattern to add the effect to |
+| `class` | string | yes | — | Effect class name, as returned by list_available_effects — full class name or short name |
 
 ### `remove_effect`
 
@@ -288,11 +289,11 @@ Move an effect to a new 0-based index within its container (channel, bus, or pat
 
 _mutating_
 
-Add a modulator by class name (from list_available_modulators) — e.g. heronarts.lx.modulator.MacroKnobs for a bank of eight mappable knobs, or the short name it lists (e.g. VariableLFO for heronarts.lx.modulator.VariableLFO). By default it lands in the global modulation engine (the Chromatik side panel); pass scope to add it inside a pattern/effect's own chain. The response lists every parameter with its canonical path and OSC address. Undoable in Chromatik with Cmd-Z.
+Add a modulator by class name (from list_available_modulators) — e.g. heronarts.lx.modulator.MacroKnobs for a bank of eight mappable knobs, or the short name it lists (e.g. VariableLFO for heronarts.lx.modulator.VariableLFO). Pass the class name as 'class'. By default it lands in the global modulation engine (the Chromatik side panel); pass 'scope' to add it inside a pattern/effect's own chain. The response lists every parameter with its canonical path and OSC address. Undoable in Chromatik with Cmd-Z.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
-| `type` | string | yes | — | Modulator class name, as returned by list_available_modulators — full class name (e.g. heronarts.lx.modulator.VariableLFO) or short name (e.g. VariableLFO) |
+| `class` | string | yes | — | Modulator class name, as returned by list_available_modulators — full class name (e.g. heronarts.lx.modulator.VariableLFO) or short name (e.g. VariableLFO) |
 | `scope` | string | no | — | Optional canonical path of a pattern/effect to host the modulator in its own chain; omit for the global engine |
 
 ### `remove_modulator`
@@ -309,12 +310,12 @@ Remove a modulator added by add_modulator, by the canonical path returned when i
 
 _mutating_
 
-Wire a continuous modulation from a source parameter (e.g. a macro knob's macro1) onto a target parameter. To use an oscillator/envelope modulator's own running value as the source, pass the modulator's own canonical path (it is itself a parameter) — not one of its input sub-parameters like an LFO's basisIn, which only takes effect when that modulator's manualBasis is enabled and otherwise silently does nothing. The target must be a compound parameter (most device/mixer knobs are). Scope is inferred from the source — a knob inside a device chain wires within that device; pass scope explicitly to override. The wiring starts with zero depth and has no visible effect until depth is set — pass the optional range argument (e.g. 1.0 for full depth) to apply it immediately, or set_parameter on the returned rangePath afterwards. Adjust direction via polarityPath. Undoable in Chromatik with Cmd-Z, though a wiring created with range takes two undo steps (depth first, then the wiring). Caution: a wiring LX rejects (circular dependency) clears Chromatik's undo history.
+Wire a continuous modulation from a source parameter (e.g. a macro knob's macro1) onto a target parameter. To use an oscillator/envelope modulator's own running value as the source, pass the modulator's own canonical path (it is itself a parameter) — not one of its input sub-parameters like an LFO's basisIn, which only takes effect when that modulator's manualBasis is enabled and otherwise silently does nothing. The target must be a compound parameter (most device/mixer knobs are). Scope is inferred from the source — a knob inside a device chain wires within that device; pass scope explicitly to override. The wiring starts with zero depth and has no visible effect until depth is set — pass the optional range argument (e.g. 1.0 for full depth) to apply it immediately, or set_parameter on the returned rangePath afterwards. Adjust direction via polarityPath. Undoable in Chromatik with Cmd-Z, though a wiring created with range takes two undo steps (depth first, then the wiring). Caution: a wiring LX rejects (circular dependency) clears Chromatik's undo history. Args: 'sourcePath', 'targetPath', optional 'scope' and 'range'.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
-| `source` | string | yes | — | Canonical path of the source parameter (e.g. a MacroKnobs macro1) |
-| `target` | string | yes | — | Canonical path of the target compound parameter |
+| `sourcePath` | string | yes | — | Canonical path of the source parameter (e.g. a MacroKnobs macro1) |
+| `targetPath` | string | yes | — | Canonical path of the target compound parameter |
 | `scope` | string | no | — | Optional path of the engine hosting the wiring: a device path (its own engine) or /lx/modulation (global — required to wire a device knob to a target outside its device). Omitted, it is inferred from the source |
 | `range` | number | no | — | Optional initial modulation depth, -1.0 to 1.0; without it the wiring starts at 0 and is inert |
 
@@ -322,12 +323,12 @@ Wire a continuous modulation from a source parameter (e.g. a macro knob's macro1
 
 _mutating_
 
-Wire a trigger modulation: when the boolean source fires (e.g. a MacroTriggers macro1), the boolean target is pulsed. Both ends must be boolean parameters. Scope is inferred from the source like wire_modulator. Undoable in Chromatik with Cmd-Z. Caution: a wiring LX rejects (circular dependency) clears Chromatik's undo history.
+Wire a trigger modulation: when the boolean source fires (e.g. a MacroTriggers macro1), the boolean target is pulsed. Both ends must be boolean parameters. Scope is inferred from the source like wire_modulator. Undoable in Chromatik with Cmd-Z. Caution: a wiring LX rejects (circular dependency) clears Chromatik's undo history. Args: 'sourcePath', 'targetPath', optional 'scope'.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
-| `source` | string | yes | — | Canonical path of the boolean source parameter |
-| `target` | string | yes | — | Canonical path of the boolean target parameter |
+| `sourcePath` | string | yes | — | Canonical path of the boolean source parameter |
+| `targetPath` | string | yes | — | Canonical path of the boolean target parameter |
 | `scope` | string | no | — | Optional path of the engine hosting the wiring: a device path (its own engine) or /lx/modulation (global — required to wire a device trigger to a target outside its device). Omitted, it is inferred from the source |
 
 ### `remove_modulation`

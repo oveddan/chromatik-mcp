@@ -252,7 +252,7 @@ class ToolsIntegrationTest {
     int before = lx.engine.modulation.modulators.size();
 
     Map<String, Object> payload = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
 
     assertEquals(before + 1, lx.engine.modulation.modulators.size());
     assertEquals(MacroKnobs.class.getName(), payload.get("class"));
@@ -283,7 +283,7 @@ class ToolsIntegrationTest {
     // The short name list_available_modulators advertises for MacroKnobs is also
     // MacroKnobs — this exercises the same simple-name lookup path used by any short name.
     Map<String, Object> payload = structured(
-        call("add_modulator", Map.of("type", "MacroKnobs")));
+        call("add_modulator", Map.of("class", "MacroKnobs")));
 
     assertEquals(before + 1, lx.engine.modulation.modulators.size());
     assertEquals(MacroKnobs.class.getName(), payload.get("class"),
@@ -297,7 +297,7 @@ class ToolsIntegrationTest {
     int before = pattern.modulation.modulators.size();
 
     Map<String, Object> payload = structured(call("add_modulator", Map.of(
-        "type", MacroKnobs.class.getName(),
+        "class", MacroKnobs.class.getName(),
         "scope", pattern.getCanonicalPath())));
 
     assertEquals(before + 1, pattern.modulation.modulators.size(),
@@ -308,12 +308,12 @@ class ToolsIntegrationTest {
   @Test
   void wireModulatorThenRemoveModulation() {
     Map<String, Object> knobs = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
     String macro1 = knobs.get("path") + "/macro1";
     int before = lx.engine.modulation.modulations.size();
 
     Map<String, Object> wired = structured(call("wire_modulator", Map.of(
-        "source", macro1, "target", channel.fader.getCanonicalPath())));
+        "sourcePath", macro1, "targetPath", channel.fader.getCanonicalPath())));
     assertEquals(before + 1, lx.engine.modulation.modulations.size());
     assertEquals(lx.engine.modulation.getCanonicalPath(), wired.get("enginePath"));
     assertNotNull(wired.get("rangePath"), "modulation depth is set_parameter-able");
@@ -327,10 +327,10 @@ class ToolsIntegrationTest {
   @Test
   void wireModulatorRejectsNonCompoundTarget() {
     Map<String, Object> knobs = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
     McpSchema.CallToolResult result = call("wire_modulator", Map.of(
-        "source", knobs.get("path") + "/macro1",
-        "target", channel.enabled.getCanonicalPath()));
+        "sourcePath", knobs.get("path") + "/macro1",
+        "targetPath", channel.enabled.getCanonicalPath()));
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT),
@@ -341,11 +341,11 @@ class ToolsIntegrationTest {
   void wireModulatorScopeViolationIsInvalidArgument() {
     var pattern = channel.patterns.get(0);
     Map<String, Object> knobs = structured(call("add_modulator", Map.of(
-        "type", MacroKnobs.class.getName(), "scope", pattern.getCanonicalPath())));
+        "class", MacroKnobs.class.getName(), "scope", pattern.getCanonicalPath())));
     // Device knob -> global fader: out of the device engine's scope.
     McpSchema.CallToolResult result = call("wire_modulator", Map.of(
-        "source", knobs.get("path") + "/macro1",
-        "target", channel.fader.getCanonicalPath(),
+        "sourcePath", knobs.get("path") + "/macro1",
+        "targetPath", channel.fader.getCanonicalPath(),
         "scope", pattern.getCanonicalPath()));
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
@@ -356,13 +356,13 @@ class ToolsIntegrationTest {
   void wireModulatorInfersDeviceEngineFromSource() {
     var pattern = channel.patterns.get(0);
     Map<String, Object> knobs = structured(call("add_modulator", Map.of(
-        "type", MacroKnobs.class.getName(), "scope", pattern.getCanonicalPath())));
+        "class", MacroKnobs.class.getName(), "scope", pattern.getCanonicalPath())));
     int before = pattern.modulation.modulations.size();
 
     // No scope arg: the device source's own engine hosts the wiring.
     Map<String, Object> wired = structured(call("wire_modulator", Map.of(
-        "source", knobs.get("path") + "/macro1",
-        "target", knobs.get("path") + "/macro2")));
+        "sourcePath", knobs.get("path") + "/macro1",
+        "targetPath", knobs.get("path") + "/macro2")));
     assertEquals(pattern.modulation.getCanonicalPath(), wired.get("enginePath"));
     assertEquals(before + 1, pattern.modulation.modulations.size());
 
@@ -372,11 +372,11 @@ class ToolsIntegrationTest {
   @Test
   void wireModulatorWithRangeAppliesInitialDepth() {
     Map<String, Object> knobs = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
     String macro1 = knobs.get("path") + "/macro1";
 
     Map<String, Object> wired = structured(call("wire_modulator", Map.of(
-        "source", macro1, "target", channel.fader.getCanonicalPath(), "range", 0.75)));
+        "sourcePath", macro1, "targetPath", channel.fader.getCanonicalPath(), "range", 0.75)));
     assertEquals(0.75, ((Number) wired.get("range")).doubleValue(), 1e-9);
 
     Map<String, Object> rangeParam = structured(
@@ -389,11 +389,11 @@ class ToolsIntegrationTest {
   @Test
   void wireModulatorRangeOutOfBoundsIsInvalidArgument() {
     Map<String, Object> knobs = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
     String macro1 = knobs.get("path") + "/macro1";
 
     McpSchema.CallToolResult result = call("wire_modulator", Map.of(
-        "source", macro1, "target", channel.fader.getCanonicalPath(), "range", 2.0));
+        "sourcePath", macro1, "targetPath", channel.fader.getCanonicalPath(), "range", 2.0));
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
@@ -414,12 +414,12 @@ class ToolsIntegrationTest {
   @Test
   void wireTriggerOverMcp() {
     Map<String, Object> triggers = structured(
-        call("add_modulator", Map.of("type", MacroTriggers.class.getName())));
+        call("add_modulator", Map.of("class", MacroTriggers.class.getName())));
     int before = lx.engine.modulation.triggers.size();
 
     Map<String, Object> wired = structured(call("wire_trigger", Map.of(
-        "source", triggers.get("path") + "/macro1",
-        "target", channel.enabled.getCanonicalPath())));
+        "sourcePath", triggers.get("path") + "/macro1",
+        "targetPath", channel.enabled.getCanonicalPath())));
     assertEquals(before + 1, lx.engine.modulation.triggers.size());
 
     Map<String, Object> removed = structured(
@@ -432,15 +432,15 @@ class ToolsIntegrationTest {
   @SuppressWarnings("unchecked")
   void listModulationsDiscoversWirings() {
     Map<String, Object> knobs = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
     Map<String, Object> wired = structured(call("wire_modulator", Map.of(
-        "source", knobs.get("path") + "/macro1",
-        "target", channel.fader.getCanonicalPath())));
+        "sourcePath", knobs.get("path") + "/macro1",
+        "targetPath", channel.fader.getCanonicalPath())));
     Map<String, Object> triggerBank = structured(
-        call("add_modulator", Map.of("type", MacroTriggers.class.getName())));
+        call("add_modulator", Map.of("class", MacroTriggers.class.getName())));
     Map<String, Object> wiredTrigger = structured(call("wire_trigger", Map.of(
-        "source", triggerBank.get("path") + "/macro1",
-        "target", channel.enabled.getCanonicalPath())));
+        "sourcePath", triggerBank.get("path") + "/macro1",
+        "targetPath", channel.enabled.getCanonicalPath())));
 
     Map<String, Object> payload = structured(call("list_modulations", Map.of("detail", "full")));
     List<Map<String, Object>> modulators = (List<Map<String, Object>>) payload.get("modulators");
@@ -465,10 +465,10 @@ class ToolsIntegrationTest {
   @SuppressWarnings("unchecked")
   void listModulationsDefaultSummaryOmitsDepthFields() {
     Map<String, Object> knobs = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
     Map<String, Object> wired = structured(call("wire_modulator", Map.of(
-        "source", knobs.get("path") + "/macro1",
-        "target", channel.fader.getCanonicalPath())));
+        "sourcePath", knobs.get("path") + "/macro1",
+        "targetPath", channel.fader.getCanonicalPath())));
 
     try {
       Map<String, Object> payload = structured(call("list_modulations", Map.of()));
@@ -501,10 +501,10 @@ class ToolsIntegrationTest {
   @SuppressWarnings("unchecked")
   void listModulationsFullIncludesDepthFields() {
     Map<String, Object> knobs = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
     Map<String, Object> wired = structured(call("wire_modulator", Map.of(
-        "source", knobs.get("path") + "/macro1",
-        "target", channel.fader.getCanonicalPath())));
+        "sourcePath", knobs.get("path") + "/macro1",
+        "targetPath", channel.fader.getCanonicalPath())));
 
     try {
       Map<String, Object> payload = structured(call("list_modulations", Map.of("detail", "full")));
@@ -526,7 +526,7 @@ class ToolsIntegrationTest {
   @Test
   void fireTriggerPulsesAMomentaryMacro() {
     Map<String, Object> triggers = structured(
-        call("add_modulator", Map.of("type", MacroTriggers.class.getName())));
+        call("add_modulator", Map.of("class", MacroTriggers.class.getName())));
 
     Map<String, Object> payload = structured(
         call("fire_trigger", Map.of("path", triggers.get("path") + "/macro1")));
@@ -563,7 +563,7 @@ class ToolsIntegrationTest {
   @Test
   void removeModulatorOverMcpMutatesEngineState() {
     Map<String, Object> knobs = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
     String path = (String) knobs.get("path");
     int before = lx.engine.modulation.modulators.size();
 
@@ -577,10 +577,10 @@ class ToolsIntegrationTest {
   @Test
   void removeModulatorRemovesDependentWirings() {
     Map<String, Object> knobs = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
     String macro1 = knobs.get("path") + "/macro1";
     structured(call("wire_modulator", Map.of(
-        "source", macro1, "target", channel.fader.getCanonicalPath())));
+        "sourcePath", macro1, "targetPath", channel.fader.getCanonicalPath())));
     assertEquals(1, lx.engine.modulation.modulations.size());
 
     structured(call("remove_modulator", Map.of("path", knobs.get("path"))));
@@ -633,7 +633,7 @@ class ToolsIntegrationTest {
     int before = lx.engine.mixer.channels.size();
 
     Map<String, Object> added = structured(call("add_channel",
-        Map.of("pattern", GradientPattern.class.getName())));
+        Map.of("class", GradientPattern.class.getName())));
     String channelPath = (String) added.get("path");
     try {
       assertNotNull(channelPath);
@@ -668,13 +668,13 @@ class ToolsIntegrationTest {
     try {
       // Add first pattern
       Map<String, Object> p1 = structured(call("add_pattern", Map.of(
-          "channel", channelPath, "type", GradientPattern.class.getName())));
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
       String p1path = (String) p1.get("path");
       assertNotNull(p1path);
 
       // Add second pattern
       Map<String, Object> p2 = structured(call("add_pattern", Map.of(
-          "channel", channelPath, "type", GradientPattern.class.getName())));
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
       String p2path = (String) p2.get("path");
 
       // Activate the second pattern
@@ -703,12 +703,12 @@ class ToolsIntegrationTest {
     String channelPath = (String) ch.get("path");
     try {
       Map<String, Object> e1 = structured(call("add_effect", Map.of(
-          "container", channelPath, "type", BlurEffect.class.getName())));
+          "containerPath", channelPath, "class", BlurEffect.class.getName())));
       String e1path = (String) e1.get("path");
       assertNotNull(e1path);
 
       Map<String, Object> e2 = structured(call("add_effect", Map.of(
-          "container", channelPath, "type", BlurEffect.class.getName())));
+          "containerPath", channelPath, "class", BlurEffect.class.getName())));
       String e2path = (String) e2.get("path");
 
       // Move e1 to index 1
@@ -730,7 +730,7 @@ class ToolsIntegrationTest {
   @Test
   void addEffectInvalidContainerIsInvalidArgument() {
     McpSchema.CallToolResult result = call("add_effect", Map.of(
-        "container", "/lx/mixer", "type", BlurEffect.class.getName()));
+        "containerPath", "/lx/mixer", "class", BlurEffect.class.getName()));
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
@@ -883,7 +883,7 @@ class ToolsIntegrationTest {
     String channelPath = (String) ch.get("path");
     try {
       String patternPath = (String) structured(call("add_pattern", Map.of(
-          "channel", channelPath, "type", GradientPattern.class.getName()))).get("path");
+          "containerPath", channelPath, "class", GradientPattern.class.getName()))).get("path");
 
       // Assert empty effects list before adding effect
       Map<String, Object> beforeAddEffectPayload =
@@ -902,7 +902,7 @@ class ToolsIntegrationTest {
       assertEquals(0, beforeAddEffectEffects.size(), "pattern should have empty effects list before add_effect");
 
       Map<String, Object> effect = structured(call("add_effect", Map.of(
-          "container", patternPath, "type", BlurEffect.class.getName())));
+          "containerPath", patternPath, "class", BlurEffect.class.getName())));
       String effectPath = (String) effect.get("path");
 
       Map<String, Object> payload = structured(call("list_channels", Map.of("detail", "full")));
@@ -933,9 +933,9 @@ class ToolsIntegrationTest {
     String channelPath = (String) ch.get("path");
     try {
       String p1path = (String) structured(call("add_pattern", Map.of(
-          "channel", channelPath, "type", GradientPattern.class.getName()))).get("path");
+          "containerPath", channelPath, "class", GradientPattern.class.getName()))).get("path");
       String p2path = (String) structured(call("add_pattern", Map.of(
-          "channel", channelPath, "type", GradientPattern.class.getName()))).get("path");
+          "containerPath", channelPath, "class", GradientPattern.class.getName()))).get("path");
 
       // Flip the channel to BLEND (CompositeMode ordinal 1 on the pattern engine's
       // compositeMode EnumParameter, registered on the channel).
@@ -1066,12 +1066,12 @@ class ToolsIntegrationTest {
     try {
       for (int i = 0; i < 4; i++) {
         String channelPath = (String) structured(call("add_channel",
-            Map.of("pattern", GradientPattern.class.getName()))).get("path");
+            Map.of("class", GradientPattern.class.getName()))).get("path");
         channelPaths.add(channelPath);
         structured(call("add_pattern", Map.of(
-            "channel", channelPath, "type", GradientPattern.class.getName())));
+            "containerPath", channelPath, "class", GradientPattern.class.getName())));
         structured(call("add_effect", Map.of(
-            "container", channelPath, "type", BlurEffect.class.getName())));
+            "containerPath", channelPath, "class", BlurEffect.class.getName())));
       }
 
       String summaryJson = jsonSize(structured(call("list_channels", Map.of())));
@@ -1258,14 +1258,14 @@ class ToolsIntegrationTest {
   void getParameterReportsEffectiveModulatedValueOverHttp() {
     double originalFader = channel.fader.getValue();
     Map<String, Object> knobs = structured(
-        call("add_modulator", Map.of("type", MacroKnobs.class.getName())));
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
     String macro1 = knobs.get("path") + "/macro1";
     structured(call("set_parameter",
         Map.of("path", channel.fader.getCanonicalPath(), "value", 0.0)));
     // A deterministic source value (unlike an LFO) so the effective reading is exact.
     structured(call("set_parameter", Map.of("path", macro1, "value", 0.5)));
     Map<String, Object> wired = structured(call("wire_modulator",
-        Map.of("source", macro1, "target", channel.fader.getCanonicalPath())));
+        Map.of("sourcePath", macro1, "targetPath", channel.fader.getCanonicalPath())));
     try {
       structured(call("set_parameter",
           Map.of("path", (String) wired.get("rangePath"), "value", 1.0)));
@@ -1425,6 +1425,104 @@ class ToolsIntegrationTest {
   void getComponentDocMissingArgIsRejected() {
     McpSchema.CallToolResult result = call("get_component_doc", Map.of());
     assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void getComponentDocBothArgsIsRejected() {
+    var pattern = channel.patterns.get(0);
+    McpSchema.CallToolResult result = call("get_component_doc", Map.of(
+        "class", GradientPattern.class.getName(),
+        "path", pattern.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void getComponentDocClassEmptyStringIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("get_component_doc", Map.of("class", ""));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    String errorMsg = text.text();
+    assertTrue(errorMsg.startsWith(Result.INVALID_ARGUMENT), "empty string is invalid_argument");
+    assertTrue(errorMsg.contains("class"), "error message names the offending argument");
+  }
+
+  @Test
+  void getComponentDocPathEmptyStringIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("get_component_doc", Map.of("path", ""));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    String errorMsg = text.text();
+    assertTrue(errorMsg.startsWith(Result.INVALID_ARGUMENT), "empty string is invalid_argument");
+    assertTrue(errorMsg.contains("path"), "error message names the offending argument");
+  }
+
+  @Test
+  void getComponentDocBothGivenWithValidValuesIsRejected() {
+    var pattern = channel.patterns.get(0);
+    McpSchema.CallToolResult result = call("get_component_doc", Map.of(
+        "class", GradientPattern.class.getName(), "path", pattern.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    String errorMsg = text.text();
+    assertTrue(errorMsg.startsWith(Result.INVALID_ARGUMENT),
+        "both-given check rejects with valid values");
+    assertTrue(errorMsg.contains("both"), "error message indicates both were given");
+  }
+
+  @Test
+  void getComponentDocResolvesByPathSameAsByClass() {
+    var pattern = channel.patterns.get(0);
+    Map<String, Object> byClass = structured(
+        call("get_component_doc", Map.of("class", GradientPattern.class.getName())));
+    Map<String, Object> byPath = structured(
+        call("get_component_doc", Map.of("path", pattern.getCanonicalPath())));
+    assertEquals(byClass.get("class"), byPath.get("class"));
+    assertEquals(byClass.get("summary"), byPath.get("summary"));
+  }
+
+  @Test
+  void getComponentDocPathToParameterIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("get_component_doc",
+        Map.of("path", channel.fader.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void getComponentDocPathToNonDocumentableComponentIsNotFound() {
+    McpSchema.CallToolResult result = call("get_component_doc",
+        Map.of("path", channel.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND),
+        "path to channel (not a pattern/effect/modulator) is not_found");
+  }
+
+  @Test
+  void getComponentDocShortNameReturnsFullFqcn() {
+    Map<String, Object> payload = structured(
+        call("get_component_doc", Map.of("class", "GradientPattern")));
+    assertEquals(GradientPattern.class.getName(), payload.get("class"),
+        "short name is resolved to full FQCN");
+  }
+
+  @Test
+  void getComponentDocEmptyClassWithValidPathIsRejected() {
+    var pattern = channel.patterns.get(0);
+    McpSchema.CallToolResult result = call("get_component_doc", Map.of(
+        "class", "",
+        "path", pattern.getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    String errorMsg = text.text();
+    assertTrue(errorMsg.startsWith(Result.INVALID_ARGUMENT),
+        "both-given check rejects with empty class and valid path");
+    assertTrue(errorMsg.contains("both"), "error message indicates both were given");
   }
 
   @Test

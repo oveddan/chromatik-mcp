@@ -36,15 +36,16 @@ public final class WireModulator implements LxTool {
         + "immediately, or set_parameter on the returned rangePath afterwards. Adjust "
         + "direction via polarityPath. Undoable in Chromatik with Cmd-Z, though a wiring "
         + "created with range takes two undo steps (depth first, then the wiring). Caution: a wiring "
-        + "LX rejects (circular dependency) clears Chromatik's undo history.";
+        + "LX rejects (circular dependency) clears Chromatik's undo history. Args: "
+        + "'sourcePath', 'targetPath', optional 'scope' and 'range'.";
   }
 
   @Override
   public Map<String, Object> inputSchema() {
     Map<String, Object> properties = new LinkedHashMap<>();
-    properties.put("source", Schemas.string(
+    properties.put("sourcePath", Schemas.string(
         "Canonical path of the source parameter (e.g. a MacroKnobs macro1)"));
-    properties.put("target", Schemas.string(
+    properties.put("targetPath", Schemas.string(
         "Canonical path of the target compound parameter"));
     properties.put("scope", Schemas.string(
         "Optional path of the engine hosting the wiring: a device path (its own engine) "
@@ -55,7 +56,7 @@ public final class WireModulator implements LxTool {
     rangeSchema.put("description", "Optional initial modulation depth, -1.0 to 1.0; without it the "
         + "wiring starts at 0 and is inert");
     properties.put("range", rangeSchema);
-    return Schemas.object(properties, List.of("source", "target"));
+    return Schemas.object(properties, List.of("sourcePath", "targetPath"));
   }
 
   @Override
@@ -65,11 +66,11 @@ public final class WireModulator implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("source") instanceof String sourcePath)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: source");
+    if (!(args.get("sourcePath") instanceof String sourcePath)) {
+      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: sourcePath");
     }
-    if (!(args.get("target") instanceof String targetPath)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: target");
+    if (!(args.get("targetPath") instanceof String targetPath)) {
+      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: targetPath");
     }
     Object scope = args.get("scope");
     if (scope != null && !(scope instanceof String)) {

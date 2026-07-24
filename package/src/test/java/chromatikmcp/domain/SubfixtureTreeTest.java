@@ -153,7 +153,7 @@ class SubfixtureTreeTest extends HeadlessLxTest {
     String targetPath = Resolve.canonicalPath(thirdChild) + "/identify";
     Resolve.ResolveException ex = assertThrows(Resolve.ResolveException.class,
         () -> new chromatikmcp.tools.WireTrigger().handle(lx, java.util.Map.of(
-            "source", sourcePath, "target", targetPath)));
+            "sourcePath", sourcePath, "targetPath", targetPath)));
     assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
   }
 

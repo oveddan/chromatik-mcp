@@ -44,16 +44,16 @@ Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`),
 
 `set_parameter {path, value}` dispatches on the parameter's runtime type (number / integer / boolean / string) and rejects what can't be set sanely: aggregate parameters (set a color's `.../hue`, `.../saturation`, `.../brightness` components instead), computed read-only parameters, out-of-range enum indices (LX would silently wrap), and momentary triggers (see `fire_trigger`). Discrete/selector parameters also accept an **option name string** — `{"value": "Cylinder"}` maps a device to a view by label, no index lookup needed. The response echoes the **base** value, so set-then-verify works even while modulation rides on top.
 
-Type arguments everywhere (`add_pattern`, `add_effect`, `add_modulator`, `get_component_doc`) accept either the full class name or the short `name` the `list_available_*` tools return; an ambiguous short name errors listing the candidates.
+`class` arguments everywhere (`add_pattern`, `add_effect`, `add_modulator`, `add_channel`, `get_component_doc`) accept either the full class name or the short `name` the `list_available_*` tools return; an ambiguous short name errors listing the candidates.
 
 ### Build structure: channels, patterns, effect chains
 
 | tool | what it does |
 |---|---|
-| `add_channel {pattern?}` / `remove_channel {path}` | mixer channels, optionally seeded with a first pattern (LX moves UI focus to a new channel) |
-| `add_pattern {channel, type, index?}` / `remove_pattern` / `move_pattern {path, index}` | manage a channel's pattern list |
+| `add_channel {class?}` / `remove_channel {path}` | mixer channels, optionally seeded with a first pattern (LX moves UI focus to a new channel) |
+| `add_pattern {containerPath, class, index?}` / `remove_pattern` / `move_pattern {path, index}` | manage a channel's pattern list |
 | `activate_pattern {path}` | switch the active pattern (PLAYLIST mode; BLEND-mode channels layer patterns via their `enabled` params instead) |
-| `add_effect {container, type}` / `remove_effect` / `move_effect {path, index}` | effect chains — run serially in list order — on channels, the master bus, or an individual pattern |
+| `add_effect {containerPath, class}` / `remove_effect` / `move_effect {path, index}` | effect chains — run serially in list order — on channels, the master bus, or an individual pattern |
 
 Structural paths are 1-based and reindex on remove/insert — re-list rather than reusing cached paths.
 
@@ -61,18 +61,18 @@ Structural paths are 1-based and reindex on remove/insert — re-list rather tha
 
 | tool | what it does |
 |---|---|
-| `add_modulator {type, scope?}` | add e.g. a `MacroKnobs` bank or a `VariableLFO` — to the global side panel, or inside a pattern/effect's own chain via `scope`. Response lists every parameter with its path and OSC address |
+| `add_modulator {class, scope?}` | add e.g. a `MacroKnobs` bank or a `VariableLFO` — to the global side panel, or inside a pattern/effect's own chain via `scope`. Response lists every parameter with its path and OSC address |
 | `remove_modulator {path}` | delete a modulator; wirings it sources are removed with it (one undoable step) |
-| `wire_modulator {source, target, scope?, range?}` | undoable continuous mapping, e.g. `macro1 → fader` or `LFO → twist`. Pass `range` (-1..1) to give the wiring depth immediately — **a wiring without range is inert**. Engine inferred from the source; adjust later via the returned `rangePath`/`polarityPath` |
-| `wire_trigger {source, target, scope?}` | boolean pulse wiring (e.g. a `MacroTriggers` macro → a toggle) |
+| `wire_modulator {sourcePath, targetPath, scope?, range?}` | undoable continuous mapping, e.g. `macro1 → fader` or `LFO → twist`. Pass `range` (-1..1) to give the wiring depth immediately — **a wiring without range is inert**. Engine inferred from the source; adjust later via the returned `rangePath`/`polarityPath` |
+| `wire_trigger {sourcePath, targetPath, scope?}` | boolean pulse wiring (e.g. a `MacroTriggers` macro → a toggle) |
 | `remove_modulation {path}` | unwire either kind by the path the wire call returned |
 | `fire_trigger {path}` | pulse a momentary trigger (not undoable — it's an action, and the value auto-resets). Under launch quantization the response says `pending: true`; don't re-fire |
 
 The typical macro-mapping flow:
 
 ```
-add_modulator {type: heronarts.lx.modulator.MacroKnobs}      → knob bank + 8 OSC addresses
-wire_modulator {source: <bank>/macro1, target: <fader path>} → undoable mapping
+add_modulator {class: heronarts.lx.modulator.MacroKnobs}      → knob bank + 8 OSC addresses
+wire_modulator {sourcePath: <bank>/macro1, targetPath: <fader path>} → undoable mapping
 set_parameter {path: <bank>/macro1, value: 0.75}             → turn the knob
 ```
 

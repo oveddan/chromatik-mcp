@@ -30,9 +30,9 @@ to the class's `description` fields from `list_available_*` and the parameter tr
 ## 2. Build a channel with patterns
 
 ```
-add_channel {pattern: heronarts.lx.pattern.color.GradientPattern}
+add_channel {class: heronarts.lx.pattern.color.GradientPattern}
                                         → channel path (LX focuses/selects it in the UI)
-add_pattern {channel: <path>, type: heronarts.lx.pattern.texture.SparklePattern}
+add_pattern {containerPath: <path>, class: heronarts.lx.pattern.texture.SparklePattern}
 activate_pattern {path: <pattern path>} → switch to it (PLAYLIST mode)
 ```
 
@@ -49,8 +49,8 @@ Wrinkles:
 Effects run serially in list order — order matters (blur→colorize ≠ colorize→blur):
 
 ```
-add_effect {container: <channel path>, type: heronarts.lx.effect.BlurEffect}
-add_effect {container: <channel path>, type: heronarts.lx.effect.color.ColorizeEffect}
+add_effect {containerPath: <channel path>, class: heronarts.lx.effect.BlurEffect}
+add_effect {containerPath: <channel path>, class: heronarts.lx.effect.color.ColorizeEffect}
 move_effect {path: <effect path>, index: 0}       → reorder the chain
 set_parameter {path: <effect path>/enabled, value: false}   → bypass without removing
 remove_effect {path: <effect path>}
@@ -64,9 +64,9 @@ pattern's own FX chain. Locked effects refuse removal with `invalid_argument`.
 The flow that makes external control work — a side-panel knob bank wired onto anything:
 
 ```
-add_modulator {type: heronarts.lx.modulator.MacroKnobs}
+add_modulator {class: heronarts.lx.modulator.MacroKnobs}
      → path + every knob's canonical path AND OSC address (label-based!)
-wire_modulator {source: <bank>/macro1, target: /lx/mixer/channel/1/fader}
+wire_modulator {sourcePath: <bank>/macro1, targetPath: /lx/mixer/channel/1/fader}
      → undoable mapping; response carries rangePath/polarityPath
 set_parameter {path: <modulation>/range, value: 0.5}        → dial the depth
 set_parameter {path: <bank>/macro1, value: 0.75}            → turn the knob

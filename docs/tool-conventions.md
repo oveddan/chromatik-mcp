@@ -10,6 +10,24 @@ them is a cross-cutting change that touches every tool — propose it as its own
 - `list_available_*` = instantiable **classes** from the LX registry; `list_*` = live
   **instances** in the project.
 
+### Argument naming
+
+Decided once (#108) so it isn't re-litigated per tool:
+
+- An arg naming a **class to instantiate** is `class` (e.g. `add_pattern`, `add_effect`,
+  `add_modulator`, `add_channel`'s optional seed pattern, `get_component_doc`).
+- An arg naming the **canonical path of the container being added to** is `containerPath`
+  (e.g. `add_pattern`'s channel, `add_effect`'s channel/master/pattern chain).
+- Modulation endpoints are `sourcePath` / `targetPath` (`wire_modulator`, `wire_trigger`).
+- `scope` remains for optional engine/device scoping (unrelated to the above — it says
+  *where* a mutation lands, not *what* it targets).
+- A single-subject path arg (the thing being read, wired to a live instance, etc.) stays
+  `path`.
+- Exempt: the MIDI tools' `type` (a MIDI message type, "cc"/"note") and `channel` (a MIDI
+  channel number 0-15) denote MIDI-protocol concepts, not a class or a container — they
+  keep their names. `add_fixture`'s `type` (a .lxf fixture type string) is also exempted —
+  it is not a class or container, and agents must not rename it.
+
 ## Entity addressing
 
 - The **canonical LX path** is the one address every tool accepts and returns (e.g.
