@@ -44,20 +44,27 @@ public final class AddFixture implements LxTool {
     properties.put("type", Schemas.string(
         "A .lxf fixture type string (see list_available_fixtures' 'jsonTypes'), e.g. "
             + "'MyRig/Cube'. Exactly one of class/type is required."));
-    properties.put("index", Map.of(
-        "type", "integer",
-        "description", "0-based insert position in lx.structure.fixtures; omit to append "
-            + "at the end. Clamped into range. Supported with 'class' only — 'type' always "
-            + "appends, and 'type' + 'index' together is rejected."));
+    Map<String, Object> indexSchema = new LinkedHashMap<>();
+    indexSchema.put("type", "integer");
+    indexSchema.put("description", "0-based insert position in lx.structure.fixtures; omit to "
+        + "append at the end. Clamped into range. Supported with 'class' only — 'type' always "
+        + "appends, and 'type' + 'index' together is rejected.");
+    properties.put("index", indexSchema);
+
     properties.put("label", Schemas.string("Optional display label; overrides LX's default "
         + "auto-suffixed label (e.g. 'Grid 2')."));
-    properties.put("params", Map.of(
-        "type", "object",
-        "description", "Optional map of registered parameter name -> initial value, applied "
-            + "right after the add (folded into the same undo step). Value type must match "
-            + "the parameter: a number for numeric/discrete, a boolean for toggles, a "
-            + "string for text.",
-        "additionalProperties", Map.of("type", List.of("number", "boolean", "string"))));
+
+    Map<String, Object> paramValueSchema = new LinkedHashMap<>();
+    paramValueSchema.put("type", List.of("number", "boolean", "string"));
+
+    Map<String, Object> paramsSchema = new LinkedHashMap<>();
+    paramsSchema.put("type", "object");
+    paramsSchema.put("description", "Optional map of registered parameter name -> initial "
+        + "value, applied right after the add (folded into the same undo step). Value type "
+        + "must match the parameter: a number for numeric/discrete, a boolean for toggles, a "
+        + "string for text.");
+    paramsSchema.put("additionalProperties", paramValueSchema);
+    properties.put("params", paramsSchema);
     return Schemas.object(properties, List.of());
   }
 

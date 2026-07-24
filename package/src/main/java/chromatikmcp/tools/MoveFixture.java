@@ -31,10 +31,11 @@ public final class MoveFixture implements LxTool {
     LinkedHashMap<String, Object> properties = new LinkedHashMap<>();
     properties.put("path", Schemas.string(
         "Canonical path of the fixture to move, e.g. /lx/structure/fixture/2"));
-    properties.put("index", Map.of(
-        "type", "integer",
-        "description", "0-based target position in lx.structure.fixtures, clamped into "
-            + "[0, fixtureCount - 1]"));
+    Map<String, Object> indexSchema = new LinkedHashMap<>();
+    indexSchema.put("type", "integer");
+    indexSchema.put("description", "0-based target position in lx.structure.fixtures, clamped "
+        + "into [0, fixtureCount - 1]");
+    properties.put("index", indexSchema);
     return Schemas.object(properties, List.of("path", "index"));
   }
 

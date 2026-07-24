@@ -35,10 +35,11 @@ public final class DuplicateFixture implements LxTool {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("path", Schemas.string(
         "Canonical path of the fixture to duplicate, e.g. /lx/structure/fixture/1"));
-    properties.put("index", Map.of(
-        "type", "integer",
-        "description", "0-based insert position for the clone, clamped into "
-            + "[0, fixtureCount]; omit to insert right after the source fixture."));
+    Map<String, Object> indexSchema = new LinkedHashMap<>();
+    indexSchema.put("type", "integer");
+    indexSchema.put("description", "0-based insert position for the clone, clamped into "
+        + "[0, fixtureCount]; omit to insert right after the source fixture.");
+    properties.put("index", indexSchema);
     return Schemas.object(properties, List.of("path"));
   }
 

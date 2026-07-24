@@ -532,6 +532,22 @@ The model tree: the geometry hierarchy the rig renders onto, from the whole inst
 | `path` | string | no | — | Model node path (as emitted in this tool's own 'path' field); omit for the whole installation's root |
 | `depth` | integer | no | — | Levels of children to expand below the addressed node (default 2, clamped to 10; must be >= 0) |
 
+### `get_fixture_format`
+
+_read-only_
+
+Return the .lxf fixture-file JSON schema reference: top-level keys, component types (point/points/strip/arc/class/file-reference), the parameter + $expr expression system ($instance/$instances and instances-expansion), outputs and segments per protocol, and tag rules — with worked examples. Use this to author or understand a fixture file; pairs with reload_fixtures to pick up on-disk edits to an existing fixture, and get_fixture/describe_model to inspect a fixture's already-loaded structure.
+
+No parameters.
+
+### `list_available_fixtures`
+
+_read-only_
+
+What add_fixture can instantiate: 'classes' (built-in fixture types — pass the simple name, e.g. 'GridFixture', or the full class name, as add_fixture's 'class' argument) and 'jsonTypes' (fixtures loaded from a .lxf file in the Fixtures folder — pass the type string, e.g. 'MyRig/Cube', as add_fixture's 'type' argument; 'isVisible' false means the .lxf declares itself hidden from the add menu, e.g. a subfixture-only helper type). 'errors' lists any .lxf that failed to parse (syntax/I-O error) — its type is not addable until fixed. 'fixturesDirectory' is the absolute path .lxf files live in — write a new one there with your own file tools, then call this again (or reload_fixtures) to pick it up.
+
+No parameters.
+
 ### `list_fixtures`
 
 _read-only_
@@ -550,6 +566,62 @@ One fixture's full detail: everything list_fixtures reports for it, plus 'parame
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the fixture, e.g. /lx/structure/fixture/1 |
 | `depth` | integer | no | — | How many levels of subfixtures to include in 'children' (default 1, clamped to 10 max; negative is rejected). A real installation's fixture tree can be hundreds of nodes deep and wide (e.g. ~640 subfixtures on an Apotheneum-shaped rig), so this is capped rather than unbounded. |
+
+### `get_output_map`
+
+_read-only_
+
+The output wiring beneath the fixture tree: for each fixture, its declared protocol/host/port/universe/channel/byteOrder plus a DERIVED channel footprint ('numChannels' — own point count times bytes-per-pixel) and an 'estimatedUniverseSpan' [startUniverse, endUniverse] for universe-based protocols (ARTNET/SACN/KINET) computed by rolling that footprint across universes the same way LX itself overflows (512 DMX channels per universe for ARTNET/SACN/KINET). 'pointIndexRange' indexes the same global point buffer describe_model/get_frame use. IMPORTANT: this map is DECLARED/DERIVED, NOT LX's resolved per-packet output allocation — LX keeps that privately (LXStructureOutput's generatedOutputs/Packet have no public accessor) — and the span estimate assumes one contiguous segment per fixture, ignoring serpentine wiring, segment stride, and cross-fixture packet packing, so it can diverge from LX's actual allocation on complex rigs. OPC/DDP fixtures get 'estimatedUniverseSpan: null' (those protocols use a data-length model, not universes). A fixture whose wiring is declared inside its .lxf file (e.g. a real installation's JsonFixture) reports 'directOutputCount' (its outputsDirect size) and an 'outputsNote' instead of a universe/channel estimate — LX exposes no public accessor for a .lxf-declared output's resolved universe, so none is fabricated. 'outputError' is LX's own collision report (lx.structure.outputError) — non-empty means LX itself detected an overlap; trust it over the estimate. Pairs with set_fixture_params: set artNetUniverse/dmxChannel/etc., then re-call this to check the resulting footprint. 'path' optional: map one fixture's subtree; omitted maps every top-level fixture.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | no | — | Canonical path of a fixture to map (with its subfixture subtree); omit to map every top-level fixture |
+
+### `add_fixture`
+
+_mutating_
+
+Instantiate a fixture (see list_available_fixtures for what's addable) — exactly one of 'class' (a built-in fixture type, e.g. GridFixture) or 'type' (a .lxf file's type string, e.g. MyRig/Cube) must be given. 'index' (0-based, clamped to the current fixture count) inserts at that position in lx.structure.fixtures instead of appending at the end — supported with 'class' only; 'type' always appends, and combining 'type' with 'index' is rejected (add the fixture, then reposition it with move_fixture). 'label' and 'params' (registered parameters only — x/y/z, artNetUniverse, a type-specific one like GridFixture's numRows, etc; NOT a JsonFixture's .lxf-declared parameters, which have no value until the fixture loads — configure those afterwards with set_fixture_params) are applied right after the add, and the whole call — instantiate plus configure — is a single undo step. Every fixture path is POSITIONAL (/lx/structure/fixture/N, 1-indexed) and shifts after any later add/remove/move — re-list with list_fixtures rather than reusing a path from an earlier response. Rejected when the structure is in static-model mode.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `class` | string | no | — | Built-in fixture class, simple or full name (see list_available_fixtures' 'classes'), e.g. 'GridFixture'. Exactly one of class/type is required. |
+| `type` | string | no | — | A .lxf fixture type string (see list_available_fixtures' 'jsonTypes'), e.g. 'MyRig/Cube'. Exactly one of class/type is required. |
+| `index` | integer | no | — | 0-based insert position in lx.structure.fixtures; omit to append at the end. Clamped into range. Supported with 'class' only — 'type' always appends, and 'type' + 'index' together is rejected. |
+| `label` | string | no | — | Optional display label; overrides LX's default auto-suffixed label (e.g. 'Grid 2'). |
+| `params` | object | no | — | Optional map of registered parameter name -> initial value, applied right after the add (folded into the same undo step). Value type must match the parameter: a number for numeric/discrete, a boolean for toggles, a string for text. |
+
+### `remove_fixture`
+
+_mutating_
+
+Remove a fixture by its canonical path (as returned by list_fixtures/add_fixture). Undoable with Cmd-Z. Every remaining fixture's path is POSITIONAL (/lx/structure/fixture/N, 1-indexed) and shifts after this call — re-list (list_fixtures) rather than reuse a held path. Rejected when the structure is in static-model mode.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the fixture to remove, e.g. /lx/structure/fixture/1 |
+
+### `move_fixture`
+
+_mutating_
+
+Reposition a fixture within lx.structure.fixtures (0-based 'index', clamped into [0, fixtureCount - 1]). Undoable with Cmd-Z. Every fixture's path is POSITIONAL (/lx/structure/fixture/N, 1-indexed) and shifts for this fixture and any it moved past — re-list (list_fixtures) rather than reuse a held path. Rejected when the structure is in static-model mode.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the fixture to move, e.g. /lx/structure/fixture/2 |
+| `index` | integer | yes | — | 0-based target position in lx.structure.fixtures, clamped into [0, fixtureCount - 1] |
+
+### `duplicate_fixture`
+
+_mutating_
+
+Clone a fixture — geometry, output protocol wiring, and (for a JsonFixture) its .lxf-declared parameter values all copy over — in one call, matching the UI's duplicate action. The clone gets a fresh component id and its output-enabled flag is reset to off (never silently start transmitting a duplicate). 'index' defaults to right after the source fixture; explicit values are clamped into [0, fixtureCount]. Undoable with Cmd-Z. Every fixture's path is POSITIONAL (/lx/structure/fixture/N, 1-indexed) and shifts after this call — re-list (list_fixtures) rather than reuse a held path. Rejected when the structure is in static-model mode.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the fixture to duplicate, e.g. /lx/structure/fixture/1 |
+| `index` | integer | no | — | 0-based insert position for the clone, clamped into [0, fixtureCount]; omit to insert right after the source fixture. |
 
 ### `set_fixture_params`
 

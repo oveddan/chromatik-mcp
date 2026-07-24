@@ -28,10 +28,10 @@ public final class RemoveFixture implements LxTool {
 
   @Override
   public Map<String, Object> inputSchema() {
-    return Schemas.object(
-        Map.of("path", Schemas.string(
-            "Canonical path of the fixture to remove, e.g. /lx/structure/fixture/1")),
-        List.of("path"));
+    Map<String, Object> properties = new LinkedHashMap<>();
+    properties.put("path", Schemas.string(
+        "Canonical path of the fixture to remove, e.g. /lx/structure/fixture/1"));
+    return Schemas.object(properties, List.of("path"));
   }
 
   @Override
