@@ -3,13 +3,21 @@ package chromatikmcp.domain;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.sound.midi.InvalidMidiDataException;
+
 import heronarts.lx.LX;
+import heronarts.lx.command.LXCommand;
 import heronarts.lx.midi.LXMidiEngine;
 import heronarts.lx.midi.LXMidiInput;
 import heronarts.lx.midi.LXMidiMapping;
 import heronarts.lx.midi.LXMidiOutput;
+import heronarts.lx.midi.LXShortMessage;
+import heronarts.lx.midi.MidiControlChange;
 import heronarts.lx.midi.MidiNote;
+import heronarts.lx.midi.MidiNoteOn;
 import heronarts.lx.midi.surface.LXMidiSurface;
+import heronarts.lx.parameter.LXNormalizedParameter;
+import heronarts.lx.parameter.LXParameter;
 
 /**
  * Read-only view of the MIDI engine ({@code lx.engine.midi}): the physical input/output
@@ -74,15 +82,7 @@ public final class Midi {
     List<InputInfo> inputs = new ArrayList<>();
     int i = 0;
     for (LXMidiInput input : engine.inputs) {
-      inputs.add(new InputInfo(
-          i++,
-          input.getName(),
-          input.getDescription(),
-          input.connected.isOn(),
-          input.enabled.isOn(),
-          input.channelEnabled.isOn(),
-          input.controlEnabled.isOn(),
-          input.syncEnabled.isOn()));
+      inputs.add(inputInfo(i++, input));
     }
     List<OutputInfo> outputs = new ArrayList<>();
     int o = 0;
@@ -102,29 +102,7 @@ public final class Midi {
     List<MappingInfo> result = new ArrayList<>();
     int index = 0;
     for (LXMidiMapping mapping : lx.engine.midi.mappings) {
-      String type;
-      int number;
-      String note;
-      if (mapping instanceof LXMidiMapping.Note noteMapping) {
-        type = "note";
-        number = noteMapping.pitch;
-        note = MidiNote.getPitchString(noteMapping.pitch);
-      } else if (mapping instanceof LXMidiMapping.ControlChange ccMapping) {
-        type = "cc";
-        number = ccMapping.cc;
-        note = null;
-      } else {
-        throw new IllegalStateException("Unknown LXMidiMapping subtype: " + mapping.getClass().getName());
-      }
-      result.add(new MappingInfo(
-          index++,
-          type,
-          mapping.channel,
-          number,
-          note,
-          mapping.getDescription(),
-          Resolve.canonicalPath(mapping.parameter),
-          mapping.parameter.getLabel()));
+      result.add(mappingInfo(index++, mapping));
     }
     return result;
   }
@@ -134,16 +112,174 @@ public final class Midi {
     List<SurfaceInfo> result = new ArrayList<>();
     int index = 0;
     for (LXMidiSurface surface : lx.engine.midi.surfaces) {
-      result.add(new SurfaceInfo(
-          index++,
-          surface.getSurfaceName(),
-          surface.getDeviceName(),
-          surface.getClass().getName(),
-          surface.enabled.isOn(),
-          surface.connected.isOn(),
-          surface.getInput().getName(),
-          (surface.getOutput() != null) ? surface.getOutput().getName() : null));
+      result.add(surfaceInfo(index++, surface));
     }
     return result;
+  }
+
+  // ── Mutations ────────────────────────────────────────────────────────────────
+
+  /**
+   * Fixed velocity for a note mapping added via {@link #addMapping}. A mapping wires
+   * channel+pitch (note) or channel+cc (control change) to a parameter; LX dispatches on
+   * that identity, not the triggering message's velocity/value, so any in-range constant
+   * works — 127 (max) matches what a real controller sends for a firm keypress.
+   */
+  private static final int MAPPING_NOTE_VELOCITY = 127;
+
+  /** Fixed initial value for a CC mapping added via {@link #addMapping}; see above. */
+  private static final int MAPPING_CC_VALUE = 0;
+
+  /**
+   * Add a MIDI mapping: incoming {@code type} ('note' or 'cc') on {@code channel} (0-15)
+   * with pitch/cc {@code number} (0-127) drives the parameter at {@code targetPath}.
+   * Routes through {@code LXCommand.Midi.AddMapping} (undoable). Only parameters
+   * implementing {@link LXNormalizedParameter} are mappable — the same restriction LX's own
+   * UI mapping mode enforces (LXMidiMapping.create's signature).
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the target isn't a normalized
+   *     parameter, or channel/number are out of MIDI range (LXShortMessage validates)
+   */
+  public static MappingInfo addMapping(LX lx, String type, int channel, int number, String targetPath) {
+    LXParameter parameter = Resolve.parameter(lx, targetPath);
+    if (!(parameter instanceof LXNormalizedParameter normalized)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Parameter at " + targetPath + " cannot be MIDI-mapped (not a normalized parameter): "
+              + parameter.getClass().getSimpleName());
+    }
+    LXShortMessage message;
+    try {
+      message = switch (type) {
+        case "note" -> new MidiNoteOn(channel, number, MAPPING_NOTE_VELOCITY);
+        case "cc" -> new MidiControlChange(channel, number, MAPPING_CC_VALUE);
+        default -> throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+            "type must be 'note' or 'cc': " + type);
+      };
+    } catch (InvalidMidiDataException e) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Invalid MIDI mapping (channel " + channel + ", number " + number + "): " + e.getMessage());
+    }
+    List<LXMidiMapping> mappings = lx.engine.midi.mappings;
+    Commands.perform(lx, new LXCommand.Midi.AddMapping(message, normalized));
+    int index = mappings.size() - 1;
+    return mappingInfo(index, mappings.get(index));
+  }
+
+  /**
+   * Remove the mapping at {@code index} (0-based, into {@link #mappings}). Routes through
+   * {@code LXCommand.Midi.RemoveMapping} (undoable). Remaining mappings reindex, so a
+   * caller must re-list before reusing another index.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if index is out of range
+   */
+  public static MappingInfo removeMapping(LX lx, int index) {
+    List<LXMidiMapping> mappings = lx.engine.midi.mappings;
+    if (index < 0 || index >= mappings.size()) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Mapping index " + index + " out of range [0," + (mappings.size() - 1) + "]");
+    }
+    LXMidiMapping mapping = mappings.get(index);
+    MappingInfo removed = mappingInfo(index, mapping);
+    Commands.perform(lx, new LXCommand.Midi.RemoveMapping(lx, mapping));
+    return removed;
+  }
+
+  /**
+   * Set one or more of an input's routing flags (see {@link InputInfo}) by 0-based index
+   * into {@link #devices}' input list. A {@code null} argument leaves that flag unchanged.
+   * No {@code LXCommand} covers these {@code BooleanParameter}s, so they're set directly
+   * (CLAUDE.md layering); {@code enabled} is a derived union LX recomputes from the three
+   * flags and can't be set directly.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if index is out of range
+   */
+  public static InputInfo setInputFlags(LX lx, int index, Boolean channelEnabled,
+      Boolean controlEnabled, Boolean syncEnabled) {
+    List<LXMidiInput> inputs = lx.engine.midi.inputs;
+    if (index < 0 || index >= inputs.size()) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Input index " + index + " out of range [0," + (inputs.size() - 1) + "]");
+    }
+    LXMidiInput input = inputs.get(index);
+    if (channelEnabled != null) {
+      input.channelEnabled.setValue(channelEnabled);
+    }
+    if (controlEnabled != null) {
+      input.controlEnabled.setValue(controlEnabled);
+    }
+    if (syncEnabled != null) {
+      input.syncEnabled.setValue(syncEnabled);
+    }
+    return inputInfo(index, input);
+  }
+
+  /**
+   * Enable or disable a control surface by 0-based index into {@link #surfaces}. No
+   * {@code LXCommand} covers surface enablement, so it's set directly on the surface's
+   * {@code BooleanParameter} (CLAUDE.md layering).
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if index is out of range
+   */
+  public static SurfaceInfo setSurfaceEnabled(LX lx, int index, boolean enabled) {
+    List<LXMidiSurface> surfaces = lx.engine.midi.surfaces;
+    if (index < 0 || index >= surfaces.size()) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Surface index " + index + " out of range [0," + (surfaces.size() - 1) + "]");
+    }
+    LXMidiSurface surface = surfaces.get(index);
+    surface.enabled.setValue(enabled);
+    return surfaceInfo(index, surface);
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────────
+
+  private static InputInfo inputInfo(int index, LXMidiInput input) {
+    return new InputInfo(
+        index,
+        input.getName(),
+        input.getDescription(),
+        input.connected.isOn(),
+        input.enabled.isOn(),
+        input.channelEnabled.isOn(),
+        input.controlEnabled.isOn(),
+        input.syncEnabled.isOn());
+  }
+
+  private static MappingInfo mappingInfo(int index, LXMidiMapping mapping) {
+    String type;
+    int number;
+    String note;
+    if (mapping instanceof LXMidiMapping.Note noteMapping) {
+      type = "note";
+      number = noteMapping.pitch;
+      note = MidiNote.getPitchString(noteMapping.pitch);
+    } else if (mapping instanceof LXMidiMapping.ControlChange ccMapping) {
+      type = "cc";
+      number = ccMapping.cc;
+      note = null;
+    } else {
+      throw new IllegalStateException("Unknown LXMidiMapping subtype: " + mapping.getClass().getName());
+    }
+    return new MappingInfo(
+        index,
+        type,
+        mapping.channel,
+        number,
+        note,
+        mapping.getDescription(),
+        Resolve.canonicalPath(mapping.parameter),
+        mapping.parameter.getLabel());
+  }
+
+  private static SurfaceInfo surfaceInfo(int index, LXMidiSurface surface) {
+    return new SurfaceInfo(
+        index,
+        surface.getSurfaceName(),
+        surface.getDeviceName(),
+        surface.getClass().getName(),
+        surface.enabled.isOn(),
+        surface.connected.isOn(),
+        surface.getInput().getName(),
+        (surface.getOutput() != null) ? surface.getOutput().getName() : null);
   }
 }

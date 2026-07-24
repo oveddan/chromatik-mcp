@@ -203,6 +203,7 @@ class ToolsIntegrationTest {
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
             "get_tempo",
             "list_midi_devices", "list_midi_mappings", "list_midi_surfaces",
+            "add_midi_mapping", "remove_midi_mapping", "set_midi_input", "set_midi_surface_enabled",
             "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
             "remove_color",
             "list_snapshots", "add_snapshot", "recall_snapshot",
@@ -216,7 +217,8 @@ class ToolsIntegrationTest {
         "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
         "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
         "remove_color",
-        "add_snapshot", "recall_snapshot", "update_snapshot", "remove_snapshot");
+        "add_snapshot", "recall_snapshot", "update_snapshot", "remove_snapshot",
+        "add_midi_mapping", "remove_midi_mapping", "set_midi_input", "set_midi_surface_enabled");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
       assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),
@@ -961,6 +963,96 @@ class ToolsIntegrationTest {
     assertNotNull(payload.get("surfaces"), "surfaces list always present");
     assertEquals(lx.engine.midi.surfaces.size(),
         ((List<Map<String, Object>>) payload.get("surfaces")).size());
+  }
+
+  @Test
+  void addMidiMappingWireShapeAndRemoveRoundTrip() {
+    int before = lx.engine.midi.mappings.size();
+
+    Map<String, Object> added = structured(call("add_midi_mapping", Map.of(
+        "type", "cc", "channel", 2, "number", 20,
+        "targetPath", channel.fader.getCanonicalPath())));
+    assertEquals("cc", added.get("type"));
+    assertEquals(2, added.get("channel"));
+    assertEquals(20, added.get("number"));
+    assertEquals(channel.fader.getCanonicalPath(), added.get("targetPath"));
+    assertTrue(added.containsKey("label"), "label field present");
+    assertTrue(added.containsKey("targetLabel"), "targetLabel field present");
+    assertFalse(added.containsKey("note"), "note key omitted for CC mapping");
+    assertEquals(before + 1, lx.engine.midi.mappings.size());
+
+    int index = ((Number) added.get("index")).intValue();
+    Map<String, Object> removed = structured(call("remove_midi_mapping", Map.of("index", index)));
+    assertEquals("cc", removed.get("type"));
+    assertEquals(channel.fader.getCanonicalPath(), removed.get("targetPath"));
+    assertEquals(before, lx.engine.midi.mappings.size(), "round trip leaves mapping count unchanged");
+  }
+
+  @Test
+  void removeMidiMappingUnknownIndexIsInvalidArgument() {
+    int outOfRange = lx.engine.midi.mappings.size() + 99;
+    McpSchema.CallToolResult result = call("remove_midi_mapping", Map.of("index", outOfRange));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void setMidiInputOverMcpFlipsFlagVisibleInListMidiDevices() throws InterruptedException {
+    awaitFirstMidiInput();
+
+    Map<String, Object> updated = structured(
+        call("set_midi_input", Map.of("index", 0, "channelEnabled", true)));
+    assertEquals(Boolean.TRUE, updated.get("channelEnabled"));
+    assertEquals(Boolean.TRUE, updated.get("enabled"), "enabled is the derived union");
+
+    try {
+      Map<String, Object> devices = structured(call("list_midi_devices", Map.of()));
+      Map<String, Object> input = ((List<Map<String, Object>>) devices.get("inputs")).get(0);
+      assertEquals(Boolean.TRUE, input.get("channelEnabled"));
+      assertEquals(Boolean.TRUE, input.get("enabled"));
+    } finally {
+      // Leave the shared LX fixture's flag state as later tests found it.
+      structured(call("set_midi_input", Map.of("index", 0, "channelEnabled", false)));
+    }
+  }
+
+  @Test
+  void setMidiInputRequiresAtLeastOneFlag() {
+    McpSchema.CallToolResult result = call("set_midi_input", Map.of("index", 0));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void setMidiSurfaceEnabledUnknownIndexIsInvalidArgument() {
+    // No hardware surface can be instantiated headlessly, so only the invalid-index path
+    // is testable here — the mutation itself is exercised only by a direct BooleanParameter
+    // set, which is covered structurally by the analogous input-flag test above.
+    McpSchema.CallToolResult result =
+        call("set_midi_surface_enabled", Map.of("index", 99, "enabled", true));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  /**
+   * {@code engine.midi.inputs} is populated by an async device-detection thread that
+   * finishes with an {@code engine.addTask(...)} the class's drainer thread (standing in
+   * for the engine thread) drains — poll rather than assume it has landed by the time this
+   * test runs. The JDK's built-in "Real Time Sequencer" software device guarantees at
+   * least one entry on any OS, without depending on real hardware.
+   */
+  private static void awaitFirstMidiInput() throws InterruptedException {
+    long deadline = System.currentTimeMillis() + 5000;
+    while (lx.engine.midi.inputs.isEmpty()) {
+      if (System.currentTimeMillis() > deadline) {
+        throw new IllegalStateException("No MIDI input discovered within 5s");
+      }
+      Thread.sleep(20);
+    }
   }
 
   @Test

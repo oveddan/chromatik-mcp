@@ -45,16 +45,7 @@ public final class ListMidiDevices implements LxTool {
     Midi.DevicesInfo info = Midi.devices(lx);
     List<Map<String, Object>> inputs = new ArrayList<>();
     for (Midi.InputInfo in : info.inputs()) {
-      Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("index", in.index());
-      entry.put("name", in.name());
-      entry.put("description", in.description());
-      entry.put("connected", in.connected());
-      entry.put("enabled", in.enabled());
-      entry.put("channelEnabled", in.channelEnabled());
-      entry.put("controlEnabled", in.controlEnabled());
-      entry.put("syncEnabled", in.syncEnabled());
-      inputs.add(entry);
+      inputs.add(toMap(in));
     }
     List<Map<String, Object>> outputs = new ArrayList<>();
     for (Midi.OutputInfo out : info.outputs()) {
@@ -70,5 +61,18 @@ public final class ListMidiDevices implements LxTool {
     payload.put("inputs", inputs);
     payload.put("outputs", outputs);
     return Result.ok(payload);
+  }
+
+  static Map<String, Object> toMap(Midi.InputInfo in) {
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("index", in.index());
+    entry.put("name", in.name());
+    entry.put("description", in.description());
+    entry.put("connected", in.connected());
+    entry.put("enabled", in.enabled());
+    entry.put("channelEnabled", in.channelEnabled());
+    entry.put("controlEnabled", in.controlEnabled());
+    entry.put("syncEnabled", in.syncEnabled());
+    return entry;
   }
 }

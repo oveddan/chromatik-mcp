@@ -688,6 +688,53 @@ List the instantiated MIDI control surfaces (e.g. an APC40, a MidiFighterTwister
 
 No parameters.
 
+### `add_midi_mapping`
+
+_mutating_
+
+Add a MIDI mapping: incoming note-on or control-change messages on a channel drive a parameter, resolved by its canonical LX path (see list_parameters). type is 'note' (number is the pitch, 0-127) or 'cc' (number is the CC number, 0-127); channel is 0-based (0-15). The mapping fires on channel+pitch/cc identity, not a specific velocity/value — the actual incoming velocity/value still reaches the parameter at runtime. Only parameters that support MIDI mapping (most numeric/bounded/toggle/discrete ones) can be targeted; aggregate parameters (color, MIDI filter) are rejected — map their component paths instead. Returns the created mapping in list_midi_mappings' shape, including its 0-based index; that index shifts if other mappings are later removed, so re-list before reusing it. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `type` | string | yes | one of: `note`, `cc` | Mapping type: 'note' (note-on) or 'cc' (control change) |
+| `channel` | integer | yes | 0–15 | 0-based MIDI channel (0-15) |
+| `number` | integer | yes | 0–127 | Note pitch or CC number, 0-127 depending on type |
+| `targetPath` | string | yes | — | Canonical LX path of the parameter to map, as returned by the list/get tools |
+
+### `remove_midi_mapping`
+
+_mutating_
+
+Remove a MIDI mapping by its 0-based index into list_midi_mappings. Returns the removed mapping's summary. Remaining mappings reindex afterwards, so held indices go stale — re-list before reusing one. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `index` | integer | yes | -2147483648–2147483647 | 0-based index of the mapping to remove, as returned by list_midi_mappings |
+
+### `set_midi_input`
+
+_mutating_
+
+Set one or more of a MIDI input's routing flags by its 0-based index into list_midi_devices' inputs list: channelEnabled (forward notes/CCs to channel and modulator devices), controlEnabled (feed the control-mapping layer — see list_midi_mappings), syncEnabled (this port's MIDI clock drives the engine tempo). At least one flag must be provided; flags left unset are unchanged. enabled is a derived union of the three and cannot be set directly. Returns the updated input in list_midi_devices' shape. Not undoable — LX has no undo command for these flags.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `index` | integer | yes | -2147483648–2147483647 | 0-based index of the input, as returned by list_midi_devices |
+| `channelEnabled` | boolean | no | — | Forward notes/CCs from this input to channel and modulator devices |
+| `controlEnabled` | boolean | no | — | Feed events from this input to the control-mapping layer |
+| `syncEnabled` | boolean | no | — | Let this input's MIDI clock drive the engine tempo |
+
+### `set_midi_surface_enabled`
+
+_mutating_
+
+Enable or disable a control surface by its 0-based index into list_midi_surfaces. Returns the updated surface in list_midi_surfaces' shape. Not undoable — LX has no undo command for surface enablement.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `index` | integer | yes | -2147483648–2147483647 | 0-based index of the surface, as returned by list_midi_surfaces |
+| `enabled` | boolean | yes | — | Whether the surface should be enabled |
+
 <!-- generated:end -->
 
 ## OSC

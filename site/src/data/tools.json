@@ -97,6 +97,38 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "add_midi_mapping",
+  "description" : "Add a MIDI mapping: incoming note-on or control-change messages on a channel drive a parameter, resolved by its canonical LX path (see list_parameters). type is 'note' (number is the pitch, 0-127) or 'cc' (number is the CC number, 0-127); channel is 0-based (0-15). The mapping fires on channel+pitch/cc identity, not a specific velocity/value — the actual incoming velocity/value still reaches the parameter at runtime. Only parameters that support MIDI mapping (most numeric/bounded/toggle/discrete ones) can be targeted; aggregate parameters (color, MIDI filter) are rejected — map their component paths instead. Returns the created mapping in list_midi_mappings' shape, including its 0-based index; that index shifts if other mappings are later removed, so re-list before reusing it. Undoable in Chromatik with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "type" : {
+        "type" : "string",
+        "description" : "Mapping type: 'note' (note-on) or 'cc' (control change)",
+        "enum" : [ "note", "cc" ]
+      },
+      "channel" : {
+        "type" : "integer",
+        "description" : "0-based MIDI channel (0-15)",
+        "minimum" : 0,
+        "maximum" : 15
+      },
+      "number" : {
+        "type" : "integer",
+        "description" : "Note pitch or CC number, 0-127 depending on type",
+        "minimum" : 0,
+        "maximum" : 127
+      },
+      "targetPath" : {
+        "type" : "string",
+        "description" : "Canonical LX path of the parameter to map, as returned by the list/get tools"
+      }
+    },
+    "required" : [ "type", "channel", "number", "targetPath" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "add_modulator",
   "description" : "Add a modulator by class name (from list_available_modulators) — e.g. heronarts.lx.modulator.MacroKnobs for a bank of eight mappable knobs, or the short name it lists (e.g. VariableLFO for heronarts.lx.modulator.VariableLFO). By default it lands in the global modulation engine (the Chromatik side panel); pass scope to add it inside a pattern/effect's own chain. The response lists every parameter with its canonical path and OSC address. Undoable in Chromatik with Cmd-Z.",
   "readOnly" : false,
@@ -683,6 +715,23 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "remove_midi_mapping",
+  "description" : "Remove a MIDI mapping by its 0-based index into list_midi_mappings. Returns the removed mapping's summary. Remaining mappings reindex afterwards, so held indices go stale — re-list before reusing one. Undoable in Chromatik with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "index" : {
+        "type" : "integer",
+        "description" : "0-based index of the mapping to remove, as returned by list_midi_mappings",
+        "minimum" : -2147483648,
+        "maximum" : 2147483647
+      }
+    },
+    "required" : [ "index" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "remove_modulation",
   "description" : "Remove a modulation (continuous or trigger) by the canonical path returned when it was wired (e.g. /lx/modulation/modulation/1). Remaining modulations in the same engine reindex afterwards, so held paths can go stale. Undoable in Chromatik with Cmd-Z.",
   "readOnly" : false,
@@ -823,6 +872,56 @@
       }
     },
     "required" : [ "path", "tags" ],
+    "additionalProperties" : false
+  }
+}, {
+  "name" : "set_midi_input",
+  "description" : "Set one or more of a MIDI input's routing flags by its 0-based index into list_midi_devices' inputs list: channelEnabled (forward notes/CCs to channel and modulator devices), controlEnabled (feed the control-mapping layer — see list_midi_mappings), syncEnabled (this port's MIDI clock drives the engine tempo). At least one flag must be provided; flags left unset are unchanged. enabled is a derived union of the three and cannot be set directly. Returns the updated input in list_midi_devices' shape. Not undoable — LX has no undo command for these flags.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "index" : {
+        "type" : "integer",
+        "description" : "0-based index of the input, as returned by list_midi_devices",
+        "minimum" : -2147483648,
+        "maximum" : 2147483647
+      },
+      "channelEnabled" : {
+        "type" : "boolean",
+        "description" : "Forward notes/CCs from this input to channel and modulator devices"
+      },
+      "controlEnabled" : {
+        "type" : "boolean",
+        "description" : "Feed events from this input to the control-mapping layer"
+      },
+      "syncEnabled" : {
+        "type" : "boolean",
+        "description" : "Let this input's MIDI clock drive the engine tempo"
+      }
+    },
+    "required" : [ "index" ],
+    "additionalProperties" : false
+  }
+}, {
+  "name" : "set_midi_surface_enabled",
+  "description" : "Enable or disable a control surface by its 0-based index into list_midi_surfaces. Returns the updated surface in list_midi_surfaces' shape. Not undoable — LX has no undo command for surface enablement.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "index" : {
+        "type" : "integer",
+        "description" : "0-based index of the surface, as returned by list_midi_surfaces",
+        "minimum" : -2147483648,
+        "maximum" : 2147483647
+      },
+      "enabled" : {
+        "type" : "boolean",
+        "description" : "Whether the surface should be enabled"
+      }
+    },
+    "required" : [ "index", "enabled" ],
     "additionalProperties" : false
   }
 }, {

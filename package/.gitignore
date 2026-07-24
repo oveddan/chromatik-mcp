@@ -19,5 +19,9 @@ hs_err_pid*
 # Written by LX when verify-load.sh runs
 .lxpreferences
 
+# Written by LXMidiEngine.saveDevices() when a headless test sets an input's routing
+# flags (chromatikmcp.domain.MidiTest, ToolsIntegrationTest)
+.lxmidi
+
 # Logs
 *.log

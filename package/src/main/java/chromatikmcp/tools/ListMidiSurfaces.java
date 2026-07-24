@@ -41,21 +41,25 @@ public final class ListMidiSurfaces implements LxTool {
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
     List<Map<String, Object>> surfaces = new ArrayList<>();
     for (Midi.SurfaceInfo s : Midi.surfaces(lx)) {
-      Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("index", s.index());
-      entry.put("name", s.name());
-      entry.put("deviceName", s.deviceName());
-      entry.put("class", s.className());
-      entry.put("enabled", s.enabled());
-      entry.put("connected", s.connected());
-      entry.put("inputName", s.inputName());
-      if (s.outputName() != null) {
-        entry.put("outputName", s.outputName());
-      }
-      surfaces.add(entry);
+      surfaces.add(toMap(s));
     }
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("surfaces", surfaces);
     return Result.ok(payload);
+  }
+
+  static Map<String, Object> toMap(Midi.SurfaceInfo s) {
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("index", s.index());
+    entry.put("name", s.name());
+    entry.put("deviceName", s.deviceName());
+    entry.put("class", s.className());
+    entry.put("enabled", s.enabled());
+    entry.put("connected", s.connected());
+    entry.put("inputName", s.inputName());
+    if (s.outputName() != null) {
+      entry.put("outputName", s.outputName());
+    }
+    return entry;
   }
 }
