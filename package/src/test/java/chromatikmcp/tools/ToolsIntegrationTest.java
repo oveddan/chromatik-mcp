@@ -24,7 +24,9 @@ import heronarts.lx.LX;
 import heronarts.lx.LXPath;
 import heronarts.lx.color.LXDynamicColor;
 import heronarts.lx.color.LXSwatch;
+import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.BlurEffect;
+import heronarts.lx.midi.MidiControlChange;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.MacroKnobs;
@@ -200,6 +202,7 @@ class ToolsIntegrationTest {
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
             "get_tempo",
+            "list_midi_devices", "list_midi_mappings", "list_midi_surfaces",
             "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
             "remove_color",
             "list_snapshots", "add_snapshot", "recall_snapshot",
@@ -909,6 +912,55 @@ class ToolsIntegrationTest {
         ((List<?>) structured(call("list_available_effects", Map.of())).get("effects")).size());
     assertEquals(Registry.modulators(lx).size(),
         ((List<?>) structured(call("list_available_modulators", Map.of())).get("modulators")).size());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listMidiDevicesReturnsBothPortLists() {
+    Map<String, Object> payload = structured(call("list_midi_devices", Map.of()));
+    assertNotNull(payload.get("inputs"), "inputs list always present");
+    assertNotNull(payload.get("outputs"), "outputs list always present");
+    assertInstanceOf(List.class, payload.get("inputs"));
+    assertInstanceOf(List.class, payload.get("outputs"));
+    // Headless test JVM discovers no hardware ports; the counts still mirror live state.
+    assertEquals(lx.engine.midi.inputs.size(), ((List<?>) payload.get("inputs")).size());
+    assertEquals(lx.engine.midi.outputs.size(), ((List<?>) payload.get("outputs")).size());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listMidiMappingsReturnsMappingList() {
+    Map<String, Object> payload = structured(call("list_midi_mappings", Map.of()));
+    assertNotNull(payload.get("mappings"), "mappings list always present");
+    assertEquals(lx.engine.midi.mappings.size(),
+        ((List<Map<String, Object>>) payload.get("mappings")).size());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listMidiMappingsWireShapeForCcMapping() throws javax.sound.midi.InvalidMidiDataException {
+    lx.command.perform(new LXCommand.Midi.AddMapping(new MidiControlChange(2, 20, 64), channel.fader));
+
+    Map<String, Object> payload = structured(call("list_midi_mappings", Map.of()));
+    List<Map<String, Object>> mappings = (List<Map<String, Object>>) payload.get("mappings");
+    assertTrue(mappings.size() > 0, "at least one mapping");
+    Map<String, Object> entry = mappings.get(0);
+    assertEquals("cc", entry.get("type"));
+    assertEquals(2, entry.get("channel"));
+    assertEquals(20, entry.get("number"));
+    assertEquals(channel.fader.getCanonicalPath(), entry.get("targetPath"));
+    assertTrue(entry.containsKey("label"), "label field present");
+    assertTrue(entry.containsKey("targetLabel"), "targetLabel field present");
+    assertFalse(entry.containsKey("note"), "note key omitted for CC mapping");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listMidiSurfacesReturnsSurfaceList() {
+    Map<String, Object> payload = structured(call("list_midi_surfaces", Map.of()));
+    assertNotNull(payload.get("surfaces"), "surfaces list always present");
+    assertEquals(lx.engine.midi.surfaces.size(),
+        ((List<Map<String, Object>>) payload.get("surfaces")).size());
   }
 
   @Test

@@ -78,6 +78,7 @@ const CATEGORIES = {
     'set_fixture_tags',
     'reload_fixtures',
   ],
+  midi: ['list_midi_devices', 'list_midi_mappings', 'list_midi_surfaces'],
 };
 
 function schemaTypeLabel(schema) {

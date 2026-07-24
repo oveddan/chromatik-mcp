@@ -655,6 +655,41 @@ No parameters.
 
 <!-- generated:end -->
 
+## MIDI
+
+Read-side only for now: devices (inputs/outputs), the parameter mappings incoming
+MIDI drives, and connected control surfaces. Ports/mappings/surfaces carry no
+canonical path, so each is addressed by its 0-based list index — re-list before
+reusing one, since indices shift when the underlying list changes.
+
+<!-- generated:start:midi -->
+
+### `list_midi_devices`
+
+_read-only_
+
+List the MIDI input and output ports LX has discovered. Each input carries three independent routing flags: channelEnabled (notes/CCs forwarded to channel and modulator devices), controlEnabled (events feed the control-mapping layer — see list_midi_mappings), and syncEnabled (this port's MIDI clock drives the engine tempo, effective only when get_tempo reports clockSource MIDI). enabled is the union of those three. connected starts true and flips false only if the device disconnects mid-session; ports remembered from the project file whose hardware is absent are not listed at all. Ports are addressed by their 0-based index (they carry no canonical path); indices shift as devices connect or disconnect, so re-list before reusing one.
+
+No parameters.
+
+### `list_midi_mappings`
+
+_read-only_
+
+List the parameter mappings driven by incoming MIDI. Each entry gives type ('note' or 'cc'), the 0-based MIDI channel (0-15), number (note pitch or CC number, 0-127), a note-name for note mappings, and targetPath — the canonical path of the mapped parameter, usable with get_parameter/set_parameter. Mappings are addressed by their 0-based index; indices shift when a mapping is removed, so re-list before reusing one. Only inputs with controlEnabled (see list_midi_devices) actually apply these mappings. label is LX's description of the mapping source (for note mappings this duplicates the note name); targetLabel is the mapped parameter's display label.
+
+No parameters.
+
+### `list_midi_surfaces`
+
+_read-only_
+
+List the instantiated MIDI control surfaces (e.g. an APC40, a MidiFighterTwister) — a surface is a two-way hardware controller LX drives with a dedicated protocol, distinct from the ad-hoc parameter mappings in list_midi_mappings. Each entry gives the surface name, the deviceName it binds to, enabled (actively driving the hardware) and connected (device present). Surfaces are addressed by their 0-based index. A registered surface only appears here once its device has been seen; surfaces LX knows how to drive but hasn't instantiated are not listed.
+
+No parameters.
+
+<!-- generated:end -->
+
 ## OSC
 
 Parameter payloads carry the address an OSC controller must send to. For most
