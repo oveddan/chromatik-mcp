@@ -31,6 +31,10 @@ class CatalogFormatTest {
 
   private static final Set<String> VALID_KINDS = Set.of("pattern", "effect", "modulator");
 
+  /** Summary is deliberately absent — it must stay derivable from source. */
+  private static final Set<String> CURATABLE_SECTIONS =
+      Set.of("parameterInteractions", "usageTips");
+
   @AutoClose("dispose")
   private static final LX lx = new LX(new GridModel(8, 8));
 
@@ -74,6 +78,21 @@ class CatalogFormatTest {
     assertNotNull(generatedAt, "frontmatter must have 'generatedAt'");
     assertDoesNotThrow(() -> Instant.parse(generatedAt),
         "generatedAt '" + generatedAt + "' must be an ISO-8601 instant");
+
+    // A curated entry declares which sections are hand-written; those names must be
+    // recognizable and stamped, or the marker can't be acted on by a regeneration run.
+    String curated = fm.get("curated");
+    if (curated != null) {
+      for (String section : curated.split(",")) {
+        assertTrue(CURATABLE_SECTIONS.contains(section.trim()),
+            "curated section '" + section.trim() + "' must be one of " + CURATABLE_SECTIONS
+                + " in " + filename);
+      }
+      String curatedAt = fm.get("curatedAt");
+      assertNotNull(curatedAt, "an entry with 'curated' must also have 'curatedAt' in " + filename);
+      assertDoesNotThrow(() -> Instant.parse(curatedAt),
+          "curatedAt '" + curatedAt + "' must be an ISO-8601 instant in " + filename);
+    }
 
     // All three body sections are present and non-empty
     assertNotNull(entry.summary(), "## Summary section must be present in " + filename);

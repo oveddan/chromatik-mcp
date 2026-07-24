@@ -56,7 +56,8 @@ it is cheap and safe.
    behavior-shaping control, no parameter names/ranges, behavior-vocabulary tags.
    Apply the triage rule before batching: classes whose live parameter descriptions
    are the whole story get skipped (count as `triaged-out` in the run report) or get
-   a minimal entry.
+   a minimal entry. If the existing entry declares `curated:` sections, carry those
+   sections through verbatim and regenerate only the rest (count as `curated-preserved`).
 6. **Validate.** `cd package && mvn package` — `CatalogFormatTest` walks every entry
    (frontmatter keys, FQCN=filename, hash shapes, section headings). Fix mechanically
    before review. (Until PR-7b lands the test, validate with a shell pass over the
@@ -68,8 +69,15 @@ it is cheap and safe.
 
 ## Never
 
-- Hand-edit a catalog entry to "fix" it — fix the generation (or the source) and re-run;
-  hand edits are silently clobbered by the next run and have no hash integrity.
+- Hand-edit an *undeclared* catalog entry to "fix" it — fix the generation (or the source)
+  and re-run; such edits are silently clobbered by the next run and have no hash integrity.
+  The one exception is a **curated section**: an insight generation cannot reach because it
+  came from driving the pattern live, not from reading its source. Such an entry declares
+  `curated: parameterInteractions` and/or `usageTips`, plus `curatedAt`, in its frontmatter.
+  **Step 5 must then read the existing entry and carry those sections through verbatim** —
+  this is the only thing standing between curated prose and deletion, since nothing in the
+  code enforces it. Never curate the Summary; it must stay derivable from source. See
+  `docs/catalog-format.md` for what the marker does and does not guarantee.
 - Record parameter names, ranges, defaults, or option lists — the live tools own
   structure; restating it here reintroduces the drift this design exists to kill.
 - Write an entry for a class whose source you did not read.

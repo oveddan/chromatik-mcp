@@ -1188,6 +1188,25 @@ class ToolsIntegrationTest {
     assertTrue(
         Set.of("class-jar", "plugin-jar").contains(catalog.get("source")),
         "source is either class-jar (tier 2) or plugin-jar (tier 3)");
+
+    // GradientPattern's parameter-interaction and usage-tip prose is curated (written from
+    // live driving, carried across regenerations), so the class-bytes hash does not vouch
+    // for it. The payload must say so, or `stale: false` implies more than it can.
+    assertEquals("parameterInteractions, usageTips", catalog.get("curated"));
+    assertNotNull(catalog.get("curatedAt"), "a curated entry stamps when it was curated");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void getComponentDocOmitsCuratedForGeneratedEntries() {
+    // The curated keys appear only where the entry declares them — an ordinary generated
+    // entry's whole body is hash-backed and must not imply otherwise.
+    Map<String, Object> payload = structured(
+        call("get_component_doc", Map.of("class", "heronarts.lx.effect.BlurEffect")));
+    Map<String, Object> catalog = (Map<String, Object>) payload.get("catalog");
+    assertNotNull(catalog);
+    assertFalse(catalog.containsKey("curated"));
+    assertFalse(catalog.containsKey("curatedAt"));
   }
 
   @Test

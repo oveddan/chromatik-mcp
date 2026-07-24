@@ -9,6 +9,8 @@ classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
 lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
+curated: parameterInteractions, usageTips
+curatedAt: 2026-07-24T00:00:00Z
 tags: color, gradient, palette, geometric, generative
 ---
 
@@ -22,13 +24,13 @@ Fills the model with a continuous gradient computed from a weighted sum of per-a
 
 ## Parameter interactions
 
-- Only a Y-axis amount gives a top-to-bottom gradient; equal X/Y amounts give a diagonal sweep; Radial mode on all axes gives a spherical gradient outward from center.
-- A scale control zooms the coordinate range before lookup; with wrap or mirror clamping (instead of hard clamp) this produces repeating bands rather than one sweep.
-- A phase offset shifts the lookup position and is the natural animation target — an LFO on phase gives a continuously scrolling wash.
-- Center coordinate mode mirrors the gradient around an axis's midpoint.
+- In Fixed and Linked modes the master amount multiplies the hue, saturation, and brightness ranges into the delta defining the ramp's second stop — at zero it nulls all three however far they are turned, collapsing the ramp to one color.
+- Palette mode builds its stops from swatches, ignoring the master amount and all three ranges; per-axis amounts still apply in every mode.
+- A fresh instance renders flat because the master amount and every per-axis amount start at zero: Fixed and Linked need both raised, Palette only a per-axis amount.
+- Only a Y-axis amount gives a top-to-bottom gradient; equal X/Y amounts a diagonal sweep; Radial mode on all axes a spherical gradient from center.
+- A scale control zooms the coordinate range before lookup; with wrap or mirror clamping this produces repeating bands rather than one sweep.
+- A phase offset shifts the lookup position and is the natural animation target — an LFO on it gives a scrolling wash, where animating a per-axis amount reshapes geometry instead.
 
 ## Usage tips
 
 - Works well as a static or slow-moving color backdrop beneath texture or motion patterns.
-- Combining more than two axes at full amount without compression clips the gradient at its color-stop endpoints, losing the smooth blend in the middle.
-- Animate phase for a scrolling wash rather than per-axis amount, which reshapes geometry instead of moving it.

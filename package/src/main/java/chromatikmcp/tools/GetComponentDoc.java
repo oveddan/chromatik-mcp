@@ -106,6 +106,15 @@ public final class GetComponentDoc implements LxTool {
       catalogMeta.put("currentClassBytesSha256", currentHash);
     }
     catalogMeta.put("stale", stale);
+    // Curated sections are hand-written and carried across regenerations, so the class-bytes
+    // hash does not vouch for them — say which ones, rather than letting `stale: false`
+    // imply the whole body was re-derived.
+    if (fm.get("curated") != null) {
+      catalogMeta.put("curated", fm.get("curated"));
+      if (fm.get("curatedAt") != null) {
+        catalogMeta.put("curatedAt", fm.get("curatedAt"));
+      }
+    }
     catalogMeta.put("source", entry.source());
     payload.put("catalog", catalogMeta);
 
