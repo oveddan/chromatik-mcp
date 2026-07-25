@@ -1,5 +1,6 @@
 package chromatikmcp.tools;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +35,12 @@ public final class GetComponentDoc implements LxTool {
         + "patterns/effects/modulators is rejected, naming the candidates) or 'path' (the "
         + "canonical path of a live component instance, e.g. "
         + "/lx/mixer/channel/1/pattern/1 — its class is looked up and documented). "
-        + "Registered but undocumented classes return documented:false (not an error).";
+        + "Registered but undocumented classes return documented:false (not an error). "
+        + "catalog.candidates always lists every entry considered for the class, winner "
+        + "first, then the rest ranked by accuracy (bytecode match, then recency) — a "
+        + "single-element array is the common case; more than one appears when, e.g., a "
+        + "stock class is documented by both LX and this plugin, so the choice of winner "
+        + "is auditable.";
   }
 
   @Override
@@ -110,7 +116,8 @@ public final class GetComponentDoc implements LxTool {
     payload.put("category", LXComponent.getCategory(clazz));
     payload.put("tags", tags);
 
-    Catalog.CatalogEntry entry = Catalog.locateEntry(lx, clazz);
+    Catalog.Resolution resolution = Catalog.resolve(lx, clazz);
+    Catalog.CatalogEntry entry = resolution.winner();
     if (entry == null) {
       payload.put("documented", false);
       return Result.ok(payload);
@@ -159,6 +166,36 @@ public final class GetComponentDoc implements LxTool {
       }
     }
     catalogMeta.put("source", entry.source());
+    // Always emitted, including the one-element case (the common case): its absence
+    // would otherwise be ambiguous between "exactly one copy visible" and "this server
+    // predates the feature."
+    List<Map<String, Object>> candidates = new ArrayList<>();
+    for (Catalog.Candidate candidate : resolution.candidates()) {
+      Catalog.Frontmatter candidateFm = candidate.entry().frontmatter();
+      String candidateHash = candidateFm.get("classBytesSha256");
+      Map<String, Object> candidatePayload = new LinkedHashMap<>();
+      candidatePayload.put("source", candidate.source());
+      candidatePayload.put("url", candidate.url());
+      if (candidateFm.get("generatedAt") != null) {
+        candidatePayload.put("generatedAt", candidateFm.get("generatedAt"));
+      }
+      if (candidateHash != null) {
+        candidatePayload.put("classBytesSha256", candidateHash);
+      }
+      // Read the domain's verdict rather than recomputing it here: recomputing from
+      // `currentHash` (a separately, statically cached lookup) is how this field could
+      // disagree with the ranking that actually picked the winner. Three-valued like
+      // `stale` above, not a collapsed boolean: "no classBytesSha256 recorded" (e.g. a
+      // hand-written overlay fixture), "live bytecode unreadable", and "hash genuinely
+      // differs" are distinct states a client shouldn't have to guess between.
+      candidatePayload.put("bytesMatch", switch (candidate.bytesMatch()) {
+        case FRESH -> Boolean.TRUE;
+        case STALE -> Boolean.FALSE;
+        case UNKNOWN -> "unknown";
+      });
+      candidates.add(candidatePayload);
+    }
+    catalogMeta.put("candidates", candidates);
     payload.put("catalog", catalogMeta);
 
     return Result.ok(payload);

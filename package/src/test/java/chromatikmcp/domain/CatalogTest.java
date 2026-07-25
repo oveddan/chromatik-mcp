@@ -2,6 +2,7 @@ package chromatikmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -10,8 +11,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Comparator;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AutoClose;
@@ -269,6 +275,28 @@ class CatalogTest {
     assertFalse(Catalog.hasEntry(lx, SinLFO.class));
   }
 
+  // hasEntry is list_available_*'s per-class check on the engine thread: it must find an
+  // entry via a first-hit probe, not the full ranked resolution (which enumerates every
+  // visible copy on both loaders and hashes live bytecode).
+
+  @Test
+  void hasEntryFastPathFindsPluginJarTierWithoutRanking() throws IOException {
+    // Mirrors locateEntryFallsBackToPluginJarWhenClassOwnLoaderCannotSeeIt's setup, but
+    // through the boolean seam list_available_* actually calls.
+    try (URLClassLoader isolated = new URLClassLoader(new URL[0], null)) {
+      assertTrue(Catalog.hasEntry(
+          GradientPattern.class.getName(), isolated, Catalog.class.getClassLoader()));
+    }
+  }
+
+  @Test
+  void hasEntryFastPathFalseWhenNoTierHasIt() throws IOException {
+    try (URLClassLoader isolated = new URLClassLoader(new URL[0], null)) {
+      assertFalse(Catalog.hasEntry(
+          SinLFO.class.getName(), isolated, Catalog.class.getClassLoader()));
+    }
+  }
+
   @Test
   void noEntryForAbsentOverlayDir() {
     // Point overlay at a nonexistent directory — should fall through to class-jar
@@ -374,5 +402,288 @@ class CatalogTest {
         "pluginJarLoader(lx) must still track the live loader after a content reload");
     assertFalse(afterReload == beforeReload,
         "a content reload must install a new loader instance — the #121 mechanism");
+  }
+
+  // ── ranking: accuracy over proximity ────────────────────────────────────────
+  //
+  // Fixture fqcns below are never real, loadable classes — the ranking codepath never
+  // instantiates or verifies the "bytecode" it hashes, it just reads whatever bytes sit at
+  // <fqcn-as-path>.class and hashes them. That lets these tests fabricate exact-match /
+  // non-match scenarios without a compiled class per case.
+
+  @Test
+  void rankingPrefersBytecodeMatchOverNewerNonMatchingCandidate() throws Exception {
+    String fqcn = "test.catalog.BytesRankFixture";
+    byte[] classBytes = "bytes-for-ranking-test".getBytes(StandardCharsets.UTF_8);
+    String liveHash = sha256Hex(classBytes);
+
+    Path classDir = newClassBytesDir(fqcn, classBytes);
+    Path matchingDir = newCatalogDir(fqcn,
+        fixture(fqcn, liveHash, "2020-01-01T00:00:00Z", "Matches bytecode."));
+    Path nonMatchingDir = newCatalogDir(fqcn,
+        fixture(fqcn, "d".repeat(64), "2030-01-01T00:00:00Z", "Newer but wrong bytes."));
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {
+        classDir.toUri().toURL(), matchingDir.toUri().toURL(), nonMatchingDir.toUri().toURL()
+    }, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+      assertNotNull(result.winner());
+      assertEquals("Matches bytecode.", result.winner().summary(),
+          "an exact bytecode match wins even though the other candidate is newer");
+      assertEquals(2, result.candidates().size());
+      assertEquals("Matches bytecode.", result.candidates().get(0).entry().summary(),
+          "ranked list is winner-first");
+    } finally {
+      deleteRecursively(classDir);
+      deleteRecursively(matchingDir);
+      deleteRecursively(nonMatchingDir);
+    }
+  }
+
+  @Test
+  void generatedAtBreaksTieWhenNeitherCandidateMatchesBytes() throws Exception {
+    String fqcn = "test.catalog.NeitherMatchFixture";
+    Path olderDir = newCatalogDir(fqcn, fixture(fqcn, "a".repeat(64), "2020-01-01T00:00:00Z", "Older."));
+    Path newerDir = newCatalogDir(fqcn, fixture(fqcn, "b".repeat(64), "2030-01-01T00:00:00Z", "Newer."));
+    // No class bytes anywhere on this loader, so the live hash is unresolvable and both
+    // candidates report bytesMatch == false: generatedAt alone must decide.
+    try (URLClassLoader loader = new URLClassLoader(
+        new URL[] {olderDir.toUri().toURL(), newerDir.toUri().toURL()}, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+      assertEquals("Newer.", result.winner().summary());
+    } finally {
+      deleteRecursively(olderDir);
+      deleteRecursively(newerDir);
+    }
+  }
+
+  @Test
+  void generatedAtBreaksTieWhenBothCandidatesMatchBytes() throws Exception {
+    String fqcn = "test.catalog.BothMatchFixture";
+    byte[] classBytes = "both-candidates-match".getBytes(StandardCharsets.UTF_8);
+    String liveHash = sha256Hex(classBytes);
+
+    Path classDir = newClassBytesDir(fqcn, classBytes);
+    Path olderDir = newCatalogDir(fqcn, fixture(fqcn, liveHash, "2020-01-01T00:00:00Z", "Older match."));
+    Path newerDir = newCatalogDir(fqcn, fixture(fqcn, liveHash, "2030-01-01T00:00:00Z", "Newer match."));
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {
+        classDir.toUri().toURL(), olderDir.toUri().toURL(), newerDir.toUri().toURL()
+    }, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+      assertEquals("Newer match.", result.winner().summary(),
+          "both candidates match bytecode identically, so generatedAt is the tiebreak");
+    } finally {
+      deleteRecursively(classDir);
+      deleteRecursively(olderDir);
+      deleteRecursively(newerDir);
+    }
+  }
+
+  @Test
+  void malformedCandidateIsSkippedRatherThanAbortingLookup() throws Exception {
+    String fqcn = "test.catalog.MalformedFixture";
+    Path malformedDir = newCatalogDir(fqcn, "this is not a catalog entry\nno frontmatter markers\n");
+    Path validDir = newCatalogDir(fqcn,
+        fixture(fqcn, "c".repeat(64), "2025-01-01T00:00:00Z", "Valid entry."));
+    // Malformed candidate first, so a naive implementation that bails on the first parse
+    // failure would never reach the valid one.
+    try (URLClassLoader loader = new URLClassLoader(
+        new URL[] {malformedDir.toUri().toURL(), validDir.toUri().toURL()}, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+      assertNotNull(result.winner(), "a malformed candidate must not deny service for a valid one");
+      assertEquals("Valid entry.", result.winner().summary());
+      assertEquals(1, result.candidates().size(),
+          "the malformed candidate is excluded outright, not merely outranked");
+    } finally {
+      deleteRecursively(malformedDir);
+      deleteRecursively(validDir);
+    }
+  }
+
+  @Test
+  void rankingIsDeterministicRegardlessOfEnumerationOrder() throws Exception {
+    String fqcn = "test.catalog.DeterminismFixture";
+    // Tie on bytesMatch (both false — no class bytes visible) and generatedAt (identical),
+    // so only the URL tiebreak can decide: this isolates that enumeration order itself
+    // (not the content of the winner) is what must stay stable.
+    Path dirA = newCatalogDir(fqcn, fixture(fqcn, "e".repeat(64), "2025-01-01T00:00:00Z", "Candidate A."));
+    Path dirB = newCatalogDir(fqcn, fixture(fqcn, "f".repeat(64), "2025-01-01T00:00:00Z", "Candidate B."));
+    try {
+      URL urlA = dirA.toUri().toURL();
+      URL urlB = dirB.toUri().toURL();
+      try (URLClassLoader forward = new URLClassLoader(new URL[] {urlA, urlB}, null);
+          URLClassLoader reverse = new URLClassLoader(new URL[] {urlB, urlA}, null)) {
+        Catalog.Resolution viaForwardOrder = Catalog.resolveCandidates(fqcn, forward, forward);
+        Catalog.Resolution viaReverseOrder = Catalog.resolveCandidates(fqcn, reverse, reverse);
+
+        assertEquals(2, viaForwardOrder.candidates().size());
+        assertEquals(2, viaReverseOrder.candidates().size());
+        assertEquals(viaForwardOrder.winner().summary(), viaReverseOrder.winner().summary(),
+            "the winner must not depend on which order the loader enumerated candidates in");
+      }
+    } finally {
+      deleteRecursively(dirA);
+      deleteRecursively(dirB);
+    }
+  }
+
+  @Test
+  void overlayWinsOutrightButReportsTheCandidateItShadowed() throws IOException {
+    Path tempDir = Files.createTempDirectory("catalog-overlay-candidates-test");
+    try {
+      String overlayContent = """
+          ---
+          class: heronarts.lx.pattern.color.GradientPattern
+          kind: pattern
+          generatedAt: 2026-01-01T00:00:00Z
+          lxVersion: 1.2.1
+          tags: test-overlay
+          ---
+
+          ## Summary
+
+          Overlay summary sentinel.
+
+          ## Parameter interactions
+
+          Overlay interactions sentinel.
+
+          ## Usage tips
+
+          Overlay tips sentinel.
+          """;
+      Files.writeString(
+          tempDir.resolve("heronarts.lx.pattern.color.GradientPattern.md"), overlayContent);
+
+      Catalog.setOverlayDir(tempDir);
+      Catalog.Resolution result = Catalog.resolveCandidates(
+          GradientPattern.class.getName(), GradientPattern.class.getClassLoader(),
+          Catalog.class.getClassLoader());
+      assertEquals("overlay", result.winner().source(), "overlay still wins outright, not by ranking");
+      assertTrue(result.candidates().size() > 1,
+          "overlay reports the class-jar entry it shadowed rather than hiding it");
+      assertEquals("overlay", result.candidates().get(0).source(),
+          "overlay is always reported first, ranking or not");
+      assertEquals(Catalog.Staleness.UNKNOWN, result.candidates().get(0).bytesMatch(),
+          "no classBytesSha256 recorded on the hand-written overlay fixture — unknown, "
+              + "not a false 'differs'");
+    } finally {
+      Catalog.setOverlayDir(DEFAULT_OVERLAY);
+      Files.deleteIfExists(tempDir.resolve("heronarts.lx.pattern.color.GradientPattern.md"));
+      Files.deleteIfExists(tempDir);
+    }
+  }
+
+  // ── regression: candidate bytesMatch must agree with get_component_doc's per-class
+  // staleness verdict, both backed by the one cached hash ──────────────────────────────
+  //
+  // Before this fix, Catalog.rank computed its own liveHash uncached, while
+  // GetComponentDoc separately recomputed bytesMatch from Catalog.computeBytesHash(Class)
+  // (the fqcn-keyed static cache) — two independent computations that could disagree,
+  // most concretely right after a Chromatik content reload replaces a class's loader
+  // without invalidating that cache. Routing both through the one hash computed here
+  // (via the 4-arg resolveCandidates a real Class enables) makes them the same value by
+  // construction. This also exercises Fix 5's replacement for the old
+  // target/test-classes/ planting trick: a throwaway URLClassLoader stands in for a
+  // second package jar shipping the same entry name, so nothing touches the build's own
+  // classpath (a leftover planted directory there would shadow the real catalog for every
+  // later, non-clean test run — see CatalogFormatTest.catalogFiles()).
+
+  @Test
+  void candidateBytesMatchAgreesWithGetComponentDocsPerClassStaleness() throws IOException {
+    String fqcn = GradientPattern.class.getName();
+    Path plantedDir = newCatalogDir(fqcn,
+        fixture(fqcn, "0".repeat(64), "1999-01-01T00:00:00Z", "Planted competing entry."));
+    try (URLClassLoader plantedLoader =
+        new URLClassLoader(new URL[] {plantedDir.toUri().toURL()}, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(
+          fqcn, GradientPattern.class.getClassLoader(), plantedLoader, GradientPattern.class);
+
+      assertEquals(2, result.candidates().size());
+      assertNotEquals("1999-01-01T00:00:00Z", result.winner().frontmatter().get("generatedAt"),
+          "the deliberately old, wrong-bytes planted fixture must lose the ranking");
+
+      Catalog.Candidate real = result.candidates().stream()
+          .filter(c -> "class-jar".equals(c.source())).findFirst().orElseThrow();
+      Catalog.Candidate planted = result.candidates().stream()
+          .filter(c -> "plugin-jar".equals(c.source())).findFirst().orElseThrow();
+
+      assertEquals("1999-01-01T00:00:00Z", planted.entry().frontmatter().get("generatedAt"),
+          "the shadowed planted candidate is still reported, not hidden");
+      assertEquals(Catalog.Staleness.STALE, planted.bytesMatch(),
+          "the planted fixture's all-zero hash cannot match live GradientPattern bytecode");
+
+      // The exact defect this fixes: read off the Candidate, this is definitionally the
+      // same verdict Catalog.staleness (what get_component_doc's top-level `stale` field
+      // uses) reports for the winner — not a second, independent computation that could
+      // disagree with it.
+      assertEquals(
+          Catalog.staleness(GradientPattern.class, real.entry().frontmatter().get("classBytesSha256")),
+          real.bytesMatch(),
+          "candidate bytesMatch must be backed by the same cached hash as the top-level "
+              + "staleness verdict, not recomputed independently");
+    } finally {
+      deleteRecursively(plantedDir);
+    }
+  }
+
+  private static Path newCatalogDir(String fqcn, String content) throws IOException {
+    Path dir = Files.createTempDirectory("catalog-rank-test");
+    Path catalogDir = Files.createDirectories(dir.resolve("catalog"));
+    Files.writeString(catalogDir.resolve(fqcn + ".md"), content);
+    return dir;
+  }
+
+  private static Path newClassBytesDir(String fqcn, byte[] classBytes) throws IOException {
+    Path dir = Files.createTempDirectory("catalog-rank-test-class");
+    Path classFile = dir.resolve(fqcn.replace('.', '/') + ".class");
+    Files.createDirectories(classFile.getParent());
+    Files.write(classFile, classBytes);
+    return dir;
+  }
+
+  private static String fixture(String fqcn, String classBytesSha256, String generatedAt, String summary) {
+    return """
+        ---
+        class: %s
+        kind: pattern
+        classBytesSha256: %s
+        generatedAt: %s
+        lxVersion: 1.2.1
+        ---
+
+        ## Summary
+
+        %s
+
+        ## Parameter interactions
+
+        Interactions.
+
+        ## Usage tips
+
+        Tips.
+        """.formatted(fqcn, classBytesSha256, generatedAt, summary);
+  }
+
+  private static String sha256Hex(byte[] bytes) throws NoSuchAlgorithmException {
+    byte[] hash = MessageDigest.getInstance("SHA-256").digest(bytes);
+    StringBuilder sb = new StringBuilder(64);
+    for (byte b : hash) sb.append(String.format("%02x", b));
+    return sb.toString();
+  }
+
+  private static void deleteRecursively(Path root) throws IOException {
+    if (root == null || !Files.exists(root)) {
+      return;
+    }
+    try (Stream<Path> walk = Files.walk(root)) {
+      walk.sorted(Comparator.reverseOrder()).forEach(p -> {
+        try {
+          Files.deleteIfExists(p);
+        } catch (IOException e) {
+          // Best-effort cleanup; leftover temp files don't affect test correctness.
+        }
+      });
+    }
   }
 }

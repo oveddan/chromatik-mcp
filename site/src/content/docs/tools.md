@@ -148,7 +148,7 @@ See what the model is rendering by reading the composited output buffer. Pass in
 
 _read-only_
 
-Return the semantic catalog entry for an LX pattern, effect, or modulator class: visual summary, parameter interactions, usage tips, and staleness metadata. Accepts exactly one of 'class' (the full class name or the short name returned by the list_available_* tools — a short name ambiguous across patterns/effects/modulators is rejected, naming the candidates) or 'path' (the canonical path of a live component instance, e.g. /lx/mixer/channel/1/pattern/1 — its class is looked up and documented). Registered but undocumented classes return documented:false (not an error).
+Return the semantic catalog entry for an LX pattern, effect, or modulator class: visual summary, parameter interactions, usage tips, and staleness metadata. Accepts exactly one of 'class' (the full class name or the short name returned by the list_available_* tools — a short name ambiguous across patterns/effects/modulators is rejected, naming the candidates) or 'path' (the canonical path of a live component instance, e.g. /lx/mixer/channel/1/pattern/1 — its class is looked up and documented). Registered but undocumented classes return documented:false (not an error). catalog.candidates always lists every entry considered for the class, winner first, then the rest ranked by accuracy (bytecode match, then recency) — a single-element array is the common case; more than one appears when, e.g., a stock class is documented by both LX and this plugin, so the choice of winner is auditable.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|

@@ -1776,6 +1776,33 @@ class ToolsIntegrationTest {
 
   @Test
   @SuppressWarnings("unchecked")
+  void getComponentDocAlwaysEmitsCandidatesEvenForASingleVisibleCopy() {
+    // The common case: exactly one copy of GradientPattern's entry is visible. candidates
+    // must still be a one-element array, not omitted — its absence would otherwise be
+    // ambiguous between "exactly one copy visible" and "this server predates the feature."
+    // (The multi-candidate ranking behavior itself — an overlay/classpath entry losing to
+    // a more-accurate one — is covered at the domain layer in CatalogTest, which can
+    // fabricate a competing copy via a throwaway URLClassLoader; doing that here would mean
+    // planting a file on the shared test classpath, which is what a prior version of this
+    // test did and which risked poisoning CatalogFormatTest on a non-clean rebuild.)
+    Map<String, Object> payload = structured(
+        call("get_component_doc", Map.of("class", GradientPattern.class.getName())));
+    Map<String, Object> catalog = (Map<String, Object>) payload.get("catalog");
+    assertNotNull(catalog);
+
+    List<Map<String, Object>> candidates = (List<Map<String, Object>>) catalog.get("candidates");
+    assertNotNull(candidates, "candidates is always present, even with a single visible copy");
+    assertEquals(1, candidates.size());
+    Map<String, Object> only = candidates.get(0);
+    assertEquals(catalog.get("source"), only.get("source"));
+    assertNotNull(only.get("url"));
+    Object bytesMatch = only.get("bytesMatch");
+    assertTrue(bytesMatch instanceof Boolean || "unknown".equals(bytesMatch),
+        "bytesMatch is three-valued like `stale`: true, false, or \"unknown\"");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
   void getComponentDocOmitsCuratedForGeneratedEntries() {
     // The curated keys appear only where the entry declares them — an ordinary generated
     // entry's whole body is hash-backed and must not imply otherwise.
