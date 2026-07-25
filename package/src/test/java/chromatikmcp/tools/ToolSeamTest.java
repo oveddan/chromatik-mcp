@@ -195,6 +195,35 @@ class ToolSeamTest extends HeadlessLxTest {
   }
 
   @Test
+  void executorFailureMapsToInternalIsError() throws InterruptedException {
+    // Regression for the PR that narrowed the try/catch into invoke(): EngineExecutor.call
+    // itself can throw (timeout, interruption) from the *calling* thread, outside the
+    // supplier invoke() wraps. Stop the drainer so the engine task never completes, then
+    // interrupt the calling thread while it blocks in Future.get() inside executor.call.
+    this.draining.set(false);
+    this.drainer.join(2_000);
+
+    McpServerFeatures.SyncToolSpecification spec =
+        Tools.specification(new ImageTool(() -> new byte[0]), this.lx, new EngineExecutor(this.lx));
+
+    java.util.concurrent.atomic.AtomicReference<McpSchema.CallToolResult> resultRef =
+        new java.util.concurrent.atomic.AtomicReference<>();
+    Thread caller = new Thread(() -> resultRef.set(
+        spec.callHandler().apply(null, new McpSchema.CallToolRequest("image_tool", Map.of()))));
+    caller.start();
+    Thread.sleep(100); // let it reach Future.get() inside executor.call
+    caller.interrupt();
+    caller.join(5_000);
+
+    McpSchema.CallToolResult result = resultRef.get();
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text =
+        assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INTERNAL + ":"),
+        "executor-level failure maps to internal, no thrown exception: " + text.text());
+  }
+
+  @Test
   void unexpectedExceptionMapsToInternalIsError() {
     McpServerFeatures.SyncToolSpecification spec =
         Tools.specification(new BoomTool(), this.lx, new EngineExecutor(this.lx));

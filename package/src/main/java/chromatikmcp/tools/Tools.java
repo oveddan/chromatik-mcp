@@ -1,7 +1,9 @@
 package chromatikmcp.tools;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -87,7 +89,7 @@ public final class Tools {
    * docs site (see {@code chromatikmcp.ToolCatalogDump}).
    */
   public static List<LxTool> allTools(GetStatus getStatus) {
-    return List.of(
+    List<LxTool> tools = new ArrayList<>(List.of(
             new GetProjectInfo(),
             getStatus,
             new ListChannels(),
@@ -151,7 +153,19 @@ public final class Tools {
             new AddSnapshot(),
             new RecallSnapshot(),
             new UpdateSnapshot(),
-            new RemoveSnapshot());
+            new RemoveSnapshot()));
+
+    // Built from the list above, not a static registry: appending after gives ApplyOperations
+    // no way to see itself, and filtering readOnly() gives it no way to see a read tool either
+    // — nested batches and read-in-batch are rejected structurally, not by a special case.
+    Map<String, LxTool> mutationTools = new LinkedHashMap<>();
+    for (LxTool tool : tools) {
+      if (!tool.readOnly()) {
+        mutationTools.put(tool.name(), tool);
+      }
+    }
+    tools.add(new ApplyOperations(mutationTools));
+    return tools;
   }
 
   public static List<McpServerFeatures.SyncToolSpecification> specifications(
@@ -177,10 +191,10 @@ public final class Tools {
 
   private static McpSchema.CallToolResult call(
       LxTool tool, LX lx, EngineExecutor executor, McpSchema.CallToolRequest request) {
+    Map<String, Object> args = (request.arguments() == null) ? Map.of() : request.arguments();
     Result<Map<String, Object>> result;
     try {
-      Map<String, Object> args = (request.arguments() == null) ? Map.of() : request.arguments();
-      result = executor.call(() -> tool.handle(lx, args));
+      result = executor.call(() -> invoke(tool, lx, args));
     } catch (Resolve.ResolveException e) {
       // Expected failure, not a defect: typed resolver errors map to wire codes, no log.
       result = Result.error(
@@ -214,6 +228,29 @@ public final class Tools {
           .addTextContent(error.code() + ": " + error.message())
           .build();
     };
+  }
+
+  /**
+   * Runs {@code tool.handle(lx, args)} and maps whatever it throws to a {@link Result},
+   * exactly as the top-level MCP call handler does. Package-private re-entry seam: {@link
+   * ApplyOperations} calls this directly (never {@link EngineExecutor#call}, whose javadoc
+   * forbids re-entry from the engine thread it already holds) to dispatch each batched
+   * operation through the same exception mapping every individual tool call gets, without
+   * reimplementing any mutation.
+   */
+  static Result<Map<String, Object>> invoke(LxTool tool, LX lx, Map<String, Object> args) {
+    try {
+      return tool.handle(lx, args);
+    } catch (Resolve.ResolveException e) {
+      // Expected failure, not a defect: typed resolver errors map to wire codes, no log.
+      return Result.error(
+          (e.failure == Resolve.Failure.NOT_FOUND) ? Result.NOT_FOUND : Result.INVALID_ARGUMENT,
+          e.getMessage());
+    } catch (RuntimeException e) {
+      LX.error(e, "[Chromatik-MCP] Tool " + tool.name() + " failed");
+      return Result.error(Result.INTERNAL,
+          (e.getMessage() == null) ? e.getClass().getSimpleName() : e.getMessage());
+    }
   }
 
   private static McpSchema.CallToolResult success(LxTool tool, Map<String, Object> value, byte[] png) {

@@ -208,7 +208,8 @@ class ToolsIntegrationTest {
             "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
             "remove_color",
             "list_snapshots", "add_snapshot", "recall_snapshot",
-            "update_snapshot", "remove_snapshot"),
+            "update_snapshot", "remove_snapshot",
+            "apply_operations"),
         names);
     Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
         "wire_trigger", "remove_modulation", "remove_modulator", "fire_trigger",
@@ -219,7 +220,8 @@ class ToolsIntegrationTest {
         "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
         "remove_color",
         "add_snapshot", "recall_snapshot", "update_snapshot", "remove_snapshot",
-        "add_midi_mapping", "remove_midi_mapping", "set_midi_input", "set_midi_surface_enabled");
+        "add_midi_mapping", "remove_midi_mapping", "set_midi_input", "set_midi_surface_enabled",
+        "apply_operations");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
       assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),

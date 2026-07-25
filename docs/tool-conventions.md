@@ -64,6 +64,14 @@ Decided once (#108) so it isn't re-litigated per tool:
   also requires revisiting `RewordingJsonSchemaValidator`, which currently assumes no tool
   has an `outputSchema` and rewrites every validator failure accordingly — `EmbeddedMcpServer`
   enforces that assumption at startup.
+- **Explicit exception**: `apply_operations` always returns `Result.ok` at the top level,
+  even when individual batched operations failed — per-op outcomes live in its `results`
+  array (`{index, ok, result}` or `{index, ok: false, code, message}`), reusing the same
+  codes a top-level call would return. A client that only dispatches on the top-level
+  `isError` will silently miss those per-op failures; it must inspect `results`. This is a
+  deliberate divergence for a batch tool (there is no single expected/unexpected outcome
+  for a multi-operation call), not an oversight — the rest of the tool surface follows the
+  rule above.
 
 ## Drill-down
 

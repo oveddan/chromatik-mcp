@@ -81,6 +81,7 @@ const CATEGORIES = {
   ],
   midi: ['list_midi_devices', 'list_midi_mappings', 'list_midi_surfaces',
     'add_midi_mapping', 'remove_midi_mapping', 'set_midi_input', 'set_midi_surface_enabled'],
+  batch: ['apply_operations'],
 };
 
 function schemaTypeLabel(schema) {

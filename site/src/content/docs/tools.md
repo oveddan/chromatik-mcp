@@ -1,6 +1,6 @@
 ---
 title: Tool reference
-description: The full MCP tool surface — discovery, parameters, structure, modulation, palette, snapshots, views, and rendering.
+description: The full MCP tool surface — discovery, parameters, structure, modulation, palette, snapshots, views, rendering, and batching.
 ---
 
 Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`), as
@@ -749,6 +749,27 @@ Enable or disable a control surface by its 0-based index into list_midi_surfaces
 |---|---|---|---|---|
 | `index` | integer | yes | -2147483648–2147483647 | 0-based index of the surface, as returned by list_midi_surfaces |
 | `enabled` | boolean | yes | — | Whether the surface should be enabled |
+
+<!-- generated:end -->
+
+## Batch
+
+Run several mutation-tool calls in one round-trip, all inside a single engine frame.
+Undo is **not** batched: each operation still produces its own undo entry, and per the
+tool's own description, one failing operation in a batch can wipe undo history for
+earlier operations in that same batch even though they still report success.
+
+<!-- generated:start:batch -->
+
+### `apply_operations`
+
+_mutating_
+
+Apply up to 50 mutation-tool calls in one MCP round-trip. Every handler already runs on the LX engine thread, so a batch schedules onto it once and every operation lands in the same engine frame — no intermediate half-built state is ever rendered or output between operations, unlike issuing the same calls one at a time. Each entry is {tool, args}: 'tool' names any registered mutation tool (by its normal tool name) and 'args' is exactly the argument object a top-level call to that tool would take. Every operations[i].tool is validated up front — an unknown name, a read-only tool, or apply_operations itself (batches cannot nest) fails the whole call with invalid_argument and applies nothing. Once validated, execution is continue-on-error: an operation that fails does not stop the ones after it. The response's results array has one entry per operation, in order: {index, ok: true, result} on success or {index, ok: false, code, message} on failure, using the same error codes a top-level call would return. Two sharp edges this tool does NOT smooth over: (1) it does not collapse the batch into one undo step — each operation still produces its own undo entry (or entries) exactly as if called individually, so undoing an N-operation batch takes N presses of Cmd-Z; (2) LX's lx.command.perform() wipes the entire undo/redo history when a command fails — in a batch, one failing operation can silently erase undo history for every earlier operation in the SAME batch, even though those operations still report ok: true; (3) all operations run inside one engine frame, so an I/O-heavy operation stalls the whole batch's cost onto that single frame — reload_fixtures (which re-reads every .lxf from disk) is a representative worst case, and a large or slow batch can hit the 30s executor timeout, after which the batch is NOT cancelled and still applies once the engine drains it.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `operations` | array<object> | yes | — | Operations to apply, in order |
 
 <!-- generated:end -->
 

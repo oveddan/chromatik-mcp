@@ -140,4 +140,24 @@ class EngineExecutorTest extends HeadlessLxTest {
       drainer.join(2_000);
     }
   }
+
+  /**
+   * The overload taking an explicit {@code timeout}/{@code unit} is what {@link
+   * EngineExecutor#call(java.util.function.Supplier)} delegates to with {@link
+   * EngineExecutor#DEFAULT_TIMEOUT_MS}; the seam always uses that 30s default, so this is
+   * the only place a genuine {@code TimeoutException} (EngineExecutor.java:87-88) can be
+   * driven quickly, rather than the {@code InterruptedException} branch covered elsewhere.
+   * No drainer runs, so the submitted task never completes and the tiny timeout expires.
+   */
+  @Test
+  @Timeout(10)
+  void callThrowsWhenTimeoutElapsesBeforeTheEngineDrains() {
+    LX lx = newHeadlessLx();
+    EngineExecutor executor = new EngineExecutor(lx);
+
+    IllegalStateException thrown = assertThrows(IllegalStateException.class,
+        () -> executor.call(() -> "never", 20, TimeUnit.MILLISECONDS));
+    assertTrue(thrown.getMessage().contains("timed out"),
+        "TimeoutException branch surfaces as an unchecked timeout failure: " + thrown.getMessage());
+  }
 }

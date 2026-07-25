@@ -217,6 +217,38 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "apply_operations",
+  "description" : "Apply up to 50 mutation-tool calls in one MCP round-trip. Every handler already runs on the LX engine thread, so a batch schedules onto it once and every operation lands in the same engine frame — no intermediate half-built state is ever rendered or output between operations, unlike issuing the same calls one at a time. Each entry is {tool, args}: 'tool' names any registered mutation tool (by its normal tool name) and 'args' is exactly the argument object a top-level call to that tool would take. Every operations[i].tool is validated up front — an unknown name, a read-only tool, or apply_operations itself (batches cannot nest) fails the whole call with invalid_argument and applies nothing. Once validated, execution is continue-on-error: an operation that fails does not stop the ones after it. The response's results array has one entry per operation, in order: {index, ok: true, result} on success or {index, ok: false, code, message} on failure, using the same error codes a top-level call would return. Two sharp edges this tool does NOT smooth over: (1) it does not collapse the batch into one undo step — each operation still produces its own undo entry (or entries) exactly as if called individually, so undoing an N-operation batch takes N presses of Cmd-Z; (2) LX's lx.command.perform() wipes the entire undo/redo history when a command fails — in a batch, one failing operation can silently erase undo history for every earlier operation in the SAME batch, even though those operations still report ok: true; (3) all operations run inside one engine frame, so an I/O-heavy operation stalls the whole batch's cost onto that single frame — reload_fixtures (which re-reads every .lxf from disk) is a representative worst case, and a large or slow batch can hit the 30s executor timeout, after which the batch is NOT cancelled and still applies once the engine drains it.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "operations" : {
+        "type" : "array",
+        "description" : "Operations to apply, in order",
+        "items" : {
+          "type" : "object",
+          "properties" : {
+            "tool" : {
+              "type" : "string",
+              "description" : "Name of a registered mutation tool to invoke (read-only tools and apply_operations itself are rejected)"
+            },
+            "args" : {
+              "type" : "object",
+              "description" : "Arguments for the tool, exactly as passed to a top-level call of it"
+            }
+          },
+          "required" : [ "tool", "args" ],
+          "additionalProperties" : false
+        },
+        "minItems" : 1,
+        "maxItems" : 50
+      }
+    },
+    "required" : [ "operations" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "describe_model",
   "description" : "The model tree: the geometry hierarchy the rig renders onto, from the whole installation down to individual points. Each node reports 'tags' (the same vocabulary get_views' selectors match against — e.g. a selector 'cube' matches every node tagged 'cube'), 'size' (point count), 'pointIndexRange' ([firstIndex, lastIndex], the bounding range of this node's point indices in the same global color buffer get_frame reads back — NOT a claim that the node owns every index in that range; check 'contiguous' before slicing the buffer), 'contiguous' (true when the node's indices form an unbroken run equal to 'size', so the range is exactly its points; false when they're interleaved with other nodes' indices, as for a grid column submodel — both fields are omitted for an empty node), 'bounds'/'center' (spatial extent), and 'childCount' (how many submodels sit below, even when 'children' itself is absent). Pass 'path' (a model node path, as emitted in this tool's own 'path' field — not a component canonical path, since LXModel isn't addressable through the component tree) to describe a submodel instead of the whole installation; omit it for the root, which also reports 'modelName', 'isStatic', 'totalPoints', 'fixtureCount', and 'tagVocabulary' (every distinct tag in the project with its occurrence count). 'depth' (default 2, max 10) bounds how many levels of children are expanded below the addressed node — real installations can have thousands of submodels, so an unbounded dump would blow a client's context. When 'childCount' is nonzero but 'children' is missing, depth ran out; re-call with 'path' set to one of the reported child paths (or a higher 'depth') to keep descending.",
   "readOnly" : true,
