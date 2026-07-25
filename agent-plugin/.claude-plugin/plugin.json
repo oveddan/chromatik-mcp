@@ -1,0 +1,10 @@
+{
+  "name": "chromatik",
+  "version": "0.1.0",
+  "description": "Drive a live Chromatik (LX Studio) lighting show over MCP — connects the chromatik-mcp server and carries the house rules for driving it well.",
+  "author": { "name": "Dan Oved", "url": "https://github.com/oveddan" },
+  "homepage": "https://oveddan.github.io/chromatik-mcp/",
+  "repository": "https://github.com/oveddan/chromatik-mcp",
+  "license": "MIT",
+  "keywords": ["chromatik", "lx", "lx-studio", "lighting", "led", "mcp", "vj", "show-control"]
+}

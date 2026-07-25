@@ -1,21 +1,7 @@
 ---
-title: Driving Chromatik well
-description: Second-person guidance for the agent connected over MCP — discovery etiquette, restart handling, timeout semantics, and verifying your own work.
+name: driving-chromatik
+description: House rules for driving a live Chromatik (LX Studio) lighting show over the chromatik-mcp MCP server — connecting and recovering from restarts, canonical-path addressing, timeout and error-code semantics, consulting component docs before reasoning about a pattern, and the mutate/look/adjust verification loop. Use whenever calling chromatik MCP tools against a running instance.
 ---
-
-## Who this page is for
-
-You are the agent connected to a running Chromatik over MCP. This page is written to
-you, not about you — if a human handed you a link to this site, this is the page to
-read before you start calling tools. The rest of the site explains the system to
-humans; this one is operating instructions for the model in the loop.
-
-The content below is generated from the `driving-chromatik` skill bundled in this
-project's [agent plugin](https://github.com/oveddan/chromatik-mcp/tree/main/agent-plugin) —
-if your client loads that plugin, you already have this in context and don't need to
-read it here too.
-
-<!-- generated:start:driving -->
 
 ## When this applies
 
@@ -163,40 +149,3 @@ atomic:
 
 See the plugin's bundled `references/addressing.md` for canonical-vs-OSC path details and
 `references/error-codes.md` for the full `Result` wire shape.
-
-<!-- generated:end -->
-
-## What the server already told you
-
-The MCP `initialize` response carries a server-level `instructions` string — your
-client may or may not surface it to you, so it's reproduced here in full:
-
-> LX mixer semantics: a channel's patternMode is 'playlist' (one active pattern shows)
-> or 'blend' (all enabled patterns composite simultaneously, each scaled by its
-> compositeLevel parameter, 0-1). For pixels to reach fixtures, the whole chain must
-> be on: pattern contributing → channel enabled and fader > 0 → master
-> fader > 0 → engine output enabled (see get_project_info's output object).
-> Every component and parameter is addressed by its canonical LX path (e.g.
-> /lx/mixer/channel/1/fader); use list_parameters on any component path to discover
-> its parameters instead of guessing names. Scene colors flow from the global
-> palette (get_palette) to palette-linked patterns and effects; recall a saved
-> swatch via fire_trigger on its recallPath. A parameter with live modulations
-> reports its effective value plus baseValue; set_parameter moves the base. A new
-> wire_modulator wiring needs depth: pass its range argument or set rangePath
-> afterwards. Views are named model subsets (see get_views), created via add_view; a
-> device's view selector clips its rendering to that subset — map a device by
-> set_parameter on its 'view' path to the view's label (discrete/selector
-> parameters accept an option name string as well as an integer index) — and
-> 'Default' inherits the view from the parent device/channel instead. get_tempo
-> reports the engine tempo (bpm, clock source, beat position) and its
-> launchQuantization: with quantization set, a fire_trigger on a quantized
-> trigger (pattern/clip launch) may report pending:true instead of firing
-> immediately, deferring to the next tempo boundary. Snapshots (list_snapshots,
-> add_snapshot, recall_snapshot) capture and recall whole-look state — mixer,
-> pattern, effect, and modulation values together — with an optional fade
-> controlled by the engine's transition settings.
-
-This is sent verbatim in the `initialize` result (`Tools.INSTRUCTIONS` in the server
-source) — it's the one thing the server tells every connecting client unprompted, and
-this page is the one place it's visible to you as prose rather than buried in a
-handshake payload.

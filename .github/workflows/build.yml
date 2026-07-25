@@ -32,3 +32,33 @@ jobs:
       # which verify-load.sh resolves first.
       - name: headless load gate
         run: ./scripts/verify-load.sh
+
+  # Site-side drift gates for the agent plugin (agent-plugin/). deploy-docs.yml only runs
+  # on pushes to main, so without this job a PR could land a stale driving.md or a tool
+  # rename that silently orphans a name referenced in the plugin's skill undetected.
+  plugin-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - run: npm ci
+
+      # src/content/docs/driving.md must match what generate-driving-page.mjs would
+      # produce from agent-plugin/skills/driving-chromatik/SKILL.md.
+      - name: driving.md matches SKILL.md
+        run: npm run driving-ref -- --check
+
+      # Every tool-shaped name referenced under agent-plugin/ must exist in the live
+      # tool catalog (src/data/tools.json).
+      - name: agent-plugin tool names match tools.json
+        run: npm run check:plugin-tool-names

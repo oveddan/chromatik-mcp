@@ -1,0 +1,10 @@
+dependencies:
+  tools:
+    - type: mcp
+      value: chromatik
+      description: >-
+        The chromatik-mcp server embedded in a running Chromatik (LX Studio) instance.
+        Pin the port to 3232 in ~/.chromatik-mcp/config.json, or read the live port
+        from ~/.chromatik-mcp/status.json.
+      transport: http
+      url: http://127.0.0.1:3232/mcp

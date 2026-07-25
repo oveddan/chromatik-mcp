@@ -8,7 +8,9 @@
     "build": "astro build",
     "preview": "astro preview",
     "og": "node scripts/generate-og.mjs",
-    "tools-ref": "node scripts/generate-tool-reference.mjs"
+    "tools-ref": "node scripts/generate-tool-reference.mjs",
+    "driving-ref": "node scripts/generate-driving-page.mjs",
+    "check:plugin-tool-names": "node scripts/check-plugin-tool-names.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.34.0",

@@ -1,0 +1,6 @@
+{
+  "name": "chromatik",
+  "version": "0.1.0",
+  "description": "Drive a live Chromatik (LX Studio) lighting show over MCP.",
+  "skills": "./skills/"
+}
