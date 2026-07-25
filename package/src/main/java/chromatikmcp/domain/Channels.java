@@ -1,10 +1,13 @@
 package chromatikmcp.domain;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
+import heronarts.lx.LXDeviceComponent;
 import heronarts.lx.blend.LXBlend;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.LXEffect;
@@ -14,6 +17,9 @@ import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.mixer.LXMixerEngine;
 import heronarts.lx.mixer.LXPatternEngine;
+import heronarts.lx.modulation.LXCompoundModulation;
+import heronarts.lx.modulation.LXTriggerModulation;
+import heronarts.lx.modulator.LXModulator;
 import heronarts.lx.parameter.ObjectParameter;
 import heronarts.lx.pattern.LXPattern;
 
@@ -265,11 +271,25 @@ public final class Channels {
   }
 
   /**
+   * A single component's canonical-path change caused by a move — either the moved
+   * component itself or a sibling whose 1-based index (and therefore path) shifted.
+   * Keyed by component id, never by list position, since position is exactly what
+   * a move changes.
+   */
+  public record PathChange(int componentId, String before, String after) {}
+
+  /** The moved pattern plus every sibling whose canonical path changed as a result. */
+  public record PatternMoveResult(LXPattern pattern, List<PathChange> oscChanges) {}
+
+  /** The moved effect plus every sibling whose canonical path changed as a result. */
+  public record EffectMoveResult(LXEffect effect, List<PathChange> oscChanges) {}
+
+  /**
    * Move a pattern to a new 0-based index within its channel.
    *
    * @throws Resolve.ResolveException TYPE_MISMATCH if index is out of range
    */
-  public static LXPattern movePattern(LX lx, String path, int toIndex) {
+  public static PatternMoveResult movePattern(LX lx, String path, int toIndex) {
     LXPattern pattern = Resolve.component(lx, path, LXPattern.class);
     LXPatternEngine engine = pattern.getEngine();
     int size = engine.patterns.size();
@@ -278,8 +298,9 @@ public final class Channels {
           "Pattern index " + toIndex + " out of range [0," + (size - 1) + "] on "
               + engine.component.getCanonicalPath());
     }
+    var before = snapshotPaths(engine.patterns);
     Commands.perform(lx, new LXCommand.Channel.MovePattern(engine, pattern, toIndex));
-    return pattern;
+    return new PatternMoveResult(pattern, pathChanges(lx, before));
   }
 
   /**
@@ -326,7 +347,7 @@ public final class Channels {
    *
    * @throws Resolve.ResolveException if index is out of range
    */
-  public static LXEffect moveEffect(LX lx, String path, int toIndex) {
+  public static EffectMoveResult moveEffect(LX lx, String path, int toIndex) {
     LXEffect effect = Resolve.component(lx, path, LXEffect.class);
     LXEffect.Container container = effect.getContainer();
     List<LXEffect> effects = container.getEffects();
@@ -337,8 +358,9 @@ public final class Channels {
               + ((LXComponent) container).getCanonicalPath());
     }
     LXComponent parent = (LXComponent) container;
+    var before = snapshotPaths(effects);
     Commands.perform(lx, new LXCommand.Channel.MoveEffect(parent, effect, toIndex));
-    return effect;
+    return new EffectMoveResult(effect, pathChanges(lx, before));
   }
 
   // ── Snapshot builders ────────────────────────────────────────────────────────
@@ -423,6 +445,80 @@ public final class Channels {
         new Field<>(engine.transitionTimeSecs.getValue(), engine.transitionTimeSecs.getCanonicalPath()),
         new EnumField(engine.transitionBlendMode.getObject().getLabel(), null,
             engine.transitionBlendMode.getCanonicalPath()));
+  }
+
+  /**
+   * Id -> canonical path for every sibling and its full descendant subtree (owned
+   * effects, and for a {@link heronarts.lx.mixer.LXPatternEngine.Container} pattern
+   * such as PatternRack, its nested patterns and their effects, to arbitrary depth),
+   * taken before a move mutates the list. A sibling's index shift cascades to every
+   * component that sibling transitively owns, since canonical paths are built by
+   * walking the whole parent chain (LXPath) — this walk has to mirror that.
+   */
+  private static LinkedHashMap<Integer, String> snapshotPaths(List<? extends LXComponent> siblings) {
+    LinkedHashMap<Integer, String> snapshot = new LinkedHashMap<>();
+    for (LXComponent sibling : siblings) {
+      collectSubtree(sibling, snapshot);
+    }
+    return snapshot;
+  }
+
+  // No explicit depth guard: LXComponent.setParent enforces a single-parent invariant
+  // (throws if a parent is already set, or if parent == this), so the component graph
+  // is a tree and this recursion always terminates without revisiting a node.
+  private static void collectSubtree(LXComponent component, Map<Integer, String> snapshot) {
+    snapshot.put(component.getId(), component.getCanonicalPath());
+    if (component instanceof LXEffect.Container container) {
+      for (LXEffect effect : container.getEffects()) {
+        collectSubtree(effect, snapshot);
+      }
+    }
+    if (component instanceof LXPatternEngine.Container container) {
+      for (LXPattern pattern : container.getPatternEngine().patterns) {
+        collectSubtree(pattern, snapshot);
+      }
+    }
+    // Every LXPattern/LXEffect is an LXDeviceComponent and unconditionally owns a
+    // modulation engine (LXDeviceComponent.java:87,157); its modulators, compound
+    // modulations, and triggers are addressed by canonical paths prefixed with this
+    // component's own path segment, so they shift right alongside it.
+    if (component instanceof LXDeviceComponent device) {
+      for (LXModulator modulator : device.modulation.modulators) {
+        collectSubtree(modulator, snapshot);
+      }
+      for (LXCompoundModulation modulation : device.modulation.modulations) {
+        collectSubtree(modulation, snapshot);
+      }
+      for (LXTriggerModulation trigger : device.modulation.triggers) {
+        collectSubtree(trigger, snapshot);
+      }
+    }
+  }
+
+  /**
+   * Diff a pre-move id->path snapshot against each id's current (post-move) canonical
+   * path. Re-reads every path live via {@code lx.getComponent(id)} rather than trusting
+   * index arithmetic, so this stays correct even if LX's reindexing behavior changes.
+   * Ids that no longer resolve (component removed since the snapshot) are skipped
+   * rather than treated as a change.
+   */
+  private static List<PathChange> pathChanges(LX lx, Map<Integer, String> before) {
+    List<PathChange> changes = new ArrayList<>();
+    for (Map.Entry<Integer, String> entry : before.entrySet()) {
+      LXComponent component = lx.getComponent(entry.getKey());
+      if (component == null) {
+        // A move doesn't remove anything on its own, so this shouldn't fire in
+        // practice; it's a defensive skip against a component vanishing (e.g. a
+        // concurrent removal) between the snapshot and this diff. oscChanges only
+        // reports paths that changed, not components that disappeared.
+        continue;
+      }
+      String after = component.getCanonicalPath();
+      if (!after.equals(entry.getValue())) {
+        changes.add(new PathChange(entry.getKey(), entry.getValue(), after));
+      }
+    }
+    return changes;
   }
 
   private static List<EffectInfo> effects(List<LXEffect> effects) {

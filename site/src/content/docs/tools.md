@@ -241,7 +241,7 @@ Remove a pattern by its canonical path. Remaining sibling patterns reindex (thei
 
 _mutating_
 
-Move a pattern to a new 0-based index within its channel. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z.
+Move a pattern to a new 0-based index within its channel. Moving shifts the 1-based paths of the moved pattern, any sibling it crosses, and everything those siblings own (their effects, any nested rack patterns and effects, and any device-local modulators/modulations/triggers) — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
@@ -283,7 +283,7 @@ Remove an effect from its container by canonical path. Returns invalid_argument 
 
 _mutating_
 
-Move an effect to a new 0-based index within its container (channel, bus, or pattern). Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z.
+Move an effect to a new 0-based index within its container (channel, bus, or pattern). Moving shifts the 1-based paths of the moved effect, any sibling it crosses, and any device-local modulators/modulations/triggers those siblings own — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|

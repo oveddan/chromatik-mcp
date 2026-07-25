@@ -717,6 +717,7 @@ class ToolsIntegrationTest {
       // After moving e1 to index 1, its path may change (index-based paths shift)
       assertNotNull(moved.get("path"));
       assertEquals(1, ((Number) moved.get("index")).intValue());
+      assertOscChanges(moved.get("oscChanges"));
 
       // Remove e2 (still at index 0 after e1 moved)
       Map<String, Object> removed = structured(call("remove_effect", Map.of("path", e2path)));
@@ -725,6 +726,46 @@ class ToolsIntegrationTest {
     } finally {
       structured(call("remove_channel", Map.of("path", channelPath)));
     }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void movePatternReportsOscChanges() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> p0 = structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      String p0path = (String) p0.get("path");
+
+      // Move p0 past both siblings — every one of the three patterns' paths shifts.
+      Map<String, Object> moved = structured(
+          call("move_pattern", Map.of("path", p0path, "index", 2)));
+      assertEquals(2, ((Number) moved.get("index")).intValue());
+
+      List<Map<String, Object>> oscChanges = (List<Map<String, Object>>) assertOscChanges(moved.get("oscChanges"));
+      assertEquals(3, oscChanges.size(), "moved pattern plus the two shifted siblings");
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  /** Asserts oscChanges is a non-null array of {componentId, before, after} objects. */
+  @SuppressWarnings("unchecked")
+  private static Object assertOscChanges(Object oscChangesObj) {
+    assertInstanceOf(List.class, oscChangesObj);
+    List<Map<String, Object>> oscChanges = (List<Map<String, Object>>) oscChangesObj;
+    for (Map<String, Object> entry : oscChanges) {
+      assertInstanceOf(Number.class, entry.get("componentId"));
+      assertInstanceOf(String.class, entry.get("before"));
+      assertInstanceOf(String.class, entry.get("after"));
+      assertNotEquals(entry.get("before"), entry.get("after"));
+    }
+    return oscChanges;
   }
 
   @Test

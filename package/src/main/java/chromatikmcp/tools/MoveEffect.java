@@ -1,5 +1,6 @@
 package chromatikmcp.tools;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +20,15 @@ public final class MoveEffect implements LxTool {
   @Override
   public String description() {
     return "Move an effect to a new 0-based index within its container (channel, bus, or pattern). "
-        + "Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z.";
+        + "Moving shifts the 1-based paths of the moved effect, any sibling it crosses, and any "
+        + "device-local modulators/modulations/triggers those siblings own — re-list rather than "
+        + "reusing cached paths; the response's oscChanges array reports exactly which canonical "
+        + "paths changed (componentId, before, after). It reports changes only, not components "
+        + "removed during the move. "
+        + "Returns invalid_argument if the index is out of range. Undoable in Chromatik with "
+        + "Cmd-Z, which a human can trigger outside this session's control; an undo inverts "
+        + "every path in oscChanges with no separate signal, so re-list after any move if undo "
+        + "is possible.";
   }
 
   @Override
@@ -45,12 +54,26 @@ public final class MoveEffect implements LxTool {
     if (!(args.get("index") instanceof Number n)) {
       return Result.error(Result.INVALID_ARGUMENT, "Required integer argument: index");
     }
-    LXEffect effect = Channels.moveEffect(lx, path, n.intValue());
+    Channels.EffectMoveResult result = Channels.moveEffect(lx, path, n.intValue());
+    LXEffect effect = result.effect();
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("path", effect.getCanonicalPath());
     payload.put("id", effect.getId());
     payload.put("label", effect.getLabel());
     payload.put("index", effect.getIndex());
+    payload.put("oscChanges", oscChanges(result.oscChanges()));
     return Result.ok(payload);
+  }
+
+  private static List<Map<String, Object>> oscChanges(List<Channels.PathChange> changes) {
+    List<Map<String, Object>> result = new ArrayList<>();
+    for (Channels.PathChange change : changes) {
+      Map<String, Object> entry = new LinkedHashMap<>();
+      entry.put("componentId", change.componentId());
+      entry.put("before", change.before());
+      entry.put("after", change.after());
+      result.add(entry);
+    }
+    return result;
   }
 }

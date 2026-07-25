@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 import chromatikmcp.HeadlessLxTest;
@@ -238,13 +240,131 @@ class ChannelMutationsTest extends HeadlessLxTest {
     channel.addPattern(p0);
     channel.addPattern(p1);
     channel.addPattern(p2);
+    String p0Before = p0.getCanonicalPath();
+    String p1Before = p1.getCanonicalPath();
+    String p2Before = p2.getCanonicalPath();
 
     // Move p0 to index 2
-    Channels.movePattern(lx, p0.getCanonicalPath(), 2);
-    assertEquals(2, p0.getIndex(), "p0 moved to index 2");
+    Channels.PatternMoveResult result = Channels.movePattern(lx, p0.getCanonicalPath(), 2);
+    LXPattern moved = result.pattern();
+    assertEquals(2, moved.getIndex(), "p0 moved to index 2");
+
+    // p1 and p2 shift down to fill p0's old slot; only these three paths changed.
+    assertEquals(3, result.oscChanges().size());
+    assertPathChange(result.oscChanges(), p0.getId(), p0Before, p0.getCanonicalPath());
+    assertPathChange(result.oscChanges(), p1.getId(), p1Before, p1.getCanonicalPath());
+    assertPathChange(result.oscChanges(), p2.getId(), p2Before, p2.getCanonicalPath());
 
     lx.command.undo();
     assertEquals(0, p0.getIndex(), "p0 back at index 0 after undo");
+  }
+
+  @Test
+  void movePatternToSameIndexReportsNoChanges() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXPattern p0 = new GradientPattern(lx);
+    LXPattern p1 = new GradientPattern(lx);
+    channel.addPattern(p0);
+    channel.addPattern(p1);
+
+    // Same-index move: no shift, so oscChanges must be empty.
+    Channels.PatternMoveResult same = Channels.movePattern(lx, p0.getCanonicalPath(), 0);
+    assertEquals(0, same.pattern().getIndex());
+    assertTrue(same.oscChanges().isEmpty(), "moving to the same index changes nothing");
+
+    // A real move on the same channel must report changes, so an always-empty
+    // implementation of oscChanges would fail this test.
+    Channels.PatternMoveResult moved = Channels.movePattern(lx, p0.getCanonicalPath(), 1);
+    assertTrue(!moved.oscChanges().isEmpty(), "a real move must report path changes");
+  }
+
+  @Test
+  void movePatternReportsOwnedEffectPathChange() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXPattern p0 = new GradientPattern(lx);
+    LXPattern p1 = new GradientPattern(lx);
+    LXPattern p2 = new GradientPattern(lx);
+    channel.addPattern(p0);
+    channel.addPattern(p1);
+    channel.addPattern(p2);
+    BlurEffect e1 = new BlurEffect(lx);
+    p1.addEffect(e1);
+    String e1Before = e1.getCanonicalPath();
+
+    // Move p0 past p1, shifting p1's index and therefore its owned effect's path too.
+    Channels.PatternMoveResult result = Channels.movePattern(lx, p0.getCanonicalPath(), 2);
+
+    assertPathChange(result.oscChanges(), e1.getId(), e1Before, e1.getCanonicalPath());
+  }
+
+  @Test
+  void movePatternReportsNestedRackEffectPathChange() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXPattern p0 = new GradientPattern(lx);
+    heronarts.lx.pattern.PatternRack rack = new heronarts.lx.pattern.PatternRack(lx);
+    LXPattern p2 = new GradientPattern(lx);
+    channel.addPattern(p0);
+    channel.addPattern(rack);
+    channel.addPattern(p2);
+    GradientPattern nested = new GradientPattern(lx);
+    rack.patternEngine.addPattern(nested);
+    BlurEffect nestedEffect = new BlurEffect(lx);
+    nested.addEffect(nestedEffect);
+    String rackBefore = rack.getCanonicalPath();
+    String nestedBefore = nested.getCanonicalPath();
+    String nestedEffectBefore = nestedEffect.getCanonicalPath();
+
+    // Moving p0 past the rack shifts the rack's own path, which cascades into every
+    // pattern and effect the rack hosts.
+    Channels.PatternMoveResult result = Channels.movePattern(lx, p0.getCanonicalPath(), 1);
+
+    assertPathChange(result.oscChanges(), rack.getId(), rackBefore, rack.getCanonicalPath());
+    assertPathChange(result.oscChanges(), nested.getId(), nestedBefore, nested.getCanonicalPath());
+    assertPathChange(result.oscChanges(), nestedEffect.getId(), nestedEffectBefore,
+        nestedEffect.getCanonicalPath());
+  }
+
+  @Test
+  void movePatternReportsDeviceScopedModulatorPathChange() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXPattern p0 = new GradientPattern(lx);
+    LXPattern p1 = new GradientPattern(lx);
+    channel.addPattern(p0);
+    channel.addPattern(p1);
+    heronarts.lx.modulator.VariableLFO lfo = new heronarts.lx.modulator.VariableLFO();
+    p1.modulation.addModulator(lfo, -1, null);
+    String lfoBefore = lfo.getCanonicalPath();
+
+    // Move p0 past p1, shifting p1's index and therefore the path of its device-local
+    // modulator too.
+    Channels.PatternMoveResult result = Channels.movePattern(lx, p0.getCanonicalPath(), 1);
+
+    assertPathChange(result.oscChanges(), lfo.getId(), lfoBefore, lfo.getCanonicalPath());
+  }
+
+  @Test
+  void movePatternReportsModulatorScopedToOwnedEffectPathChange() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXPattern p0 = new GradientPattern(lx);
+    LXPattern p1 = new GradientPattern(lx);
+    channel.addPattern(p0);
+    channel.addPattern(p1);
+    BlurEffect e1 = new BlurEffect(lx);
+    p1.addEffect(e1);
+    heronarts.lx.modulator.VariableLFO lfo = new heronarts.lx.modulator.VariableLFO();
+    e1.modulation.addModulator(lfo, -1, null);
+    String lfoBefore = lfo.getCanonicalPath();
+
+    // Move p0 past p1, shifting p1's index, which cascades into its owned effect's
+    // path and that effect's own device-local modulator.
+    Channels.PatternMoveResult result = Channels.movePattern(lx, p0.getCanonicalPath(), 1);
+
+    assertPathChange(result.oscChanges(), lfo.getId(), lfoBefore, lfo.getCanonicalPath());
   }
 
   @Test
@@ -374,14 +494,44 @@ class ChannelMutationsTest extends HeadlessLxTest {
     LXChannel channel = lx.engine.mixer.addChannel();
     BlurEffect e0 = new BlurEffect(lx);
     BlurEffect e1 = new BlurEffect(lx);
+    BlurEffect e2 = new BlurEffect(lx);
     channel.addEffect(e0);
     channel.addEffect(e1);
+    channel.addEffect(e2);
+    String e0Before = e0.getCanonicalPath();
+    String e1Before = e1.getCanonicalPath();
+    String e2Before = e2.getCanonicalPath();
 
-    Channels.moveEffect(lx, e0.getCanonicalPath(), 1);
-    assertEquals(1, e0.getIndex(), "e0 moved to index 1");
+    Channels.EffectMoveResult result = Channels.moveEffect(lx, e0.getCanonicalPath(), 2);
+    assertEquals(2, result.effect().getIndex(), "e0 moved to index 2");
+
+    assertEquals(3, result.oscChanges().size());
+    assertPathChange(result.oscChanges(), e0.getId(), e0Before, e0.getCanonicalPath());
+    assertPathChange(result.oscChanges(), e1.getId(), e1Before, e1.getCanonicalPath());
+    assertPathChange(result.oscChanges(), e2.getId(), e2Before, e2.getCanonicalPath());
 
     lx.command.undo();
     assertEquals(0, e0.getIndex(), "e0 back at index 0 after undo");
+  }
+
+  @Test
+  void moveEffectToSameIndexReportsNoChanges() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    BlurEffect e0 = new BlurEffect(lx);
+    BlurEffect e1 = new BlurEffect(lx);
+    channel.addEffect(e0);
+    channel.addEffect(e1);
+
+    // Same-index move: no shift, so oscChanges must be empty.
+    Channels.EffectMoveResult same = Channels.moveEffect(lx, e0.getCanonicalPath(), 0);
+    assertEquals(0, same.effect().getIndex());
+    assertTrue(same.oscChanges().isEmpty(), "moving to the same index changes nothing");
+
+    // A real move on the same channel must report changes, so an always-empty
+    // implementation of oscChanges would fail this test.
+    Channels.EffectMoveResult moved = Channels.moveEffect(lx, e0.getCanonicalPath(), 1);
+    assertTrue(!moved.oscChanges().isEmpty(), "a real move must report path changes");
   }
 
   @Test
@@ -403,6 +553,25 @@ class ChannelMutationsTest extends HeadlessLxTest {
   }
 
   @Test
+  void moveEffectReportsDeviceScopedModulatorPathChange() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    BlurEffect e0 = new BlurEffect(lx);
+    BlurEffect e1 = new BlurEffect(lx);
+    channel.addEffect(e0);
+    channel.addEffect(e1);
+    heronarts.lx.modulator.VariableLFO lfo = new heronarts.lx.modulator.VariableLFO();
+    e1.modulation.addModulator(lfo, -1, null);
+    String lfoBefore = lfo.getCanonicalPath();
+
+    // Move e0 past e1, shifting e1's index and therefore the path of its device-local
+    // modulator too. LXEffect is an LXDeviceComponent like LXPattern.
+    Channels.EffectMoveResult result = Channels.moveEffect(lx, e0.getCanonicalPath(), 1);
+
+    assertPathChange(result.oscChanges(), lfo.getId(), lfoBefore, lfo.getCanonicalPath());
+  }
+
+  @Test
   void moveEffectOutOfRangeIsTypeMismatch() {
     LX lx = newHeadlessLx();
     LXChannel channel = lx.engine.mixer.addChannel();
@@ -415,5 +584,13 @@ class ChannelMutationsTest extends HeadlessLxTest {
     assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
     assertSame(undoBefore, lx.command.getUndoCommand(),
         "undo stack untouched on out-of-range move");
+  }
+
+  /** Asserts a Channels.PathChange for componentId with the given before/after is present. */
+  private static void assertPathChange(List<Channels.PathChange> changes, int componentId,
+      String before, String after) {
+    Channels.PathChange expected = new Channels.PathChange(componentId, before, after);
+    assertTrue(changes.contains(expected),
+        "expected " + expected + " in " + changes);
   }
 }
