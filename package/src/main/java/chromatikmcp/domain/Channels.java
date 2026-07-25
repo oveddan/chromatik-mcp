@@ -156,13 +156,13 @@ public final class Channels {
       }
     }
     return new MixerControls(
-        new Field<>(mixer.crossfader.getValue(), mixer.crossfader.getCanonicalPath()),
+        new Field<>(mixer.crossfader.getValue(), Resolve.canonicalPathOrNull(mixer.crossfader)),
         new EnumField(mixer.crossfaderBlendMode.getObject().getLabel(),
-            objectOptions(mixer.crossfaderBlendMode), mixer.crossfaderBlendMode.getCanonicalPath()),
-        new Field<>(mixer.cueA.isOn(), mixer.cueA.getCanonicalPath()),
-        new Field<>(mixer.cueB.isOn(), mixer.cueB.getCanonicalPath()),
-        new Field<>(mixer.auxA.isOn(), mixer.auxA.getCanonicalPath()),
-        new Field<>(mixer.auxB.isOn(), mixer.auxB.getCanonicalPath()),
+            objectOptions(mixer.crossfaderBlendMode), Resolve.canonicalPathOrNull(mixer.crossfaderBlendMode)),
+        new Field<>(mixer.cueA.isOn(), Resolve.canonicalPathOrNull(mixer.cueA)),
+        new Field<>(mixer.cueB.isOn(), Resolve.canonicalPathOrNull(mixer.cueB)),
+        new Field<>(mixer.auxA.isOn(), Resolve.canonicalPathOrNull(mixer.auxA)),
+        new Field<>(mixer.auxB.isOn(), Resolve.canonicalPathOrNull(mixer.auxB)),
         blendModeOptions,
         transitionBlendModeOptions);
   }
@@ -420,7 +420,7 @@ public final class Channels {
           anyLocalModulation |= effect.hasLocalModulation();
         }
         patterns.add(new PatternInfo(
-            pattern.getCanonicalPath(),
+            Resolve.canonicalPathOrNull(pattern),
             pattern.getId(),
             pattern.getLabel(),
             pattern.getClass().getName(),
@@ -440,14 +440,14 @@ public final class Channels {
     }
     LXGroup group = channel.getGroup();
     return new ChannelInfo(
-        channel.getCanonicalPath(),
+        Resolve.canonicalPathOrNull(channel),
         channel.getId(),
         channel.getLabel(),
         channel.getIndex(),
         (channel instanceof LXGroup) ? BusType.GROUP : BusType.CHANNEL,
         channel.enabled.isOn(),
         channel.fader.getValue(),
-        (group == null) ? null : group.getCanonicalPath(),
+        (group == null) ? null : Resolve.canonicalPathOrNull(group),
         patternMode,
         patterns,
         channelEffects,
@@ -464,7 +464,7 @@ public final class Channels {
       anyLocalModulation |= effect.hasLocalModulation();
     }
     return new MasterInfo(
-        master.getCanonicalPath(),
+        Resolve.canonicalPathOrNull(master),
         master.getId(),
         master.getLabel(),
         master.fader.getValue(),
@@ -477,27 +477,27 @@ public final class Channels {
   private static ChannelControls channelControls(LXAbstractChannel channel,
       PatternEngineControls patternEngineControls) {
     return new ChannelControls(
-        new EnumField(channel.crossfadeGroup.getOption(), null, channel.crossfadeGroup.getCanonicalPath()),
-        new EnumField(channel.blendMode.getObject().getLabel(), null, channel.blendMode.getCanonicalPath()),
-        new Field<>(channel.autoMute.isOn(), channel.autoMute.getCanonicalPath()),
+        new EnumField(channel.crossfadeGroup.getOption(), null, Resolve.canonicalPathOrNull(channel.crossfadeGroup)),
+        new EnumField(channel.blendMode.getObject().getLabel(), null, Resolve.canonicalPathOrNull(channel.blendMode)),
+        new Field<>(channel.autoMute.isOn(), Resolve.canonicalPathOrNull(channel.autoMute)),
         // isAutoMuted is a read-only derived flag that isn't path-registered
-        // (LXAbstractChannel.java:113) — getCanonicalPath() would yield "/null", so
-        // report the value only, with no path.
-        new Field<>(channel.isAutoMuted.isOn(), null),
-        new Field<>(channel.cueActive.isOn(), channel.cueActive.getCanonicalPath()),
-        new Field<>(channel.auxActive.isOn(), channel.auxActive.getCanonicalPath()),
+        // (LXAbstractChannel.java:113); canonicalPathOrNull detects that and reports the
+        // value only, with no path.
+        new Field<>(channel.isAutoMuted.isOn(), Resolve.canonicalPathOrNull(channel.isAutoMuted)),
+        new Field<>(channel.cueActive.isOn(), Resolve.canonicalPathOrNull(channel.cueActive)),
+        new Field<>(channel.auxActive.isOn(), Resolve.canonicalPathOrNull(channel.auxActive)),
         patternEngineControls);
   }
 
   private static PatternEngineControls patternEngineControls(LXPatternEngine engine) {
     return new PatternEngineControls(
-        new Field<>(engine.autoCycleEnabled.isOn(), engine.autoCycleEnabled.getCanonicalPath()),
-        new EnumField(engine.autoCycleMode.getOption(), null, engine.autoCycleMode.getCanonicalPath()),
-        new Field<>(engine.autoCycleTimeSecs.getValue(), engine.autoCycleTimeSecs.getCanonicalPath()),
-        new Field<>(engine.transitionEnabled.isOn(), engine.transitionEnabled.getCanonicalPath()),
-        new Field<>(engine.transitionTimeSecs.getValue(), engine.transitionTimeSecs.getCanonicalPath()),
+        new Field<>(engine.autoCycleEnabled.isOn(), Resolve.canonicalPathOrNull(engine.autoCycleEnabled)),
+        new EnumField(engine.autoCycleMode.getOption(), null, Resolve.canonicalPathOrNull(engine.autoCycleMode)),
+        new Field<>(engine.autoCycleTimeSecs.getValue(), Resolve.canonicalPathOrNull(engine.autoCycleTimeSecs)),
+        new Field<>(engine.transitionEnabled.isOn(), Resolve.canonicalPathOrNull(engine.transitionEnabled)),
+        new Field<>(engine.transitionTimeSecs.getValue(), Resolve.canonicalPathOrNull(engine.transitionTimeSecs)),
         new EnumField(engine.transitionBlendMode.getObject().getLabel(), null,
-            engine.transitionBlendMode.getCanonicalPath()));
+            Resolve.canonicalPathOrNull(engine.transitionBlendMode)));
   }
 
   /**
@@ -578,7 +578,7 @@ public final class Channels {
     List<EffectInfo> result = new ArrayList<>();
     for (LXEffect effect : effects) {
       result.add(new EffectInfo(
-          effect.getCanonicalPath(),
+          Resolve.canonicalPathOrNull(effect),
           effect.getId(),
           effect.getLabel(),
           effect.getClass().getName(),

@@ -1,6 +1,7 @@
 package chromatikmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -17,6 +18,8 @@ import heronarts.lx.command.LXCommand;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.modulator.LXModulator;
+import heronarts.lx.output.LXOutputGroup;
+import heronarts.lx.parameter.BooleanParameter;
 import heronarts.lx.structure.GridFixture;
 import heronarts.lx.structure.LXFixture;
 import heronarts.lx.structure.LXProtocolFixture;
@@ -214,5 +217,42 @@ class ResolveTest extends HeadlessLxTest {
 
     assertEquals(Resolve.Failure.NOT_FOUND,
         failureOf(() -> Resolve.component(lx, "/lx/structure/fixture/2")));
+  }
+
+  // ── canonicalPathOrNull: the third-occurrence "/null" hazard (issue #119) ──
+
+  @Test
+  void canonicalPathOrNullIsNullForABareUnregisteredParameter() {
+    // Never added to a component via addParameter — getPath() is null, so
+    // getCanonicalPath() would build the bogus literal "/null" (LXPath.java:85-93).
+    BooleanParameter unregistered = new BooleanParameter("unregistered");
+
+    assertNull(Resolve.canonicalPathOrNull(unregistered));
+  }
+
+  @Test
+  void canonicalPathOrNullMatchesGetCanonicalPathForARegisteredParameter() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+
+    assertEquals(channel.fader.getCanonicalPath(), Resolve.canonicalPathOrNull(channel.fader));
+    assertEquals(channel.getCanonicalPath(), Resolve.canonicalPathOrNull(channel));
+  }
+
+  @Test
+  void canonicalPathOrNullIsNullWhenAnAncestorIsUnregistered() {
+    // LXOutputGroup.addChild(LXOutput) calls child.setGroup(this), which calls
+    // LXComponent.setParent(parent) with no path — the child output is never
+    // path-registered (LXOutput doesn't override getPath() the way LXModulator/LXLayer do),
+    // even though it's live in the tree. Its own parameters (e.g. enabled, addParameter'd in
+    // the LXOutput constructor) still get their own non-null path, so a leaf-only null check
+    // would miss this: the hazard is one level up the ancestor chain, not at the leaf.
+    LX lx = newHeadlessLx();
+    LXOutputGroup group = new LXOutputGroup(lx);
+    LXOutputGroup child = new LXOutputGroup(lx);
+    group.addChild(child);
+
+    assertNull(child.getPath());
+    assertNull(Resolve.canonicalPathOrNull(child.enabled));
   }
 }

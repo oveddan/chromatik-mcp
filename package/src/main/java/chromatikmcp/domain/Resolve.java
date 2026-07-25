@@ -175,6 +175,30 @@ public final class Resolve {
   }
 
   /**
+   * {@code object.getCanonicalPath()}, or {@code null} when {@code object} or any ancestor in
+   * its parent chain was never path-registered ({@code getPath() == null}). Unregistered
+   * objects (e.g. a read-only derived parameter that's never {@code addParameter}'d, or an
+   * unregistered ancestor further up the chain) make {@code getCanonicalPath()} build a
+   * literal {@code "null"} segment (LXPath.java:85-93) rather than failing — snapshot builders
+   * call this instead of the raw method so payloads omit the key rather than emit that bogus
+   * path (docs/tool-conventions.md's "omit the key, never emit null" rule). All current
+   * callers address {@code lx.engine} descendants, where the raw path already carries the
+   * {@code /lx} root; unlike {@link #canonicalPath(LXPath)}, this does not apply that method's
+   * structure-tree root normalization.
+   */
+  public static String canonicalPathOrNull(LXPath object) {
+    if (object.getPath() == null) {
+      return null;
+    }
+    for (LXComponent parent = object.getParent(); parent != null; parent = parent.getParent()) {
+      if (parent.getPath() == null) {
+        return null;
+      }
+    }
+    return object.getCanonicalPath();
+  }
+
+  /**
    * Walks a component tree using its public {@code children}/{@code childArrays}/
    * {@code getParameter} accessors — a from-outside-the-package equivalent of
    * {@code LXComponent.path(String[], int)} (package-private, LXComponent.java:961), needed

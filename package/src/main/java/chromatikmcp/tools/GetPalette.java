@@ -43,15 +43,25 @@ public final class GetPalette implements LxTool {
     Palettes.PaletteInfo info = Palettes.info(lx);
 
     Map<String, Object> activeSwatch = new LinkedHashMap<>();
-    activeSwatch.put("path", info.activeSwatch().path());
+    // path is null for an object that isn't path-registered (Resolve.canonicalPathOrNull) —
+    // omit the key rather than emit a bogus "/null" or a literal JSON null.
+    if (info.activeSwatch().path() != null) {
+      activeSwatch.put("path", info.activeSwatch().path());
+    }
     List<Map<String, Object>> colors = new ArrayList<>();
     for (Palettes.ColorInfo color : info.activeSwatch().colors()) {
       Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("path", color.path());
+      if (color.path() != null) {
+        entry.put("path", color.path());
+      }
       entry.put("mode", color.mode());
       entry.put("effectiveColor", color.effectiveColor());
-      entry.put("primaryPath", color.primaryPath());
-      entry.put("secondaryPath", color.secondaryPath());
+      if (color.primaryPath() != null) {
+        entry.put("primaryPath", color.primaryPath());
+      }
+      if (color.secondaryPath() != null) {
+        entry.put("secondaryPath", color.secondaryPath());
+      }
       colors.add(entry);
     }
     activeSwatch.put("colors", colors);
@@ -59,18 +69,26 @@ public final class GetPalette implements LxTool {
     List<Map<String, Object>> swatches = new ArrayList<>();
     for (Palettes.SwatchInfo swatch : info.swatches()) {
       Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("path", swatch.path());
+      if (swatch.path() != null) {
+        entry.put("path", swatch.path());
+      }
       entry.put("label", swatch.label());
-      entry.put("recallPath", swatch.recallPath());
+      if (swatch.recallPath() != null) {
+        entry.put("recallPath", swatch.recallPath());
+      }
       entry.put("autoCycleEligible", swatch.autoCycleEligible());
       swatches.add(entry);
     }
 
     Map<String, Object> transition = new LinkedHashMap<>();
     transition.put("enabled", info.transition().enabled());
-    transition.put("enabledPath", info.transition().enabledPath());
+    if (info.transition().enabledPath() != null) {
+      transition.put("enabledPath", info.transition().enabledPath());
+    }
     transition.put("timeSecs", info.transition().timeSecs());
-    transition.put("timeSecsPath", info.transition().timeSecsPath());
+    if (info.transition().timeSecsPath() != null) {
+      transition.put("timeSecsPath", info.transition().timeSecsPath());
+    }
     transition.put("transitionProgress", info.transition().transitionProgress());
 
     Map<String, Object> autoCycle = new LinkedHashMap<>();

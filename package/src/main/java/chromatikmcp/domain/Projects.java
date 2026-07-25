@@ -35,18 +35,18 @@ public final class Projects {
             lx.engine.osc.transmitPort.getValuei(),
             lx.engine.osc.transmitActive.isOn()),
         new OutputInfo(
-            lx.engine.output.enabled.getCanonicalPath(),
+            Resolve.canonicalPathOrNull(lx.engine.output.enabled),
             lx.engine.output.enabled.isOn(),
-            lx.engine.output.brightness.getCanonicalPath(),
+            Resolve.canonicalPathOrNull(lx.engine.output.brightness),
             lx.engine.output.brightness.getValue(),
-            lx.engine.output.gamma.getCanonicalPath(),
+            Resolve.canonicalPathOrNull(lx.engine.output.gamma),
             lx.engine.output.gamma.getValue(),
-            lx.engine.output.gammaMode.getCanonicalPath(),
+            Resolve.canonicalPathOrNull(lx.engine.output.gammaMode),
             lx.engine.output.gammaMode.getEnum().name()),
         new EngineInfo(
-            lx.engine.speed.getCanonicalPath(),
+            Resolve.canonicalPathOrNull(lx.engine.speed),
             lx.engine.speed.getValue(),
-            lx.engine.framesPerSecond.getCanonicalPath(),
+            Resolve.canonicalPathOrNull(lx.engine.framesPerSecond),
             lx.engine.framesPerSecond.getValue()));
   }
 }

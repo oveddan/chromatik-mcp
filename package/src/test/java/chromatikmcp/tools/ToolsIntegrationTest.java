@@ -2852,6 +2852,65 @@ class ToolsIntegrationTest {
         "payload contains no unregistered-parameter \"/null\" paths: " + errors);
   }
 
+  @Test
+  void listModulationsPayloadContainsNoNullPaths() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
+    Map<String, Object> wired = structured(call("wire_modulator", Map.of(
+        "sourcePath", knobs.get("path") + "/macro1",
+        "targetPath", channel.fader.getCanonicalPath())));
+    Map<String, Object> triggerBank = structured(
+        call("add_modulator", Map.of("class", MacroTriggers.class.getName())));
+    Map<String, Object> wiredTrigger = structured(call("wire_trigger", Map.of(
+        "sourcePath", triggerBank.get("path") + "/macro1",
+        "targetPath", channel.enabled.getCanonicalPath())));
+    // Regression guard, not a live reproduction: this PR didn't touch modulation wiring, and
+    // every component reachable from list_modulations already overrides getPath() or is
+    // addParameter'd/addChild'd at construction, so this can't currently fail. It protects
+    // against future drift, not the hazard this PR fixes.
+    try {
+      Map<String, Object> payload = structured(call("list_modulations", Map.of("detail", "full")));
+      StringBuilder errors = new StringBuilder();
+      walkForNullPaths(payload, "", errors);
+      assertEquals("", errors.toString(),
+          "payload contains no unregistered-parameter \"/null\" paths: " + errors);
+    } finally {
+      structured(call("remove_modulation", Map.of("path", wiredTrigger.get("path"))));
+      structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+    }
+  }
+
+  @Test
+  void getPalettePayloadContainsNoNullPaths() {
+    // Regression guard, not a live reproduction: every component reachable from get_palette
+    // (LXDynamicColor, LXSwatch, ColorParameter sub-fields, LXPalette's own parameters) always
+    // overrides getPath() or is addParameter'd at construction, so reverting GetPalette's
+    // conditional-put guards would not fail this test. The only currently-reachable instance
+    // of the "/null" hazard is LXAbstractChannel.isAutoMuted, covered by list_channels'
+    // existing null-path walk test.
+    lx.engine.palette.saveSwatch();
+    Map<String, Object> payload = structured(call("get_palette", Map.of()));
+    StringBuilder errors = new StringBuilder();
+    walkForNullPaths(payload, "", errors);
+    assertEquals("", errors.toString(),
+        "payload contains no unregistered-parameter \"/null\" paths: " + errors);
+  }
+
+  @Test
+  void getProjectInfoPayloadContainsNoNullPaths() {
+    // Regression guard, not a live reproduction: every component reachable from
+    // get_project_info (LXOutput's enabled/brightness/gamma/gammaMode, LXEngine's
+    // speed/framesPerSecond) is addParameter'd at construction, so reverting
+    // GetProjectInfo's conditional-put guards would not fail this test. See
+    // getPalettePayloadContainsNoNullPaths for the one currently-reachable instance of the
+    // hazard this PR guards against.
+    Map<String, Object> payload = structured(call("get_project_info", Map.of()));
+    StringBuilder errors = new StringBuilder();
+    walkForNullPaths(payload, "", errors);
+    assertEquals("", errors.toString(),
+        "payload contains no unregistered-parameter \"/null\" paths: " + errors);
+  }
+
   private static void walkForNullPaths(Object obj, String path, StringBuilder errors) {
     if (obj instanceof String str) {
       if (str.equals("/null") || str.contains("/null")) {
@@ -2861,7 +2920,19 @@ class ToolsIntegrationTest {
       for (Map.Entry<?, ?> entry : map.entrySet()) {
         String key = entry.getKey().toString();
         String newPath = path.isEmpty() ? key : path + "." + key;
-        walkForNullPaths(entry.getValue(), newPath, errors);
+        Object value = entry.getValue();
+        // A null path is supposed to omit the key entirely (docs/tool-conventions.md);
+        // a literal JSON null under a path-carrying key is the same hazard wearing a
+        // different disguise — canonicalPathOrNull forwarded a null straight into put().
+        // Matched key-shaped rather than value-shaped (a bare `null` carries no signal of
+        // what it would have been): "path"/"*Path" cover addressing fields, and "removed"
+        // covers the wire convention every remove_* tool uses for the removed object's
+        // canonical path (RemoveColor, RemoveChannel, RemoveModulator, RemoveView, …).
+        if (value == null
+            && (key.equals("path") || key.endsWith("Path") || key.equals("removed"))) {
+          errors.append("  ").append(newPath).append(": null (key should be omitted)\n");
+        }
+        walkForNullPaths(value, newPath, errors);
       }
     } else if (obj instanceof List<?> list) {
       for (int i = 0; i < list.size(); i++) {

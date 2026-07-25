@@ -38,20 +38,20 @@ public final class Palettes {
     List<SwatchInfo> swatches = new ArrayList<>();
     for (LXSwatch swatch : palette.swatches) {
       swatches.add(new SwatchInfo(
-          swatch.getCanonicalPath(),
+          Resolve.canonicalPathOrNull(swatch),
           swatch.getLabel(),
-          swatch.recall.getCanonicalPath(),
+          Resolve.canonicalPathOrNull(swatch.recall),
           swatch.autoCycleEligible.isOn()));
     }
 
     return new PaletteInfo(
-        new ActiveSwatchInfo(palette.swatch.getCanonicalPath(), colors(palette.swatch)),
+        new ActiveSwatchInfo(Resolve.canonicalPathOrNull(palette.swatch), colors(palette.swatch)),
         swatches,
         new TransitionInfo(
             palette.transitionEnabled.isOn(),
-            palette.transitionEnabled.getCanonicalPath(),
+            Resolve.canonicalPathOrNull(palette.transitionEnabled),
             palette.transitionTimeSecs.getValue(),
-            palette.transitionTimeSecs.getCanonicalPath(),
+            Resolve.canonicalPathOrNull(palette.transitionTimeSecs),
             palette.getTransitionProgress()),
         new AutoCycleInfo(
             palette.autoCycleEnabled.isOn(),
@@ -63,11 +63,11 @@ public final class Palettes {
     List<ColorInfo> colors = new ArrayList<>();
     for (LXDynamicColor color : swatch.colors) {
       colors.add(new ColorInfo(
-          color.getCanonicalPath(),
+          Resolve.canonicalPathOrNull(color),
           color.mode.getEnum().label,
           String.format("0x%08x", color.getColor()),
-          color.primary.getCanonicalPath(),
-          color.secondary.getCanonicalPath()));
+          Resolve.canonicalPathOrNull(color.primary),
+          Resolve.canonicalPathOrNull(color.secondary)));
     }
     return colors;
   }
@@ -139,7 +139,7 @@ public final class Palettes {
           "Cannot remove the last remaining color from swatch " + swatch.getCanonicalPath());
     }
     LXDynamicColor color = colors.get(colors.size() - 1);
-    String path = color.getCanonicalPath();
+    String path = Resolve.canonicalPathOrNull(color);
     int before = colors.size();
     Commands.perform(lx, new LXCommand.Palette.RemoveColor(color));
     if (colors.size() != before - 1) {

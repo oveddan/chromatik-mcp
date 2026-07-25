@@ -42,7 +42,7 @@ public final class Modulators {
     List<ModulatorInfo> modulators = new ArrayList<>();
     for (LXModulator modulator : engine.modulators) {
       modulators.add(new ModulatorInfo(
-          modulator.getCanonicalPath(),
+          Resolve.canonicalPathOrNull(modulator),
           modulator.getId(),
           modulator.getLabel(),
           modulator.getClass().getName(),
@@ -52,23 +52,23 @@ public final class Modulators {
     List<ModulationInfo> modulations = new ArrayList<>();
     for (LXCompoundModulation modulation : engine.modulations) {
       modulations.add(new ModulationInfo(
-          modulation.getCanonicalPath(),
+          Resolve.canonicalPathOrNull(modulation),
           modulation.getId(),
-          modulation.source.getCanonicalPath(),
-          modulation.target.getCanonicalPath(),
+          Resolve.canonicalPathOrNull(modulation.source),
+          Resolve.canonicalPathOrNull(modulation.target),
           modulation.range.getValue(),
           modulation.polarity.getEnum().name(),
-          modulation.range.getCanonicalPath()));
+          Resolve.canonicalPathOrNull(modulation.range)));
     }
     List<TriggerInfo> triggers = new ArrayList<>();
     for (LXTriggerModulation trigger : engine.triggers) {
       triggers.add(new TriggerInfo(
-          trigger.getCanonicalPath(),
+          Resolve.canonicalPathOrNull(trigger),
           trigger.getId(),
-          trigger.source.getCanonicalPath(),
-          trigger.target.getCanonicalPath()));
+          Resolve.canonicalPathOrNull(trigger.source),
+          Resolve.canonicalPathOrNull(trigger.target)));
     }
-    return new EngineInfo(engine.getCanonicalPath(), modulators, modulations, triggers);
+    return new EngineInfo(Resolve.canonicalPathOrNull(engine), modulators, modulations, triggers);
   }
 
   /**

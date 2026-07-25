@@ -53,19 +53,33 @@ public final class GetProjectInfo implements LxTool {
     payload.put("osc", osc);
     Map<String, Object> output = new LinkedHashMap<>();
     output.put("enabled", info.output().enabled());
-    output.put("enabledPath", info.output().enabledPath());
+    // path is null for an object that isn't path-registered (Resolve.canonicalPathOrNull) —
+    // omit the key rather than emit a bogus "/null" or a literal JSON null.
+    if (info.output().enabledPath() != null) {
+      output.put("enabledPath", info.output().enabledPath());
+    }
     output.put("brightness", info.output().brightness());
-    output.put("brightnessPath", info.output().brightnessPath());
+    if (info.output().brightnessPath() != null) {
+      output.put("brightnessPath", info.output().brightnessPath());
+    }
     output.put("gamma", info.output().gamma());
-    output.put("gammaPath", info.output().gammaPath());
+    if (info.output().gammaPath() != null) {
+      output.put("gammaPath", info.output().gammaPath());
+    }
     output.put("gammaMode", info.output().gammaMode());
-    output.put("gammaModePath", info.output().gammaModePath());
+    if (info.output().gammaModePath() != null) {
+      output.put("gammaModePath", info.output().gammaModePath());
+    }
     payload.put("output", output);
     Map<String, Object> engine = new LinkedHashMap<>();
     engine.put("speed", info.engine().speed());
-    engine.put("speedPath", info.engine().speedPath());
+    if (info.engine().speedPath() != null) {
+      engine.put("speedPath", info.engine().speedPath());
+    }
     engine.put("framesPerSecond", info.engine().framesPerSecond());
-    engine.put("framesPerSecondPath", info.engine().framesPerSecondPath());
+    if (info.engine().framesPerSecondPath() != null) {
+      engine.put("framesPerSecondPath", info.engine().framesPerSecondPath());
+    }
     payload.put("engine", engine);
     return Result.ok(payload);
   }
