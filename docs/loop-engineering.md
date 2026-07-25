@@ -114,8 +114,8 @@ environment" pattern.
   `lx.engine.copyFrameThreadSafe(LXEngine.Frame)` (`LXEngine.java:1346`) hands back a
   thread-safe copy of the rendered `int[] main`/`cue`/`aux` buffers, indexed by point;
   `LXPoint.xn/yn/zn` give normalized positions. `get_frame` returns a compact summary
-  by default (non-black fraction, mean brightness, dominant colors, NxN mean-color
-  grid); `include_image=true` opts into a PNG rendering of the point cloud too (MCP
+  by default (non-black fraction, lit fraction, mean brightness, dominant colors, NxN
+  mean-color grid); `include_image=true` opts into a PNG rendering of the point cloud too (MCP
   ImageContent — the model literally sees the frame), used sparingly since image
   content is token-expensive. `grid` / `width` further control token cost inside tight
   loops. All CPU-side and headless-testable, as predicted.

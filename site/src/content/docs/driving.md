@@ -68,8 +68,8 @@ Don't report success on the strength of an unchecked mutation. The loop:
 1. **Mutate.** Most mutating tools verify-and-echo — a `set_parameter` response
    echoes the base value it actually landed, so set-then-verify is often already free;
    read the response instead of assuming the call did what you asked.
-2. **Look.** `get_frame` returns a cheap summary — non-black fraction, mean
-   brightness, dominant colors, an NxN mean-color grid — on every call. It returns a
+2. **Look.** `get_frame` returns a cheap summary — non-black fraction, lit fraction,
+   mean brightness, dominant colors, an NxN mean-color grid — on every call. It returns a
    token-expensive PNG only when you pass `include_image: true`. Use the summary in a
    tight loop; reach for the PNG at checkpoints, not on every iteration.
 3. **Adjust.** If the frame doesn't match what you intended, change the parameter and

@@ -3,6 +3,7 @@ package chromatikmcp.domain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -83,10 +84,11 @@ class FramesTest extends HeadlessLxTest {
     lx.engine.run();
 
     Frames.FrameSnapshot snap = Frames.capture(lx, Frames.Bus.MAIN);
-    Map<String, Object> summary = Frames.summarize(snap, Frames.View.FRONT, 3);
+    Map<String, Object> summary = Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
 
     assertEquals(64, summary.get("points"));
     assertEquals(1.0, summary.get("nonBlackFraction"));
+    assertEquals(1.0, summary.get("litFraction"));
     assertEquals(1.0, summary.get("meanBrightness"));
 
     @SuppressWarnings("unchecked")
@@ -107,6 +109,64 @@ class FramesTest extends HeadlessLxTest {
   }
 
   @Test
+  void summarizeDistinguishesNearBlackFromLit() {
+    // #101010 (max channel 16) is the issue's motivating case: a blur/residual tail dark
+    // enough to read as "off" but with a nonzero channel, so nonBlackFraction still
+    // counts it. Built directly (no engine run needed — FrameSnapshot is a public record).
+    int size = 4;
+    int[] colors = new int[size];
+    Arrays.fill(colors, 0x101010);
+    float[] xn = {0f, 0.33f, 0.66f, 1f};
+    float[] yn = {0f, 0.33f, 0.66f, 1f};
+    float[] zn = {0.5f, 0.5f, 0.5f, 0.5f};
+    Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, size, 1f, 1f, 1f, "main");
+
+    Map<String, Object> summary = Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
+
+    assertEquals(1.0, summary.get("nonBlackFraction"), "unchanged: any nonzero channel counts as non-black");
+    assertEquals(0.0, summary.get("litFraction"), "near-black residual sits below the lit threshold");
+  }
+
+  @Test
+  void litThresholdOverrideChangesLitFraction() {
+    // Same #101010 fixture as summarizeDistinguishesNearBlackFromLit, but with a caller
+    // threshold (8) below the pixel's max channel (16): now it counts as lit.
+    int size = 4;
+    int[] colors = new int[size];
+    Arrays.fill(colors, 0x101010);
+    float[] xn = {0f, 0.33f, 0.66f, 1f};
+    float[] yn = {0f, 0.33f, 0.66f, 1f};
+    float[] zn = {0.5f, 0.5f, 0.5f, 0.5f};
+    Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, size, 1f, 1f, 1f, "main");
+
+    Map<String, Object> defaultSummary = Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
+    assertEquals(0.0, defaultSummary.get("litFraction"), "default threshold: near-black stays unlit");
+
+    Map<String, Object> lowThresholdSummary = Frames.summarize(snap, Frames.View.FRONT, 3, 8);
+    assertEquals(1.0, lowThresholdSummary.get("litFraction"), "threshold below max channel: counts as lit");
+  }
+
+  @Test
+  void summaryFractionsUseTotalPointCountAsDenominator() {
+    // Mixed fixture where size, nonBlack, and lit are three different numbers, so a
+    // fraction computed as x/nonBlack instead of x/size would produce a visibly wrong
+    // result: 2 fully black, 2 near-black (#101010, max=16, non-black but unlit at the
+    // default threshold), 1 bright (#ffffff, lit).
+    int size = 5;
+    int[] colors = {0x000000, 0x000000, 0x101010, 0x101010, 0xFFFFFF};
+    float[] xn = {0f, 0.2f, 0.4f, 0.6f, 1f};
+    float[] yn = {0f, 0.2f, 0.4f, 0.6f, 1f};
+    float[] zn = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f};
+    Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, size, 1f, 1f, 1f, "main");
+
+    Map<String, Object> summary = Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
+
+    assertEquals(0.6, summary.get("nonBlackFraction"), "3 of 5 points have a nonzero channel");
+    assertEquals(0.2, summary.get("litFraction"), "1 of 5 points (the bright one) clears the lit threshold");
+    assertEquals(0.2251, summary.get("meanBrightness"), "mean of max/255 across all 5 points");
+  }
+
+  @Test
   void summaryGridMarksEmptyCellsNull() {
     LX lx = newHeadlessLx();
     redChannel(lx);
@@ -115,7 +175,7 @@ class FramesTest extends HeadlessLxTest {
 
     // The grid is planar (xn/yn); viewed from the TOP an 8x8 grid collapses to one zn row.
     Frames.FrameSnapshot snap = Frames.capture(lx, Frames.Bus.MAIN);
-    Map<String, Object> summary = Frames.summarize(snap, Frames.View.TOP, 3);
+    Map<String, Object> summary = Frames.summarize(snap, Frames.View.TOP, 3, Frames.LIT_THRESHOLD);
 
     @SuppressWarnings("unchecked")
     List<List<String>> grid = (List<List<String>>) summary.get("grid");

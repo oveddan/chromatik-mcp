@@ -154,14 +154,24 @@ public final class Frames {
 
   private static final int HUE_BINS = 12;
 
+  // "Lit" is a heuristic cutoff, not perceptual luminance: the default 26/255 ~= 10% of
+  // full scale, comfortably above near-black blur/residual tails (e.g. #101010, max=16)
+  // that inflate nonBlackFraction without reading as lit to a human judging the frame.
+  public static final int LIT_THRESHOLD = 26;
+
   /**
-   * Compact stats over the snapshot: non-black fraction, mean brightness, top dominant
-   * colors from a hue histogram, and a {@code gridSize}×{@code gridSize} matrix of mean
-   * cell colors over the view plane (rows top→bottom; cells with no points are null).
+   * Compact stats over the snapshot: non-black fraction, lit fraction (see {@link
+   * #LIT_THRESHOLD}), mean brightness, top dominant colors from a hue histogram, and a
+   * {@code gridSize}×{@code gridSize} matrix of mean cell colors over the view plane
+   * (rows top→bottom; cells with no points are null). {@code litThreshold} is the max-
+   * channel value (0-255) a pixel must exceed to count toward litFraction. At 0 litFraction
+   * equals nonBlackFraction (max > 0 is the nonBlack condition); at 255 litFraction is
+   * always 0.0, since no channel can exceed the maximum.
    */
-  public static Map<String, Object> summarize(FrameSnapshot s, View view, int gridSize) {
+  public static Map<String, Object> summarize(FrameSnapshot s, View view, int gridSize, int litThreshold) {
     int size = s.size();
     int nonBlack = 0;
+    int lit = 0;
     double brightnessSum = 0;
 
     long[] binCount = new long[HUE_BINS];
@@ -191,6 +201,9 @@ public final class Frames {
 
       int max = Math.max(r, Math.max(g, b));
       brightnessSum += max / 255.0;
+      if (max > litThreshold) {
+        lit++;
+      }
       if (max == 0) {
         continue;
       }
@@ -233,6 +246,7 @@ public final class Frames {
     Map<String, Object> summary = new LinkedHashMap<>();
     summary.put("points", size);
     summary.put("nonBlackFraction", round4((size == 0) ? 0 : (double) nonBlack / size));
+    summary.put("litFraction", round4((size == 0) ? 0 : (double) lit / size));
     summary.put("meanBrightness", round4((size == 0) ? 0 : brightnessSum / size));
     summary.put("dominantColors", dominant);
     summary.put("grid", grid);

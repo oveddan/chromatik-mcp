@@ -85,8 +85,8 @@ set_parameter {path: <bank>/macro1, value: 0.75}            → turn the knob
 ## 5. Verify the render
 
 ```
-get_frame                               → non-black fraction, mean brightness,
-                                          dominant colors, NxN mean-color grid
+get_frame                               → non-black fraction, lit fraction, mean
+                                          brightness, dominant colors, NxN mean-color grid
 get_frame {include_image: true}         → plus a PNG the model literally looks at
 ```
 

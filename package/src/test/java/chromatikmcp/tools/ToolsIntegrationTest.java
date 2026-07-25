@@ -1583,6 +1583,7 @@ class ToolsIntegrationTest {
     assertEquals("front", payload.get("view"));
     assertEquals(64, ((Number) payload.get("points")).intValue());
     assertNotNull(payload.get("nonBlackFraction"));
+    assertNotNull(payload.get("litFraction"));
     assertNotNull(payload.get("dominantColors"));
     List<List<String>> grid = (List<List<String>>) payload.get("grid");
     assertEquals(2, grid.size());
@@ -1619,6 +1620,38 @@ class ToolsIntegrationTest {
     for (McpSchema.Content content : result.content()) {
       assertFalse(content instanceof McpSchema.ImageContent, "no ImageContent unless requested");
     }
+  }
+
+  @Test
+  void getFrameLitThresholdDefaultsAndOverrides() {
+    // Fixture is solid red (max channel 255): lit at the default threshold, unlit once
+    // the caller raises litThreshold above 255.
+    McpSchema.CallToolResult defaultResult = call("get_frame", Map.of());
+    assertEquals(1.0, structured(defaultResult).get("litFraction"), "default threshold: solid red is lit");
+
+    McpSchema.CallToolResult overriddenResult = call("get_frame", Map.of("litThreshold", 255));
+    assertEquals(0.0, structured(overriddenResult).get("litFraction"),
+        "max channel (255) does not exceed a litThreshold of 255");
+  }
+
+  @Test
+  void getFrameLitThresholdOutOfRangeIsRejectedBySchema() {
+    // 256 is outside the schema's declared 0-255 bound, so the SDK rejects it before the
+    // handler runs; pin the SDK's own rejection text so this fails if the schema bound is
+    // ever dropped, distinguishing it from a handler-side invalid_argument seam.
+    McpSchema.CallToolResult result = call("get_frame", Map.of("litThreshold", 256));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertFalse(text.text().startsWith(Result.INVALID_ARGUMENT),
+        "schema rejection happens in the SDK, before any handler-side check");
+  }
+
+  @Test
+  void getFrameLitThresholdZeroEqualsNonBlackFraction() {
+    // litThreshold=0 makes "max > litThreshold" identical to the nonBlack condition
+    // ("max > 0"), so the two fields collapse into each other at this boundary.
+    Map<String, Object> payload = structured(call("get_frame", Map.of("litThreshold", 0)));
+    assertEquals(payload.get("nonBlackFraction"), payload.get("litFraction"));
   }
 
   @Test

@@ -123,7 +123,7 @@ No parameters.
 
 _read-only_
 
-See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Supports orthographic front/top/side views and main/cue/aux output buses.
+See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, lit fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. nonBlackFraction counts any pixel with a nonzero channel, so near-black residuals (e.g. a #101010 blur tail) inflate it even though they read as dark. litFraction excludes those residuals: it counts only pixels whose max channel exceeds litThreshold (default 26, ~10% of full scale — a documented heuristic, not perceptual luminance; raise it to make litFraction stricter) and is the field to use when judging negative space or whether an area actually reads as dark. litThreshold=0 makes litFraction equal to nonBlackFraction (max > 0 is the nonBlack condition); litThreshold=255 makes litFraction always 0.0, since no channel can exceed the maximum. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Supports orthographic front/top/side views and main/cue/aux output buses.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
@@ -132,6 +132,7 @@ See what the model is rendering by reading the composited output buffer. Pass in
 | `bus` | string | no | one of: `main`, `cue`, `aux` | Which composited buffer to read (default main) |
 | `include_image` | boolean | no | — | Include the PNG rendering (default false — image content is token-expensive; request it explicitly when you need to see the frame) |
 | `grid` | integer | no | 1–16 | Grid resolution N for the NxN mean-color summary matrix (default 3) |
+| `litThreshold` | integer | no | 0–255 | Max-channel cutoff (0-255) a pixel must exceed to count toward litFraction (default 26). Raising it makes litFraction stricter. 0 makes litFraction equal nonBlackFraction; 255 makes litFraction always 0.0. |
 
 ### `get_component_doc`
 
