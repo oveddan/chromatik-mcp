@@ -26,8 +26,8 @@ import heronarts.lx.pattern.LXPattern;
  *
  * <p>Entries are markdown files with flat frontmatter and three fixed body sections.
  * Resolution follows a four-tier order (overlay dir → class's own classloader jar →
- * this jar's own classloader → absent); see {@code docs/catalog-format.md} for the
- * full spec.
+ * this jar's classloader, re-resolved live from the {@link LX} registry on every call
+ * → absent); see {@code docs/catalog-format.md} for the full spec.
  */
 public final class Catalog {
 
@@ -93,20 +93,32 @@ public final class Catalog {
    * <ol>
    *   <li>~/.chromatik-mcp/catalog/&lt;fqcn&gt;.md (overlay — wins if present)</li>
    *   <li>clazz.getClassLoader().getResourceAsStream("catalog/&lt;fqcn&gt;.md") (class's jar)</li>
-   *   <li>this jar's own classloader (bundled stock LX entries)</li>
+   *   <li>{@code lx.registry.getClassLoader()}, re-fetched live on every call (bundled
+   *       stock LX entries) — survives a Chromatik content reload, which disposes and
+   *       replaces the registry's loader</li>
    *   <li>absent → returns null (class is undocumented)</li>
    * </ol>
    */
-  public static CatalogEntry locateEntry(Class<?> clazz) {
-    return locateEntry(clazz.getName(), clazz.getClassLoader());
+  public static CatalogEntry locateEntry(LX lx, Class<?> clazz) {
+    return locateEntry(clazz.getName(), clazz.getClassLoader(), pluginJarLoader(lx));
   }
 
   /**
-   * Package-private seam: {@code classLoader} is the documented class's own loader.
-   * Tests pass a loader that cannot see {@code catalog/} to exercise tier 3 — the case
-   * a single-classpath test JVM never reproduces on its own.
+   * The tier-3 fallback loader, re-fetched live from the registry on every call so it survives
+   * a Chromatik content reload. Extracted so tests can assert the production wiring feeds
+   * {@link #locateEntry(LX, Class)} the live loader rather than a captured one.
    */
-  static CatalogEntry locateEntry(String fqcn, ClassLoader classLoader) {
+  static ClassLoader pluginJarLoader(LX lx) {
+    return lx.registry.getClassLoader();
+  }
+
+  /**
+   * Package-private seam: {@code classLoader} is the documented class's own loader,
+   * {@code pluginJarLoader} is the tier-3 fallback loader. Tests pass a {@code classLoader}
+   * that cannot see {@code catalog/} to exercise tier 3 — the case a single-classpath test
+   * JVM never reproduces on its own.
+   */
+  static CatalogEntry locateEntry(String fqcn, ClassLoader classLoader, ClassLoader pluginJarLoader) {
     String filename = fqcn + ".md";
 
     // Tier 1: overlay file (machine-local, always wins)
@@ -127,16 +139,15 @@ public final class Catalog {
       return entry;
     }
 
-    // Tier 3: this jar's classloader. Chromatik loads every package jar in one
+    // Tier 3: the registry's plugin-jar loader. Chromatik loads every package jar in one
     // LXClassLoader whose *parent* loaded heronarts.lx.*, so a stock LX class's own
-    // loader cannot see resources bundled here — only this one can.
-    // This loader is captured at classload time; a Chromatik content reload that
-    // disposes the LXClassLoader leaves tier 3 resolving nothing until restart (see #121).
-    ClassLoader own = Catalog.class.getClassLoader();
-    if (own == classLoader) {
+    // loader cannot see resources bundled here — only this one can. Callers re-fetch this
+    // loader live (lx.registry.getClassLoader()) rather than capture it once, so tier 3
+    // keeps working after a Chromatik content reload disposes and replaces the loader.
+    if (pluginJarLoader == classLoader) {
       return null;
     }
-    return readFromClassLoader(own, filename, "plugin-jar");
+    return readFromClassLoader(pluginJarLoader, filename, "plugin-jar");
   }
 
   private static CatalogEntry readFromClassLoader(
@@ -155,8 +166,8 @@ public final class Catalog {
   }
 
   /** Returns true if an entry exists at any resolution tier, false otherwise. */
-  public static boolean hasEntry(Class<?> clazz) {
-    return locateEntry(clazz) != null;
+  public static boolean hasEntry(LX lx, Class<?> clazz) {
+    return locateEntry(lx, clazz) != null;
   }
 
   /** Staleness of a catalog entry relative to the current class bytecode. */

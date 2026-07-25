@@ -43,7 +43,7 @@ class CatalogTest {
 
   @Test
   void parsesGradientPatternEntry() {
-    Catalog.CatalogEntry entry = Catalog.locateEntry(GradientPattern.class);
+    Catalog.CatalogEntry entry = Catalog.locateEntry(lx, GradientPattern.class);
     assertNotNull(entry, "GradientPattern has a catalog entry");
     assertEquals("class-jar", entry.source());
     assertEquals("heronarts.lx.pattern.color.GradientPattern", entry.frontmatter().get("class"));
@@ -168,7 +168,7 @@ class CatalogTest {
           overlayContent);
 
       Catalog.setOverlayDir(tempDir);
-      Catalog.CatalogEntry entry = Catalog.locateEntry(GradientPattern.class);
+      Catalog.CatalogEntry entry = Catalog.locateEntry(lx, GradientPattern.class);
       assertNotNull(entry);
       assertEquals("overlay", entry.source(), "overlay tier wins over class-jar");
       assertEquals("Overlay summary sentinel.", entry.summary());
@@ -191,8 +191,8 @@ class CatalogTest {
   @Test
   void locateEntryFallsBackToPluginJarWhenClassOwnLoaderCannotSeeIt() throws IOException {
     try (URLClassLoader isolated = new URLClassLoader(new URL[0], null)) {
-      Catalog.CatalogEntry entry =
-          Catalog.locateEntry(GradientPattern.class.getName(), isolated);
+      Catalog.CatalogEntry entry = Catalog.locateEntry(
+          GradientPattern.class.getName(), isolated, Catalog.class.getClassLoader());
       assertNotNull(entry, "plugin-jar tier resolves entries the class's own loader can't see");
       assertEquals("plugin-jar", entry.source());
     }
@@ -202,7 +202,8 @@ class CatalogTest {
   void locateEntryStillNullForUndocumentedClassViaIsolatedLoader() throws IOException {
     // SinLFO has no catalog entry anywhere — the plugin-jar fallback must not invent one.
     try (URLClassLoader isolated = new URLClassLoader(new URL[0], null)) {
-      assertNull(Catalog.locateEntry(SinLFO.class.getName(), isolated));
+      assertNull(Catalog.locateEntry(
+          SinLFO.class.getName(), isolated, Catalog.class.getClassLoader()));
     }
   }
 
@@ -210,8 +211,8 @@ class CatalogTest {
   void locateEntryResolvesPluginJarForNullClassLoader() {
     // Bootstrap classes report null from getClassLoader(); must not NPE and must still
     // fall through to the plugin-jar tier.
-    Catalog.CatalogEntry entry =
-        Catalog.locateEntry(GradientPattern.class.getName(), null);
+    Catalog.CatalogEntry entry = Catalog.locateEntry(
+        GradientPattern.class.getName(), null, Catalog.class.getClassLoader());
     assertNotNull(entry);
     assertEquals("plugin-jar", entry.source());
   }
@@ -259,13 +260,13 @@ class CatalogTest {
 
   @Test
   void hasEntryTrueForDocumentedClass() {
-    assertTrue(Catalog.hasEntry(GradientPattern.class));
+    assertTrue(Catalog.hasEntry(lx, GradientPattern.class));
   }
 
   @Test
   void hasEntryFalseForUndocumentedClass() {
     // SinLFO is a modulator with no catalog entry in the chromatik-mcp jar
-    assertFalse(Catalog.hasEntry(SinLFO.class));
+    assertFalse(Catalog.hasEntry(lx, SinLFO.class));
   }
 
   @Test
@@ -273,7 +274,7 @@ class CatalogTest {
     // Point overlay at a nonexistent directory — should fall through to class-jar
     Catalog.setOverlayDir(Path.of("/nonexistent/chromatik-mcp/catalog"));
     try {
-      Catalog.CatalogEntry entry = Catalog.locateEntry(GradientPattern.class);
+      Catalog.CatalogEntry entry = Catalog.locateEntry(lx, GradientPattern.class);
       assertNotNull(entry, "falls back to class-jar when overlay dir absent");
       assertEquals("class-jar", entry.source());
     } finally {
@@ -283,6 +284,95 @@ class CatalogTest {
 
   @Test
   void locateEntryNullForUndocumentedModulator() {
-    assertNull(Catalog.locateEntry(SinLFO.class));
+    assertNull(Catalog.locateEntry(lx, SinLFO.class));
+  }
+
+  // ── regression: tier 3 survives a Chromatik content reload (#121) ───────────
+  //
+  // Two tests, for a reason worth spelling out: `GradientPattern.class.getClassLoader()`
+  // and `Catalog.class.getClassLoader()` are literally the *same* object in a flat Maven
+  // test classpath (both are loaded by the JVM's application classloader), and that
+  // classloader is never disposed by `reloadContent()`. So a test built entirely on a real
+  // `LX` instance and a real stock class — however it's constructed — cannot observe the
+  // difference between a *captured* loader reference and a *live* one: both always resolve.
+  // `locateEntrySurvivesContentReload` still uses a real `LX` and a real `reloadContent()`
+  // call (proving that path is headless-safe end to end, per docs/qa-strategy.md), with an
+  // isolated loader standing in for the class's own loader (as in the isolated-loader tests
+  // above) to force tier 2 to miss so tier 3 is exercised. `capturedPluginJarLoaderGoesStale`
+  // is the test that actually proves the fix: it drives tier 3 through two independent,
+  // directly-constructed loaders (own real URLs, no parent, so nothing is masked by
+  // delegation) that stand in for "the loader before a reload" and "the loader a reload
+  // installs" — mirroring `LXRegistry.reloadContent()` disposing and replacing
+  // `this.classLoader` (LXRegistry.java:726, 738) — and shows that routing through a
+  // *captured* reference to the first goes dark once it's disposed, while routing through
+  // the *current* one (what `lx.registry.getClassLoader()` returns live) keeps resolving.
+
+  @Test
+  void locateEntrySurvivesContentReload() throws IOException {
+    LX freshLx = new LX(new GridModel(8, 8));
+    try (URLClassLoader isolated = new URLClassLoader(new URL[0], null)) {
+      Catalog.CatalogEntry before = Catalog.locateEntry(
+          GradientPattern.class.getName(), isolated, freshLx.registry.getClassLoader());
+      assertNotNull(before, "plugin-jar tier resolves before any reload");
+      assertEquals("plugin-jar", before.source());
+
+      freshLx.registry.reloadContent();
+
+      Catalog.CatalogEntry after = Catalog.locateEntry(
+          GradientPattern.class.getName(), isolated, freshLx.registry.getClassLoader());
+      assertNotNull(after, "plugin-jar tier still resolves after a real content reload");
+      assertEquals("plugin-jar", after.source());
+    } finally {
+      freshLx.dispose();
+    }
+  }
+
+  @Test
+  void capturedPluginJarLoaderGoesStaleButLiveFetchSurvives() throws IOException {
+    URL classesDir = Catalog.class.getProtectionDomain().getCodeSource().getLocation();
+    URLClassLoader beforeReload = new URLClassLoader(new URL[] {classesDir}, null);
+    try (URLClassLoader afterReload = new URLClassLoader(new URL[] {classesDir}, null)) {
+      // Sanity check: before any "reload", the captured loader resolves tier 3 on its own
+      // (own URLs, no parent) — the same mechanism the old `Catalog.class.getClassLoader()`
+      // capture relied on in production.
+      assertNotNull(Catalog.locateEntry(GradientPattern.class.getName(), null, beforeReload));
+
+      beforeReload.close(); // what reloadContent() does to the loader it's replacing
+
+      assertNull(
+          Catalog.locateEntry(GradientPattern.class.getName(), null, beforeReload),
+          "a captured loader reference goes dark once reloadContent() disposes it — #121");
+
+      Catalog.CatalogEntry viaLive =
+          Catalog.locateEntry(GradientPattern.class.getName(), null, afterReload);
+      assertNotNull(viaLive, "re-fetching the current loader live survives the reload");
+      assertEquals("plugin-jar", viaLive.source());
+    } finally {
+      beforeReload.close();
+    }
+  }
+
+  // The tests above prove the 3-arg seam handles loader replacement correctly. They don't
+  // touch `Catalog.pluginJarLoader(LX)` — the one line (`Catalog.java:103`) that feeds the
+  // seam its loader in production. If that line were reverted to a captured reference (the
+  // #121 bug), every test above would still pass. This test makes the wiring itself
+  // assertable: `pluginJarLoader(lx)` must be the registry's *live* loader, distinct from
+  // both the application classloader and its own value from before a reload.
+  @Test
+  void pluginJarLoaderIsTheLiveRegistryLoader() {
+    ClassLoader viaProduction = Catalog.pluginJarLoader(lx);
+    assertTrue(viaProduction == lx.registry.getClassLoader(),
+        "pluginJarLoader(lx) must be exactly lx.registry.getClassLoader(), not a captured copy");
+    assertFalse(viaProduction == Catalog.class.getClassLoader(),
+        "pluginJarLoader(lx) must not be the application classloader");
+
+    ClassLoader beforeReload = Catalog.pluginJarLoader(lx);
+    lx.registry.reloadContent();
+    ClassLoader afterReload = Catalog.pluginJarLoader(lx);
+
+    assertTrue(afterReload == lx.registry.getClassLoader(),
+        "pluginJarLoader(lx) must still track the live loader after a content reload");
+    assertFalse(afterReload == beforeReload,
+        "a content reload must install a new loader instance — the #121 mechanism");
   }
 }

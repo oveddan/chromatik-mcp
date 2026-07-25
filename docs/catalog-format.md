@@ -46,19 +46,21 @@ At runtime the resolution order for a class's entry is:
    `LXClassLoader` that Chromatik loads all package jars into — true for content-package
    classes (e.g. `apotheneum.*`), since that loader's URL list includes every package jar,
    not just the one that defined the class.
-3. **This jar's own classloader** (source: `"plugin-jar"`) — falls back to reading
-   `catalog/<fqcn>.md` via `Catalog.class.getClassLoader()` directly, i.e. this jar's own
-   bundled entries regardless of which loader defined the documented class. This tier
-   exists because tier 2 is *not* symmetric: `heronarts.lx.*` classes are defined by the
+3. **The registry's plugin-jar loader** (source: `"plugin-jar"`) — falls back to reading
+   `catalog/<fqcn>.md` via `lx.registry.getClassLoader()`, i.e. this jar's own bundled
+   entries regardless of which loader defined the documented class. This tier exists
+   because tier 2 is *not* symmetric: `heronarts.lx.*` classes are defined by the
    classloader that loaded the LX application itself — the **parent** of the shared
    `LXClassLoader` — and a `ClassLoader` can see resources on its own and its ancestors'
    classpaths, never a descendant's. So a stock LX class's own loader can never see
    `catalog/*.md` bundled inside the chromatik-mcp jar (a child classloader's resource),
-   no matter how tier 2 is queried. Tier 3 routes the lookup through *this* jar's loader
-   instead, which — being the shared `LXClassLoader` — does have the chromatik-mcp jar
-   (and every other package jar) on its URL list. Skipped only when it's the exact same
-   loader already tried in tier 2 (content-package classes, which already got a fair shot
-   in tier 2 for their own bundled entries).
+   no matter how tier 2 is queried. Tier 3 routes the lookup through the shared
+   `LXClassLoader` instead, which does have the chromatik-mcp jar (and every other package
+   jar) on its URL list. Skipped only when it's the exact same loader already tried in
+   tier 2 (content-package classes, which already got a fair shot in tier 2 for their own
+   bundled entries). The loader is re-fetched from `lx.registry.getClassLoader()` on every
+   lookup rather than captured once, so tier 3 keeps resolving after a Chromatik content
+   reload disposes and replaces the registry's loader.
 4. **Absent** — no entry found at any tier.
 
 A class with no entry at any tier is simply *undocumented* (`documented: false` over

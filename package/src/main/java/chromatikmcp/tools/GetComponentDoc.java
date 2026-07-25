@@ -110,7 +110,7 @@ public final class GetComponentDoc implements LxTool {
     payload.put("category", LXComponent.getCategory(clazz));
     payload.put("tags", tags);
 
-    Catalog.CatalogEntry entry = Catalog.locateEntry(clazz);
+    Catalog.CatalogEntry entry = Catalog.locateEntry(lx, clazz);
     if (entry == null) {
       payload.put("documented", false);
       return Result.ok(payload);
