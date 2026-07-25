@@ -23,6 +23,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
+import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 
 /**
@@ -189,6 +190,36 @@ class EmbeddedMcpServerTest {
     } finally {
       first.stop();
     }
+  }
+
+  /**
+   * See the class doc on {@link RewordingJsonSchemaValidator}: it rewrites every
+   * "structuredContent does not match tool outputSchema" failure to input-schema wording,
+   * on the assumption that no registered tool declares an {@code outputSchema}. A tool
+   * that declares one would silently break that assumption — a genuine output-schema
+   * failure would be misreported as an input-argument failure. Fail fast at startup
+   * instead of letting that assumption erode unnoticed.
+   */
+  @Test
+  void startingWithAToolThatDeclaresAnOutputSchemaThrows() {
+    McpSchema.Tool toolWithOutputSchema = McpSchema.Tool.builder()
+        .name("has_output_schema")
+        .description("test tool")
+        .inputSchema(Map.of("type", "object"))
+        .outputSchema(Map.of("type", "object"))
+        .build();
+    McpServerFeatures.SyncToolSpecification spec = McpServerFeatures.SyncToolSpecification.builder()
+        .tool(toolWithOutputSchema)
+        .callHandler((exchange, request) -> null)
+        .build();
+
+    IllegalStateException thrown = assertThrows(IllegalStateException.class,
+        () -> EmbeddedMcpServer.start(
+            "Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1", List.of(spec), null),
+        "a tool declaring an outputSchema must be rejected at startup, not let the "
+            + "rewording validator misattribute a real output-schema failure");
+    assertTrue(thrown.getMessage().contains("has_output_schema"));
+    assertTrue(thrown.getMessage().contains("RewordingJsonSchemaValidator"));
   }
 
   /**

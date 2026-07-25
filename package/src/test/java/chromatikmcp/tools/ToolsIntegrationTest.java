@@ -2545,4 +2545,34 @@ class ToolsIntegrationTest {
       }
     }
   }
+
+  @Test
+  void unknownArgumentIsRejectedAsAnInputSchemaFailure() {
+    // Regression for #115: list_modulations declares "scope", not "path" — the SDK
+    // rejects the unrecognized argument before the handler runs. The raw SDK-worded
+    // message from the pinned 2.0.0-RC1 validator hardcodes "structuredContent does not
+    // match tool outputSchema" for this failure, misleadingly blaming the server's
+    // response rather than the caller's arguments.
+    McpSchema.CallToolResult result = call("list_modulations", Map.of("path", "/lx/mixer"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertFalse(text.text().contains("outputSchema"),
+        "an input-argument failure must not blame the output schema: " + text.text());
+    assertTrue(text.text().contains("input schema") || text.text().contains("inputSchema"),
+        "the rewritten message should name the input schema: " + text.text());
+    assertTrue(text.text().contains("path"),
+        "the underlying validation error (naming the offending property) is preserved: "
+            + text.text());
+  }
+
+  @Test
+  void missingRequiredArgumentIsRejectedAsAnInputSchemaFailure() {
+    // get_parameter requires "path"; omitting it hits the same SDK-side rejection path
+    // as an unknown argument, before the handler ever runs.
+    McpSchema.CallToolResult result = call("get_parameter", Map.of());
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertFalse(text.text().contains("outputSchema"),
+        "a missing-required-argument failure must not blame the output schema: " + text.text());
+  }
 }

@@ -50,13 +50,20 @@ Decided once (#108) so it isn't re-litigated per tool:
   stable so agents can dispatch on them.
 - Unexpected exceptions map to `internal` at the seam (`chromatikmcp.tools.Tools`); they never
   cross the MCP boundary as stack traces.
-- The SDK validates `inputSchema` server-side: a request missing a required argument is
-  rejected (`isError: true`, SDK-worded message) before the handler runs. Handler
-  `invalid_argument` checks only need to cover what a JSON Schema can't express (empty
-  strings, semantic constraints).
+- The SDK validates `inputSchema` server-side: a request missing a required argument, or
+  carrying one it doesn't declare, is rejected (`isError: true`, SDK-worded message)
+  before the handler runs. Handler `invalid_argument` checks only need to cover what a
+  JSON Schema can't express (empty strings, semantic constraints).
+- The SDK's default validator hardcodes an "outputSchema"/"structuredContent" wording for
+  every such rejection (a 2.0.0-RC1 quirk — see `RewordingJsonSchemaValidator`), which
+  would otherwise mislabel an input-argument failure as an output error; the server
+  rewrites that wording so the message names the input schema instead.
 - `outputSchema` is deliberately **not** declared in v1: the SDK is at 2.0.0-RC1 and its
   validation semantics for `isError` results against a declared schema are unverified.
-  Revisit at the SDK GA bump (tracker follow-up in `docs/build-plan.md`).
+  Revisit at the SDK GA bump (tracker follow-up in `docs/build-plan.md`). Declaring one
+  also requires revisiting `RewordingJsonSchemaValidator`, which currently assumes no tool
+  has an `outputSchema` and rewrites every validator failure accordingly — `EmbeddedMcpServer`
+  enforces that assumption at startup.
 
 ## Drill-down
 

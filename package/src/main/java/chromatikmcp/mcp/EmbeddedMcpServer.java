@@ -13,6 +13,7 @@ import org.apache.tomcat.util.descriptor.web.FilterMap;
 
 import jakarta.servlet.http.HttpServlet;
 
+import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServer;
@@ -144,6 +145,31 @@ public final class EmbeddedMcpServer {
     }
   }
 
+  /**
+   * {@link RewordingJsonSchemaValidator} rewrites every "structuredContent does not match
+   * tool outputSchema" message to input-schema wording, on the assumption that no tool
+   * here declares an {@code outputSchema} — so every failure the shared validator instance
+   * can produce is actually an input-argument failure. If a tool ever declares one, that
+   * assumption breaks silently: a genuine output-serialization bug would be rewritten into
+   * "arguments do not match the tool's input schema," blaming the client's call for a
+   * server-side defect. Fail fast at startup instead.
+   *
+   * <p>This guard inspects only tools registered at {@code start(...)};
+   * dynamically-added tools via {@code McpServer.addTool(...)} would bypass this check.
+   */
+  private static void requireNoOutputSchemas(List<McpServerFeatures.SyncToolSpecification> tools) {
+    for (McpServerFeatures.SyncToolSpecification spec : tools) {
+      if (spec.tool().outputSchema() != null) {
+        throw new IllegalStateException(
+            "Tool '" + spec.tool().name() + "' declares an outputSchema, but "
+                + RewordingJsonSchemaValidator.class.getSimpleName()
+                + " rewrites all validator failures — including genuine output-schema "
+                + "failures — into input-argument wording. Revisit that wrapper (see its "
+                + "class doc) before any tool declares an outputSchema.");
+      }
+    }
+  }
+
   private static EmbeddedMcpServer startWithContextClassLoader(
       String serverName,
       String version,
@@ -153,6 +179,8 @@ public final class EmbeddedMcpServer {
       String instructions,
       ConnectionTracker connectionTracker,
       Map<String, HttpServlet> extraServlets) {
+    requireNoOutputSchemas(tools);
+
     HttpServletStreamableServerTransportProvider transport =
         HttpServletStreamableServerTransportProvider.builder()
             .mcpEndpoint(ENDPOINT)
@@ -161,7 +189,17 @@ public final class EmbeddedMcpServer {
     McpServer.SyncSpecification<?> serverSpec = McpServer.sync(transport)
         .serverInfo(serverName, version)
         .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
-        .tools(tools);
+        .tools(tools)
+        // Upstream RC-only wording bug (issue #115): DefaultJsonSchemaValidator.validate()
+        // (mcp-json-jackson3 2.0.0-RC1) hardcodes an "outputSchema"/"structuredContent"
+        // message for every validation failure, including ToolInputValidator's checks of a
+        // tool call's arguments — misleading, since no tool here declares an outputSchema
+        // (docs/tool-conventions.md), so every such failure is actually an input-argument
+        // failure. RewordingJsonSchemaValidator wraps the SDK's own default (resolved here,
+        // inside the TCCL swap above, same as the SDK's own lazy resolution would use) and
+        // only rewords that hardcoded phrase. Delete this wrapper at the SDK GA bump
+        // (docs/build-plan.md follow-up, targeted for PR-6).
+        .jsonSchemaValidator(new RewordingJsonSchemaValidator(McpJsonDefaults.getSchemaValidator()));
     if (instructions != null) {
       serverSpec = serverSpec.instructions(instructions);
     }
