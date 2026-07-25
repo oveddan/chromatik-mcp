@@ -1,5 +1,5 @@
 {
-  "//": "Copy to sources.local.json (git-ignored) and point each repo at your checkout.",
+  "//": "Prefer ~/.chromatik-mcp/catalog-sources.json (same shape, machine-level, survives worktrees). Copy this file to sources.local.json (git-ignored) only for a per-checkout override.",
   "LX": "/path/to/LX",
   "Apotheneum": "/path/to/Apotheneum"
 }

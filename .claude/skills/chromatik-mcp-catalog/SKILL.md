@@ -23,12 +23,32 @@ it is cheap and safe.
     jar; stock LX only), `repo` → the content repo's own `src/main/resources/catalog/`
     (docs ship inside *its* jar — preferred when you have write access), `overlay` →
     `~/.chromatik-mcp/catalog/` (machine-local; for content you can read but not modify).
-- `sources.local.json` (this directory, **git-ignored** — copy
-  [`sources.local.example.json`](sources.local.example.json)): repo name → local
-  checkout path on this machine. If a repo has no local mapping, clone it from `url`
-  into a scratch dir or skip it with a note in the run report.
+- Local checkout paths, resolved **per repo key**, in order, **first match wins**: each
+  repo is looked up in each source below in turn, and a source that exists but lacks
+  that repo's key falls through to the next source *for that repo only* — a present
+  `sources.local.json` does not block fallthrough for repos it doesn't mention, and
+  does not stop a legitimate override for repos it does.
+  1. `~/.chromatik-mcp/catalog-sources.json` — machine-level, same `{"<repo>":
+     "<absolute path>"}` shape as `sources.local.json` below. Lives outside every
+     checkout, so it resolves identically no matter which worktree or skill-directory
+     name (pre- or post-rename) is running. This is the preferred home — set it up once
+     per machine.
+  2. `sources.local.json` (this directory, **git-ignored** — copy
+     [`sources.local.example.json`](sources.local.example.json)): repo name → local
+     checkout path. A per-checkout override for the rare case where a repo's local path
+     needs to differ from the machine-level file for this run.
+  3. Neither has an entry → clone the repo from `url` into a scratch dir, or skip it.
+     This is a **setup defect, not routine behavior**: it means the machine-level file
+     is missing an entry for this repo. Record it as `cloned-to-scratch` (or `no-source`
+     if skipped) in the run report, and surface it as a **top-line warning**, not buried
+     mid-report — name the missing repo key and the file it belongs in
+     (`~/.chromatik-mcp/catalog-sources.json`), so the reader has the exact one-line fix.
 
-  Extending coverage to a new repo = one entry in each file.
+  Extending coverage to a new repo = one entry in `sources.json`, plus one entry in
+  `~/.chromatik-mcp/catalog-sources.json` (once, machine-wide). If a checkout
+  intentionally diverges from the machine-level path for a given run, add a matching
+  entry to `sources.local.json` too — otherwise this checkout falls through to a clone
+  or skip.
 
 ## Pipeline
 
@@ -65,7 +85,9 @@ it is cheap and safe.
 7. **Review.** Standard dev-loop review-agent pass over the diff — doc *quality* is
    judged there, not by the format test.
 8. **Report.** PR body carries counts: generated / skipped-fresh / triaged-out /
-   no-source / hash-missing.
+   no-source / hash-missing / cloned-to-scratch. Also record, per repo, which source
+   tier resolved it (machine-level file / local override / cloned to scratch) — put any
+   `cloned-to-scratch` repos in a top-line warning, not buried in the counts.
 
 ## Never
 
