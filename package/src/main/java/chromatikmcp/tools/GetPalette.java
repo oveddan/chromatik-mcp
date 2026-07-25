@@ -9,6 +9,8 @@ import heronarts.lx.LX;
 
 import chromatikmcp.domain.Palettes;
 
+import static chromatikmcp.tools.Payloads.putIfPresent;
+
 public final class GetPalette implements LxTool {
 
   @Override
@@ -43,25 +45,15 @@ public final class GetPalette implements LxTool {
     Palettes.PaletteInfo info = Palettes.info(lx);
 
     Map<String, Object> activeSwatch = new LinkedHashMap<>();
-    // path is null for an object that isn't path-registered (Resolve.canonicalPathOrNull) —
-    // omit the key rather than emit a bogus "/null" or a literal JSON null.
-    if (info.activeSwatch().path() != null) {
-      activeSwatch.put("path", info.activeSwatch().path());
-    }
+    putIfPresent(activeSwatch, "path", info.activeSwatch().path());
     List<Map<String, Object>> colors = new ArrayList<>();
     for (Palettes.ColorInfo color : info.activeSwatch().colors()) {
       Map<String, Object> entry = new LinkedHashMap<>();
-      if (color.path() != null) {
-        entry.put("path", color.path());
-      }
+      putIfPresent(entry, "path", color.path());
       entry.put("mode", color.mode());
       entry.put("effectiveColor", color.effectiveColor());
-      if (color.primaryPath() != null) {
-        entry.put("primaryPath", color.primaryPath());
-      }
-      if (color.secondaryPath() != null) {
-        entry.put("secondaryPath", color.secondaryPath());
-      }
+      putIfPresent(entry, "primaryPath", color.primaryPath());
+      putIfPresent(entry, "secondaryPath", color.secondaryPath());
       colors.add(entry);
     }
     activeSwatch.put("colors", colors);
@@ -69,26 +61,18 @@ public final class GetPalette implements LxTool {
     List<Map<String, Object>> swatches = new ArrayList<>();
     for (Palettes.SwatchInfo swatch : info.swatches()) {
       Map<String, Object> entry = new LinkedHashMap<>();
-      if (swatch.path() != null) {
-        entry.put("path", swatch.path());
-      }
+      putIfPresent(entry, "path", swatch.path());
       entry.put("label", swatch.label());
-      if (swatch.recallPath() != null) {
-        entry.put("recallPath", swatch.recallPath());
-      }
+      putIfPresent(entry, "recallPath", swatch.recallPath());
       entry.put("autoCycleEligible", swatch.autoCycleEligible());
       swatches.add(entry);
     }
 
     Map<String, Object> transition = new LinkedHashMap<>();
     transition.put("enabled", info.transition().enabled());
-    if (info.transition().enabledPath() != null) {
-      transition.put("enabledPath", info.transition().enabledPath());
-    }
+    putIfPresent(transition, "enabledPath", info.transition().enabledPath());
     transition.put("timeSecs", info.transition().timeSecs());
-    if (info.transition().timeSecsPath() != null) {
-      transition.put("timeSecsPath", info.transition().timeSecsPath());
-    }
+    putIfPresent(transition, "timeSecsPath", info.transition().timeSecsPath());
     transition.put("transitionProgress", info.transition().transitionProgress());
 
     Map<String, Object> autoCycle = new LinkedHashMap<>();

@@ -62,7 +62,6 @@ public final class RewordingJsonSchemaValidator implements JsonSchemaValidator {
    * fails.
    */
   private static String acceptedArgumentsClause(Map<String, Object> schema) {
-    // Only mention accepted arguments if the schema closes the set (additionalProperties: false)
     Object additionalProperties = schema.get("additionalProperties");
     if (!(additionalProperties instanceof Boolean) || (Boolean) additionalProperties) {
       return "";

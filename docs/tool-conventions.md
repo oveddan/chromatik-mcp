@@ -60,7 +60,11 @@ Decided once (#108) so it isn't re-litigated per tool:
   rewrites that wording so the message names the input schema instead.
 - `outputSchema` is deliberately **not** declared in v1: the SDK is at 2.0.0-RC1 and its
   validation semantics for `isError` results against a declared schema are unverified.
-  Revisit at the SDK GA bump (tracker follow-up in `docs/build-plan.md`). Declaring one
+  Revisit at the SDK GA bump (tracker follow-up in `docs/build-plan.md`).
+- A canonical path that can't be resolved (e.g. `Resolve.canonicalPathOrNull` on an object
+  that isn't path-registered) means the key is **omitted**, never emitted as JSON `null` or
+  a bogus `"/null"` string — a key whose type flips between string and null across calls
+  breaks clients. Declaring one
   also requires revisiting `RewordingJsonSchemaValidator`, which currently assumes no tool
   has an `outputSchema` and rewrites every validator failure accordingly — `EmbeddedMcpServer`
   enforces that assumption at startup.

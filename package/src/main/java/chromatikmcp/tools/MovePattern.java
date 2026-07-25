@@ -1,6 +1,5 @@
 package chromatikmcp.tools;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,19 +61,7 @@ public final class MovePattern implements LxTool {
     payload.put("id", pattern.getId());
     payload.put("label", pattern.getLabel());
     payload.put("index", pattern.getIndex());
-    payload.put("oscChanges", oscChanges(result.oscChanges()));
+    payload.put("oscChanges", OscChanges.payload(result.oscChanges()));
     return Result.ok(payload);
-  }
-
-  private static List<Map<String, Object>> oscChanges(List<Channels.PathChange> changes) {
-    List<Map<String, Object>> result = new ArrayList<>();
-    for (Channels.PathChange change : changes) {
-      Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("componentId", change.componentId());
-      entry.put("before", change.before());
-      entry.put("after", change.after());
-      result.add(entry);
-    }
-    return result;
   }
 }

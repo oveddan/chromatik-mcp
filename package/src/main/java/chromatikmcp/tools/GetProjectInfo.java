@@ -7,6 +7,8 @@ import heronarts.lx.LX;
 
 import chromatikmcp.domain.Projects;
 
+import static chromatikmcp.tools.Payloads.putIfPresent;
+
 public final class GetProjectInfo implements LxTool {
 
   @Override
@@ -41,9 +43,7 @@ public final class GetProjectInfo implements LxTool {
     Projects.ProjectInfo info = Projects.info(lx);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("lxVersion", info.lxVersion());
-    if (info.projectPath() != null) {
-      payload.put("projectPath", info.projectPath());
-    }
+    putIfPresent(payload, "projectPath", info.projectPath());
     payload.put("channelCount", info.channelCount());
     Map<String, Object> osc = new LinkedHashMap<>();
     osc.put("receivePort", info.osc().receivePort());
@@ -53,33 +53,19 @@ public final class GetProjectInfo implements LxTool {
     payload.put("osc", osc);
     Map<String, Object> output = new LinkedHashMap<>();
     output.put("enabled", info.output().enabled());
-    // path is null for an object that isn't path-registered (Resolve.canonicalPathOrNull) —
-    // omit the key rather than emit a bogus "/null" or a literal JSON null.
-    if (info.output().enabledPath() != null) {
-      output.put("enabledPath", info.output().enabledPath());
-    }
+    putIfPresent(output, "enabledPath", info.output().enabledPath());
     output.put("brightness", info.output().brightness());
-    if (info.output().brightnessPath() != null) {
-      output.put("brightnessPath", info.output().brightnessPath());
-    }
+    putIfPresent(output, "brightnessPath", info.output().brightnessPath());
     output.put("gamma", info.output().gamma());
-    if (info.output().gammaPath() != null) {
-      output.put("gammaPath", info.output().gammaPath());
-    }
+    putIfPresent(output, "gammaPath", info.output().gammaPath());
     output.put("gammaMode", info.output().gammaMode());
-    if (info.output().gammaModePath() != null) {
-      output.put("gammaModePath", info.output().gammaModePath());
-    }
+    putIfPresent(output, "gammaModePath", info.output().gammaModePath());
     payload.put("output", output);
     Map<String, Object> engine = new LinkedHashMap<>();
     engine.put("speed", info.engine().speed());
-    if (info.engine().speedPath() != null) {
-      engine.put("speedPath", info.engine().speedPath());
-    }
+    putIfPresent(engine, "speedPath", info.engine().speedPath());
     engine.put("framesPerSecond", info.engine().framesPerSecond());
-    if (info.engine().framesPerSecondPath() != null) {
-      engine.put("framesPerSecondPath", info.engine().framesPerSecondPath());
-    }
+    putIfPresent(engine, "framesPerSecondPath", info.engine().framesPerSecondPath());
     payload.put("engine", engine);
     return Result.ok(payload);
   }

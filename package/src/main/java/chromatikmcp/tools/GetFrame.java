@@ -96,7 +96,7 @@ public final class GetFrame implements LxTool {
     int grid = intArg(args, "grid", DEFAULT_GRID, MIN_GRID, MAX_GRID);
     boolean includeImage = args.get("include_image") instanceof Boolean b && b;
 
-    int litThreshold = (args.get("litThreshold") instanceof Number n) ? n.intValue() : LIT_THRESHOLD_DEFAULT;
+    int litThreshold = intArg(args, "litThreshold", LIT_THRESHOLD_DEFAULT, MIN_LIT_THRESHOLD, MAX_LIT_THRESHOLD);
 
     Frames.FrameSnapshot snap = Frames.capture(lx, bus);
     Map<String, Object> payload = new LinkedHashMap<>();
