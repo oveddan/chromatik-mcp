@@ -191,7 +191,7 @@ class ToolsIntegrationTest {
     McpSchema.ListToolsResult tools = client.listTools();
     Set<String> names = tools.tools().stream().map(McpSchema.Tool::name).collect(Collectors.toSet());
     assertEquals(
-        Set.of("get_project_info", "get_status", "list_channels", "list_available_patterns",
+        Set.of("get_project_info", "get_status", "list_channels", "get_channel", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
             "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
@@ -1095,6 +1095,105 @@ class ToolsIntegrationTest {
     } catch (RuntimeException e) {
       throw new IllegalStateException("Failed to serialize payload for size comparison", e);
     }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void getChannelMatchesItsEntryInListChannelsFull() {
+    String path = channel.getCanonicalPath();
+    Map<String, Object> payload = structured(call("get_channel", Map.of("path", path)));
+
+    Map<String, Object> listEntry = channelEntry(
+        structured(call("list_channels", Map.of("detail", "full"))), path);
+    assertEquals(listEntry, payload,
+        "get_channel payload has the same keys/values as its list_channels{full} entry "
+            + "(both call channelFull, so the shape is identical by construction)");
+
+    assertFalse(payload.containsKey("channels"), "no collection envelope");
+    assertFalse(payload.containsKey("master"), "no collection envelope");
+    assertFalse(payload.containsKey("mixer"), "no collection envelope");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void getChannelOnMasterBusReturnsMasterDetail() {
+    // #123's removed list_channels{path} drill-down 404'd on the master bus — LXMasterBus
+    // extends LXBus, not LXAbstractChannel, so it needs its own explicit branch.
+    String path = lx.engine.mixer.masterBus.getCanonicalPath();
+    Map<String, Object> payload = structured(call("get_channel", Map.of("path", path)));
+
+    Map<String, Object> listMaster = (Map<String, Object>)
+        structured(call("list_channels", Map.of("detail", "full"))).get("master");
+    assertEquals(listMaster, payload,
+        "get_channel(master) has the same keys/values as list_channels{full}.master "
+            + "(both call masterFull, so the shape is identical by construction)");
+
+    assertFalse(payload.containsKey("channels"), "no collection envelope");
+    assertFalse(payload.containsKey("mixer"), "no collection envelope");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void getChannelOnGroupMatchesItsEntryInListChannelsFull() {
+    // list_channels' own group coverage (listChannelsSummaryIncludesGroupMembership) only
+    // reads the `group` field off a member channel's entry — this exercises get_channel on
+    // the group's own canonical path, the branch Channels.describe's GROUP case covers at
+    // the domain level (ChannelsTest) but that no tool-layer test had reached.
+    // Uses its own channel, not the shared `channel` fixture — grouping the shared
+    // fixture would shift its index/path out from under every other test in the class.
+    EngineExecutor executor = new EngineExecutor(lx);
+    LXChannel grouped = executor.call(() -> lx.engine.mixer.addChannel());
+    LXGroup group = executor.call(() -> lx.engine.mixer.addGroup(List.of(grouped)));
+    try {
+      String groupPath = group.getCanonicalPath();
+      Map<String, Object> payload = structured(call("get_channel", Map.of("path", groupPath)));
+
+      Map<String, Object> listEntry = channelEntry(
+          structured(call("list_channels", Map.of("detail", "full"))), groupPath);
+      assertEquals(listEntry, payload,
+          "get_channel(group) has the same keys/values as its list_channels{full} entry "
+              + "(both call channelFull, so the shape is identical by construction)");
+
+      assertFalse(payload.containsKey("channels"), "no collection envelope");
+      assertFalse(payload.containsKey("master"), "no collection envelope");
+      assertFalse(payload.containsKey("mixer"), "no collection envelope");
+    } finally {
+      executor.execute(() -> {
+        if (lx.engine.mixer.channels.contains(group)) {
+          lx.engine.mixer.removeChannel(group);
+        }
+        if (lx.engine.mixer.channels.contains(grouped)) {
+          lx.engine.mixer.removeChannel(grouped);
+        }
+      });
+    }
+  }
+
+  @Test
+  void getChannelUnknownPathIsNotFound() {
+    McpSchema.CallToolResult result = call("get_channel", Map.of("path", "/lx/mixer/channel/99"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND));
+  }
+
+  @Test
+  void getChannelMalformedPathIsInvalidArgument() {
+    // The defect #123 hit: a malformed path bypassing Resolve reported not_found instead
+    // of invalid_argument. Resolve.component rejects this before any lookup.
+    McpSchema.CallToolResult result = call("get_channel", Map.of("path", "not-a-path"));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void getChannelNonBusPathIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("get_channel",
+        Map.of("path", channel.patterns.get(0).getCanonicalPath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
   }
 
   @Test

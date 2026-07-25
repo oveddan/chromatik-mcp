@@ -48,6 +48,16 @@ List the mixer's channels with their patterns and effects, plus the master bus. 
 |---|---|---|---|---|
 | `detail` | string | no | one of: `summary`, `full` | 'summary' (default) for a compact survey-friendly shape, or 'full' for today's complete per-channel payload (controls, full patterns/effects). |
 
+### `get_channel`
+
+_read-only_
+
+One channel's (or the master bus's) full detail — exactly the shape list_channels reports per entry at 'detail: full', for just this bus. Use this instead of scanning list_channels when you already know the path (e.g. from a prior list_channels/get_project_info call): O(1) against this one channel rather than assembling every channel's patterns/effects/controls to discard the rest. Accepts a channel, group, or the master bus's canonical path (e.g. /lx/mixer/channel/1, /lx/mixer/master).
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the channel, group, or master bus, e.g. /lx/mixer/channel/1 or /lx/mixer/master |
+
 ### `list_parameters`
 
 _read-only_

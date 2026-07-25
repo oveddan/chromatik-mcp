@@ -58,6 +58,26 @@ Decided once (#108) so it isn't re-litigated per tool:
   validation semantics for `isError` results against a declared schema are unverified.
   Revisit at the SDK GA bump (tracker follow-up in `docs/build-plan.md`).
 
+## Drill-down
+
+- Single-item detail on a collection is a sibling `get_*` tool (e.g. `get_fixture` next to
+  `list_fixtures`, `get_channel` next to `list_channels`) resolved through
+  `chromatikmcp.domain.Resolve`, never a `path` argument bolted onto the `list_*` tool. A
+  `path`-on-`list_*` shape was tried and reverted (#123 removed a `list_channels{path}`
+  drill-down): it was O(all items) to serve one, mis-typed a malformed path as `not_found`
+  instead of `invalid_argument` by bypassing `Resolve`, and 404'd on entities (the master
+  bus) that aren't in the collection's natural type. A `get_*` sibling reuses the
+  collection tool's per-entry payload-shaping helper as its base, and may extend it with
+  detail that would be too expensive to include in a list: `GetChannel` calls the same
+  `ListChannels.channelFull`/`masterFull` helpers with no additions, so its output matches
+  `list_channels{detail:"full"}`'s entry exactly by construction; `GetFixture` starts from
+  `ListFixtures.toMap` but adds `parameters`, `submodels`, and (conditionally)
+  `subfixturesAvailable`, `children`, `jsonParameters` on top. Either way the shared helper
+  means the two tools can't drift on the fields they do have in common. Returns just that
+  entity — no collection envelope. `list_parameters`, `list_snapshots`, and
+  `list_midi_mappings` should follow this same shape when they hit the same
+  payload-size problem.
+
 ## List tool detail levels
 
 - `list_*` tools accept an optional `detail` argument with values `summary` (default) or

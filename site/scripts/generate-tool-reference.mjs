@@ -19,6 +19,7 @@ const CATEGORIES = {
     'get_project_info',
     'get_tempo',
     'list_channels',
+    'get_channel',
     'list_parameters',
     'list_available_patterns',
     'list_available_effects',

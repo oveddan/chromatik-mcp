@@ -96,7 +96,9 @@ public final class ListChannels implements LxTool {
     return Result.ok(payload);
   }
 
-  private static Map<String, Object> channelFull(Channels.ChannelInfo channel) {
+  // Package-private: reused by GetChannel so the two tools' single-channel/master
+  // payload shape stays identical (same rationale as GetFixture / ListFixtures.toMap).
+  static Map<String, Object> channelFull(Channels.ChannelInfo channel) {
     Map<String, Object> entry = new LinkedHashMap<>();
     entry.put("path", channel.path());
     entry.put("id", channel.id());
@@ -152,7 +154,7 @@ public final class ListChannels implements LxTool {
     return entry;
   }
 
-  private static Map<String, Object> masterFull(Channels.MasterInfo master) {
+  static Map<String, Object> masterFull(Channels.MasterInfo master) {
     Map<String, Object> entry = new LinkedHashMap<>();
     entry.put("path", master.path());
     entry.put("id", master.id());

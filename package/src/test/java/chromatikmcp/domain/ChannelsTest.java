@@ -202,6 +202,22 @@ class ChannelsTest extends HeadlessLxTest {
   }
 
   @Test
+  void describeAndDescribeMasterMatchListOutput() {
+    // describe/describeMaster are public so get_channel can drill into one bus in O(1)
+    // instead of building the whole mixer snapshot and discarding the rest — assert the
+    // direct call agrees with what list() assembles from the same helpers.
+    LX lx = newHeadlessLx();
+    LXChannel added = lx.engine.mixer.addChannel();
+    added.addPattern(new GradientPattern(lx));
+    lx.engine.mixer.masterBus.addEffect(new BlurEffect(lx));
+
+    Channels.MixerInfo mixer = Channels.list(lx);
+
+    assertEquals(mixer.channels().get(added.getIndex()), Channels.describe(added));
+    assertEquals(mixer.master(), Channels.describeMaster(lx.engine.mixer.masterBus));
+  }
+
+  @Test
   void effectsAreListedOnPattern() {
     LX lx = newHeadlessLx();
     LXChannel channel = lx.engine.mixer.addChannel();

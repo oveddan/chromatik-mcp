@@ -91,6 +91,7 @@ public final class Tools {
             new GetProjectInfo(),
             getStatus,
             new ListChannels(),
+            new GetChannel(),
             new ListAvailable(ListAvailable.Kind.PATTERNS),
             new ListAvailable(ListAvailable.Kind.EFFECTS),
             new ListAvailable(ListAvailable.Kind.MODULATORS),

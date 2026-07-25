@@ -270,6 +270,21 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "get_channel",
+  "description" : "One channel's (or the master bus's) full detail — exactly the shape list_channels reports per entry at 'detail: full', for just this bus. Use this instead of scanning list_channels when you already know the path (e.g. from a prior list_channels/get_project_info call): O(1) against this one channel rather than assembling every channel's patterns/effects/controls to discard the rest. Accepts a channel, group, or the master bus's canonical path (e.g. /lx/mixer/channel/1, /lx/mixer/master).",
+  "readOnly" : true,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "path" : {
+        "type" : "string",
+        "description" : "Canonical path of the channel, group, or master bus, e.g. /lx/mixer/channel/1 or /lx/mixer/master"
+      }
+    },
+    "required" : [ "path" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "get_component_doc",
   "description" : "Return the semantic catalog entry for an LX pattern, effect, or modulator class: visual summary, parameter interactions, usage tips, and staleness metadata. Accepts exactly one of 'class' (the full class name or the short name returned by the list_available_* tools — a short name ambiguous across patterns/effects/modulators is rejected, naming the candidates) or 'path' (the canonical path of a live component instance, e.g. /lx/mixer/channel/1/pattern/1 — its class is looked up and documented). Registered but undocumented classes return documented:false (not an error).",
   "readOnly" : true,

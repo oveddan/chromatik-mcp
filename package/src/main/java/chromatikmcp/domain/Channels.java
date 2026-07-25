@@ -103,13 +103,7 @@ public final class Channels {
     for (LXAbstractChannel channel : lx.engine.mixer.channels) {
       channels.add(describe(channel));
     }
-    LXBus master = lx.engine.mixer.masterBus;
-    return new MixerInfo(channels, new MasterInfo(
-        master.getCanonicalPath(),
-        master.getId(),
-        master.getLabel(),
-        master.fader.getValue(),
-        effects(master.getEffects())),
+    return new MixerInfo(channels, describeMaster(lx.engine.mixer.masterBus),
         mixerControls(lx.engine.mixer));
   }
 
@@ -347,9 +341,10 @@ public final class Channels {
     return effect;
   }
 
-  // ── Private helpers ──────────────────────────────────────────────────────────
+  // ── Snapshot builders ────────────────────────────────────────────────────────
 
-  private static ChannelInfo describe(LXAbstractChannel channel) {
+  /** Snapshot a single channel or group. Exposed for get_channel's O(1) drill-down. */
+  public static ChannelInfo describe(LXAbstractChannel channel) {
     List<PatternInfo> patterns = List.of();
     PatternMode patternMode = null;
     PatternEngineControls patternEngineControls = null;
@@ -391,6 +386,18 @@ public final class Channels {
         effects(channel.getEffects()),
         channelControls(channel, patternEngineControls));
   }
+
+  /** Snapshot the master bus. Exposed for get_channel's O(1) drill-down. */
+  public static MasterInfo describeMaster(LXBus master) {
+    return new MasterInfo(
+        master.getCanonicalPath(),
+        master.getId(),
+        master.getLabel(),
+        master.fader.getValue(),
+        effects(master.getEffects()));
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────────
 
   private static ChannelControls channelControls(LXAbstractChannel channel,
       PatternEngineControls patternEngineControls) {
