@@ -32,6 +32,7 @@ import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.modulator.MacroTriggers;
+import heronarts.lx.pattern.PatternRack;
 import heronarts.lx.pattern.color.GradientPattern;
 
 import io.modelcontextprotocol.client.McpClient;
@@ -1085,6 +1086,287 @@ class ToolsIntegrationTest {
         }
         if (lx.engine.mixer.channels.contains(holder.grouped)) {
           lx.engine.mixer.removeChannel(holder.grouped);
+        }
+      });
+      lx.engine.run();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listChannelsExposesNestedPatternAndLocalModulationMarkersInBothDetailLevels() {
+    // Issue #117: list_channels must not silently omit that a pattern is itself a
+    // container (a PatternRack, whose own children this tool never walks) or that a
+    // pattern/effect carries local (device-scoped) modulation invisible to a scope-less
+    // list_modulations call. Both markers must be honest in whichever mode names the
+    // entry — including summary's single 'activePattern'.
+    class Holder {
+      LXChannel channel;
+      PatternRack rack;
+      GradientPattern modulatedPattern;
+      BlurEffect modulatedEffect;
+    }
+    Holder h = new Holder();
+
+    lx.engine.addTask(() -> {
+      h.channel = lx.engine.mixer.addChannel();
+      h.rack = new PatternRack(lx);
+      // First pattern added to an empty channel auto-activates (LXPatternEngine.addPattern),
+      // so the rack lands as summary's 'activePattern'.
+      h.channel.addPattern(h.rack);
+      h.rack.patternEngine.addPattern(new GradientPattern(lx));
+      h.rack.patternEngine.addPattern(new GradientPattern(lx));
+
+      h.modulatedPattern = new GradientPattern(lx);
+      h.channel.addPattern(h.modulatedPattern);
+      h.modulatedPattern.modulation.addModulator(new MacroKnobs());
+
+      h.modulatedEffect = new BlurEffect(lx);
+      h.channel.addEffect(h.modulatedEffect);
+      h.modulatedEffect.modulation.addModulator(new MacroKnobs());
+    });
+    lx.engine.run();
+
+    try {
+      String channelPath = h.channel.getCanonicalPath();
+      String rackPath = h.rack.getCanonicalPath();
+      String modulatedPatternPath = h.modulatedPattern.getCanonicalPath();
+      String modulatedEffectPath = h.modulatedEffect.getCanonicalPath();
+
+      Map<String, Object> full = channelEntry(structured(call("list_channels", Map.of("detail", "full"))), channelPath);
+      List<Map<String, Object>> patterns = (List<Map<String, Object>>) full.get("patterns");
+      Map<String, Object> rackEntry = patterns.stream()
+          .filter(p -> rackPath.equals(p.get("path"))).findFirst().orElseThrow();
+      assertEquals(2, ((Number) rackEntry.get("nestedPatternCount")).intValue(),
+          "rack's own two child patterns are counted, not enumerated");
+      assertEquals(Boolean.FALSE, rackEntry.get("hasLocalModulation"));
+
+      Map<String, Object> modulatedPatternEntry = patterns.stream()
+          .filter(p -> modulatedPatternPath.equals(p.get("path"))).findFirst().orElseThrow();
+      assertEquals(0, ((Number) modulatedPatternEntry.get("nestedPatternCount")).intValue(),
+          "an ordinary pattern hosts no nested patterns");
+      assertEquals(Boolean.TRUE, modulatedPatternEntry.get("hasLocalModulation"));
+
+      List<Map<String, Object>> effects = (List<Map<String, Object>>) full.get("effects");
+      Map<String, Object> modulatedEffectEntry = effects.stream()
+          .filter(e -> modulatedEffectPath.equals(e.get("path"))).findFirst().orElseThrow();
+      assertEquals(Boolean.TRUE, modulatedEffectEntry.get("hasLocalModulation"));
+
+      Map<String, Object> summary = channelEntry(structured(call("list_channels", Map.of())), channelPath);
+      Map<String, Object> activePattern = (Map<String, Object>) summary.get("activePattern");
+      assertEquals(rackPath, activePattern.get("path"), "rack is the auto-activated first pattern");
+      assertEquals(2, ((Number) activePattern.get("nestedPatternCount")).intValue(),
+          "summary's activePattern is honest about its own nested children too");
+      assertEquals(Boolean.FALSE, activePattern.get("hasLocalModulation"));
+    } finally {
+      lx.engine.addTask(() -> {
+        if (lx.engine.mixer.channels.contains(h.channel)) {
+          lx.engine.mixer.removeChannel(h.channel);
+        }
+      });
+      lx.engine.run();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listChannelsBlendModeRackExposesRollupsInSummary() {
+    // Reviewer's exact #117 repro: a BLEND-mode channel whose only pattern is a
+    // PatternRack gets no 'activePattern' at all (active is meaningless in BLEND), so the
+    // channel-level rollups are the only summary-detail signal that a rack is present.
+    class Holder {
+      LXChannel channel;
+      PatternRack rack;
+    }
+    Holder h = new Holder();
+    lx.engine.addTask(() -> {
+      h.channel = lx.engine.mixer.addChannel();
+      h.rack = new PatternRack(lx);
+      h.channel.addPattern(h.rack);
+      h.rack.patternEngine.addPattern(new GradientPattern(lx));
+      h.channel.getPatternEngine().compositeMode.setValue(1);
+    });
+    lx.engine.run();
+
+    try {
+      String channelPath = h.channel.getCanonicalPath();
+      Map<String, Object> summary = channelEntry(structured(call("list_channels", Map.of())), channelPath);
+      assertEquals("blend", summary.get("patternMode"));
+      assertFalse(summary.containsKey("activePattern"), "blend mode never carries activePattern");
+      assertEquals(1, ((Number) summary.get("containerPatternCount")).intValue(),
+          "the rack must be counted even though blend mode has no activePattern to mark it on");
+      assertEquals(Boolean.FALSE, summary.get("anyLocalModulation"));
+    } finally {
+      lx.engine.addTask(() -> {
+        if (lx.engine.mixer.channels.contains(h.channel)) {
+          lx.engine.mixer.removeChannel(h.channel);
+        }
+      });
+      lx.engine.run();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listChannelsPlaylistModeNonActiveRackExposesRollupsInSummary() {
+    // A rack that is not the active pattern is invisible to summary's single
+    // 'activePattern' marker — the channel-level rollup must still catch it.
+    class Holder {
+      LXChannel channel;
+      GradientPattern active;
+      PatternRack rack;
+    }
+    Holder h = new Holder();
+    lx.engine.addTask(() -> {
+      h.channel = lx.engine.mixer.addChannel();
+      h.active = new GradientPattern(lx);
+      h.channel.addPattern(h.active);
+      h.rack = new PatternRack(lx);
+      h.channel.addPattern(h.rack);
+      h.rack.patternEngine.addPattern(new GradientPattern(lx));
+    });
+    lx.engine.run();
+
+    try {
+      String channelPath = h.channel.getCanonicalPath();
+      Map<String, Object> summary = channelEntry(structured(call("list_channels", Map.of())), channelPath);
+      assertEquals("playlist", summary.get("patternMode"));
+      Map<String, Object> activePattern = (Map<String, Object>) summary.get("activePattern");
+      assertNotEquals(h.rack.getCanonicalPath(), activePattern.get("path"),
+          "the rack is not the active pattern");
+      assertEquals(1, ((Number) summary.get("containerPatternCount")).intValue(),
+          "a non-active rack must still be flagged by the channel-level rollup");
+    } finally {
+      lx.engine.addTask(() -> {
+        if (lx.engine.mixer.channels.contains(h.channel)) {
+          lx.engine.mixer.removeChannel(h.channel);
+        }
+      });
+      lx.engine.run();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listChannelsLocalModulationOnNonActivePatternOrEffectSetsSummaryRollup() {
+    class Holder {
+      LXChannel channel;
+      GradientPattern active;
+      GradientPattern modulatedPattern;
+      BlurEffect modulatedEffect;
+    }
+    Holder h = new Holder();
+    lx.engine.addTask(() -> {
+      h.channel = lx.engine.mixer.addChannel();
+      h.active = new GradientPattern(lx);
+      h.channel.addPattern(h.active);
+      h.modulatedPattern = new GradientPattern(lx);
+      h.channel.addPattern(h.modulatedPattern);
+      h.modulatedPattern.modulation.addModulator(new MacroKnobs());
+    });
+    lx.engine.run();
+    try {
+      String channelPath = h.channel.getCanonicalPath();
+      Map<String, Object> summary = channelEntry(structured(call("list_channels", Map.of())), channelPath);
+      assertEquals(Boolean.TRUE, summary.get("anyLocalModulation"),
+          "non-active pattern's local modulation must still surface at channel scope");
+    } finally {
+      lx.engine.addTask(() -> {
+        if (lx.engine.mixer.channels.contains(h.channel)) {
+          lx.engine.mixer.removeChannel(h.channel);
+        }
+      });
+      lx.engine.run();
+    }
+
+    Holder e = new Holder();
+    lx.engine.addTask(() -> {
+      e.channel = lx.engine.mixer.addChannel();
+      e.active = new GradientPattern(lx);
+      e.channel.addPattern(e.active);
+      e.modulatedEffect = new BlurEffect(lx);
+      e.channel.addEffect(e.modulatedEffect);
+      e.modulatedEffect.modulation.addModulator(new MacroKnobs());
+    });
+    lx.engine.run();
+    try {
+      String channelPath = e.channel.getCanonicalPath();
+      Map<String, Object> summary = channelEntry(structured(call("list_channels", Map.of())), channelPath);
+      assertEquals(Boolean.TRUE, summary.get("anyLocalModulation"),
+          "an effect's local modulation must still surface at channel scope");
+    } finally {
+      lx.engine.addTask(() -> {
+        if (lx.engine.mixer.channels.contains(e.channel)) {
+          lx.engine.mixer.removeChannel(e.channel);
+        }
+      });
+      lx.engine.run();
+    }
+  }
+
+  @Test
+  void listChannelsLocalModulationOnPatternOwnedEffectSetsSummaryAndFullRollup() {
+    class Holder {
+      LXChannel channel;
+      GradientPattern pattern;
+      BlurEffect patternEffect;
+    }
+    Holder h = new Holder();
+    lx.engine.addTask(() -> {
+      h.channel = lx.engine.mixer.addChannel();
+      h.pattern = new GradientPattern(lx);
+      h.channel.addPattern(h.pattern);
+      h.patternEffect = new BlurEffect(lx);
+      h.pattern.addEffect(h.patternEffect);
+      h.patternEffect.modulation.addModulator(new MacroKnobs());
+    });
+    lx.engine.run();
+    try {
+      String channelPath = h.channel.getCanonicalPath();
+      Map<String, Object> summary = channelEntry(structured(call("list_channels", Map.of())), channelPath);
+      assertEquals(Boolean.TRUE, summary.get("anyLocalModulation"),
+          "a pattern-owned effect's local modulation must still surface at channel scope");
+
+      Map<String, Object> full = channelEntry(structured(call("list_channels", Map.of("detail", "full"))), channelPath);
+      assertEquals(Boolean.TRUE, full.get("anyLocalModulation"),
+          "a pattern-owned effect's local modulation must still surface at channel scope in full detail");
+    } finally {
+      lx.engine.addTask(() -> {
+        if (lx.engine.mixer.channels.contains(h.channel)) {
+          lx.engine.mixer.removeChannel(h.channel);
+        }
+      });
+      lx.engine.run();
+    }
+  }
+
+  @Test
+  void listChannelsOrdinaryChannelReportsZeroRollupsInSummaryAndFull() {
+    // Uses its own freshly-added channel/pattern rather than the class-level shared
+    // 'channel' fixture, which other tests in this suite mutate over the run.
+    class Holder {
+      LXChannel channel;
+    }
+    Holder h = new Holder();
+    lx.engine.addTask(() -> {
+      h.channel = lx.engine.mixer.addChannel();
+      h.channel.addPattern(new GradientPattern(lx));
+    });
+    lx.engine.run();
+
+    try {
+      String channelPath = h.channel.getCanonicalPath();
+      Map<String, Object> summary = channelEntry(structured(call("list_channels", Map.of())), channelPath);
+      assertEquals(0, ((Number) summary.get("containerPatternCount")).intValue());
+      assertEquals(Boolean.FALSE, summary.get("anyLocalModulation"));
+
+      Map<String, Object> full = channelEntry(structured(call("list_channels", Map.of("detail", "full"))), channelPath);
+      assertEquals(0, ((Number) full.get("containerPatternCount")).intValue());
+      assertEquals(Boolean.FALSE, full.get("anyLocalModulation"));
+    } finally {
+      lx.engine.addTask(() -> {
+        if (lx.engine.mixer.channels.contains(h.channel)) {
+          lx.engine.mixer.removeChannel(h.channel);
         }
       });
       lx.engine.run();

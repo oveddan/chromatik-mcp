@@ -18,6 +18,7 @@ import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.mixer.LXMixerEngine;
 import heronarts.lx.mixer.LXPatternEngine;
 import heronarts.lx.modulation.LXCompoundModulation;
+import heronarts.lx.modulation.LXModulationEngine;
 import heronarts.lx.modulation.LXTriggerModulation;
 import heronarts.lx.modulator.LXModulator;
 import heronarts.lx.parameter.ObjectParameter;
@@ -38,12 +39,20 @@ public final class Channels {
    * {@code active} is the PLAYLIST-mode notion of "current pattern" (meaningless in
    * BLEND mode, where every pattern renders concurrently). {@code contributing} is the
    * mode-correct visibility rule: in PLAYLIST mode it mirrors {@code active}; in BLEND
-   * mode it is {@code enabled && compositeLevel > 0}.
+   * mode it is {@code enabled && compositeLevel > 0}. {@code nestedPatternCount} is nonzero
+   * when this pattern is itself an {@link LXPatternEngine.Container} (e.g. a
+   * {@code PatternRack}) — its own child patterns are not walked here (see issue #117);
+   * a nonzero count is a marker that more structure exists at this path, not a
+   * traversal. {@code hasLocalModulation} flags a nonempty device-local modulation
+   * engine (see {@link #hasLocalModulation(LXDeviceComponent)}).
    */
   public record PatternInfo(String path, int id, String label, String className, boolean active,
-      boolean enabled, double compositeLevel, boolean contributing, List<EffectInfo> effects) {}
+      boolean enabled, double compositeLevel, boolean contributing, int nestedPatternCount,
+      boolean hasLocalModulation, List<EffectInfo> effects) {}
 
-  public record EffectInfo(String path, int id, String label, String className, boolean enabled) {}
+  /** {@code hasLocalModulation}: see {@link #hasLocalModulation(LXDeviceComponent)}. */
+  public record EffectInfo(String path, int id, String label, String className, boolean enabled,
+      boolean hasLocalModulation) {}
 
   /** A single parameter's live value plus its canonical path, for compact performance-surface fields. */
   public record Field<T>(T value, String path) {}
@@ -80,12 +89,28 @@ public final class Channels {
    * — the mixer's channel list is flat, with group members as siblings of their group.
    * {@code patternMode} channels in BLEND mode render multiple patterns at once, so the
    * single {@code active} flag on patterns is only meaningful in PLAYLIST mode.
+   * {@code containerPatternCount} and {@code anyLocalModulation} are channel-level
+   * rollups, present at every detail level (including summary, where per-pattern markers
+   * are otherwise only visible via {@code activePattern} in PLAYLIST mode — see issue
+   * #117): {@code containerPatternCount} is how many of this channel's direct patterns
+   * are themselves an {@link LXPatternEngine.Container} (0 for ordinary channels; distinct
+   * from a pattern's own {@code nestedPatternCount}), and {@code anyLocalModulation} is
+   * true iff any pattern or effect on this channel has a nonempty local modulation engine.
+   * Both are markers that hidden structure exists somewhere on the channel, not the data
+   * itself — use {@code detail: full} or a per-pattern path to find which pattern/effect.
    */
   public record ChannelInfo(String path, int id, String label, int index, BusType type,
       boolean enabled, double fader, String groupPath, PatternMode patternMode,
-      List<PatternInfo> patterns, List<EffectInfo> effects, ChannelControls controls) {}
+      List<PatternInfo> patterns, List<EffectInfo> effects, ChannelControls controls,
+      int containerPatternCount, boolean anyLocalModulation) {}
 
-  public record MasterInfo(String path, int id, String label, double fader, List<EffectInfo> effects) {}
+  /**
+   * {@code anyLocalModulation}: the master bus can only host effects (no patterns), so
+   * this rolls up {@code hasLocalModulation} across {@code effects} only — see
+   * {@link ChannelInfo#anyLocalModulation()} for the channel-level equivalent.
+   */
+  public record MasterInfo(String path, int id, String label, double fader,
+      List<EffectInfo> effects, boolean anyLocalModulation) {}
 
   /**
    * Mixer-wide performance controls: the crossfader (0 = full A, 1 = full B — channels join
@@ -370,6 +395,8 @@ public final class Channels {
     List<PatternInfo> patterns = List.of();
     PatternMode patternMode = null;
     PatternEngineControls patternEngineControls = null;
+    int containerPatternCount = 0;
+    boolean anyLocalModulation = false;
     if (channel instanceof LXChannel c) {
       boolean blend = c.isComposite();
       patternMode = blend ? PatternMode.BLEND : PatternMode.PLAYLIST;
@@ -380,6 +407,18 @@ public final class Channels {
         double compositeLevel = pattern.compositeLevel.getValue();
         boolean isActive = pattern == active;
         boolean contributing = blend ? (patternEnabled && compositeLevel > 0) : isActive;
+        int nestedPatternCount = (pattern instanceof LXPatternEngine.Container container)
+            ? container.getPatternEngine().patterns.size()
+            : 0;
+        if (nestedPatternCount > 0) {
+          containerPatternCount++;
+        }
+        boolean patternHasLocalModulation = hasLocalModulation(pattern);
+        anyLocalModulation |= patternHasLocalModulation;
+        List<EffectInfo> patternEffects = effects(pattern.getEffects());
+        for (EffectInfo effect : patternEffects) {
+          anyLocalModulation |= effect.hasLocalModulation();
+        }
         patterns.add(new PatternInfo(
             pattern.getCanonicalPath(),
             pattern.getId(),
@@ -389,9 +428,15 @@ public final class Channels {
             patternEnabled,
             compositeLevel,
             contributing,
-            effects(pattern.getEffects())));
+            nestedPatternCount,
+            patternHasLocalModulation,
+            patternEffects));
       }
       patternEngineControls = patternEngineControls(c.getPatternEngine());
+    }
+    List<EffectInfo> channelEffects = effects(channel.getEffects());
+    for (EffectInfo effect : channelEffects) {
+      anyLocalModulation |= effect.hasLocalModulation();
     }
     LXGroup group = channel.getGroup();
     return new ChannelInfo(
@@ -405,18 +450,26 @@ public final class Channels {
         (group == null) ? null : group.getCanonicalPath(),
         patternMode,
         patterns,
-        effects(channel.getEffects()),
-        channelControls(channel, patternEngineControls));
+        channelEffects,
+        channelControls(channel, patternEngineControls),
+        containerPatternCount,
+        anyLocalModulation);
   }
 
   /** Snapshot the master bus. Exposed for get_channel's O(1) drill-down. */
   public static MasterInfo describeMaster(LXBus master) {
+    List<EffectInfo> masterEffects = effects(master.getEffects());
+    boolean anyLocalModulation = false;
+    for (EffectInfo effect : masterEffects) {
+      anyLocalModulation |= effect.hasLocalModulation();
+    }
     return new MasterInfo(
         master.getCanonicalPath(),
         master.getId(),
         master.getLabel(),
         master.fader.getValue(),
-        effects(master.getEffects()));
+        masterEffects,
+        anyLocalModulation);
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
@@ -529,8 +582,22 @@ public final class Channels {
           effect.getId(),
           effect.getLabel(),
           effect.getClass().getName(),
-          effect.enabled.isOn()));
+          effect.enabled.isOn(),
+          hasLocalModulation(effect)));
     }
     return result;
+  }
+
+  /**
+   * Every {@link LXDeviceComponent} (pattern or effect) owns its own {@code modulation}
+   * engine, separate from the global one — invisible to {@code list_channels} and to a
+   * scope-less {@code list_modulations} call alike. True if that engine hosts any
+   * modulator, continuous modulation, or trigger (see issue #117).
+   */
+  private static boolean hasLocalModulation(LXDeviceComponent device) {
+    LXModulationEngine modulation = device.modulation;
+    return !modulation.modulators.isEmpty()
+        || !modulation.modulations.isEmpty()
+        || !modulation.triggers.isEmpty();
   }
 }

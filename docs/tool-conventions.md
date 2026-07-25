@@ -113,6 +113,15 @@ Decided once (#108) so it isn't re-litigated per tool:
   settable path that `set_parameter` needs. Drop the *expensive part* of a value —
   a long `options` array — not the value's shape. The count keys are the deliberate
   exception: they exist only in summary, precisely because the array they count does not.
+- A distinct marker case (#117): some children are never traversed by the tool at *any*
+  detail level — a rack pattern's own nested patterns, a device's local modulation
+  engine — because walking them is a separate, unbuilt drill-down (or, for modulation, a
+  different tool's job). Unlike the count-key exception above, no mode ever emits the
+  fuller data instead — so these markers (`nestedPatternCount`, `hasLocalModulation` on
+  `list_channels`' pattern/effect entries) ride on every pattern/effect entry the tool
+  emits in *whichever* mode(s) that kind of entry appears, including a lone
+  summary-mode representative (e.g. `activePattern`) — a marker that only shows up in
+  `full` is useless on a summary payload that silently omitted the same information.
 
 ## Image-bearing results (PR-8)
 

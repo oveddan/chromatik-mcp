@@ -16,6 +16,8 @@ import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.mixer.LXAbstractChannel;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXPatternEngine;
+import heronarts.lx.modulator.MacroKnobs;
+import heronarts.lx.pattern.PatternRack;
 import heronarts.lx.pattern.color.GradientPattern;
 import heronarts.lx.pattern.color.SolidPattern;
 
@@ -215,6 +217,69 @@ class ChannelsTest extends HeadlessLxTest {
 
     assertEquals(mixer.channels().get(added.getIndex()), Channels.describe(added));
     assertEquals(mixer.master(), Channels.describeMaster(lx.engine.mixer.masterBus));
+  }
+
+  @Test
+  void nestedPatternCountReflectsRackChildrenOnly() {
+    // Issue #117: a PatternRack's own child patterns are a separate LXPatternEngine that
+    // describe()'s flat channel.patterns loop never walks — nestedPatternCount must flag
+    // it as a container without pretending to enumerate its children.
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    PatternRack rack = new PatternRack(lx);
+    channel.addPattern(rack);
+    rack.patternEngine.addPattern(new GradientPattern(lx));
+    rack.patternEngine.addPattern(new SolidPattern(lx));
+    SolidPattern ordinary = new SolidPattern(lx);
+    channel.addPattern(ordinary);
+
+    Channels.ChannelInfo info = Channels.list(lx).channels().get(channel.getIndex());
+
+    Channels.PatternInfo rackInfo = findByPath(info, rack);
+    assertEquals(2, rackInfo.nestedPatternCount(),
+        "rack's own two child patterns are counted, not enumerated");
+
+    Channels.PatternInfo ordinaryInfo = findByPath(info, ordinary);
+    assertEquals(0, ordinaryInfo.nestedPatternCount(), "an ordinary pattern hosts no nested patterns");
+  }
+
+  @Test
+  void hasLocalModulationReflectsDeviceOwnModulationEngine() {
+    // Issue #117: every LXDeviceComponent (pattern or effect) carries its own modulation
+    // engine, invisible to list_channels and to a scope-less list_modulations call alike.
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+
+    GradientPattern plainPattern = new GradientPattern(lx);
+    channel.addPattern(plainPattern);
+    GradientPattern modulatedPattern = new GradientPattern(lx);
+    channel.addPattern(modulatedPattern);
+    Modulators.addModulator(lx, modulatedPattern.modulation, MacroKnobs.class);
+
+    BlurEffect plainEffect = new BlurEffect(lx);
+    channel.addEffect(plainEffect);
+    BlurEffect modulatedEffect = new BlurEffect(lx);
+    channel.addEffect(modulatedEffect);
+    Modulators.addModulator(lx, modulatedEffect.modulation, MacroKnobs.class);
+
+    Channels.ChannelInfo info = Channels.list(lx).channels().get(channel.getIndex());
+
+    assertFalse(findByPath(info, plainPattern).hasLocalModulation());
+    assertTrue(findByPath(info, modulatedPattern).hasLocalModulation());
+
+    Channels.EffectInfo plainEffectInfo = findEffectByPath(info, plainEffect);
+    Channels.EffectInfo modulatedEffectInfo = findEffectByPath(info, modulatedEffect);
+    assertFalse(plainEffectInfo.hasLocalModulation());
+    assertTrue(modulatedEffectInfo.hasLocalModulation());
+  }
+
+  private static Channels.EffectInfo findEffectByPath(Channels.ChannelInfo info,
+      heronarts.lx.effect.LXEffect effect) {
+    String path = effect.getCanonicalPath();
+    return info.effects().stream()
+        .filter(e -> e.path().equals(path))
+        .findFirst()
+        .orElseThrow();
   }
 
   @Test

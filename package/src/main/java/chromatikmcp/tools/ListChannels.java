@@ -22,10 +22,11 @@ public final class ListChannels implements LxTool {
     return "List the mixer's channels with their patterns and effects, plus the master bus. "
         + "Defaults to 'detail: summary' — a compact per-channel shape (path, id, label, "
         + "index, type, enabled, fader, patternMode, activePattern, patternCount, "
-        + "effectCount) that is the right choice for surveying a project; a real project "
-        + "can carry dozens of channels and hundreds of patterns/effects, and the full shape "
-        + "blows past client response limits. Pass 'detail: full' for today's complete shape "
-        + "(controls block, full patterns array with per-pattern effects, effects array). "
+        + "effectCount, containerPatternCount, anyLocalModulation) that is the right choice "
+        + "for surveying a project; a real project can carry dozens of channels and hundreds "
+        + "of patterns/effects, and the full shape blows past client response limits. Pass "
+        + "'detail: full' for today's complete shape (controls block, full patterns array "
+        + "with per-pattern effects, effects array). "
         + "Every entry carries its canonical LX path for use with other tools. "
         + "Channels have two pattern modes ('patternMode'): 'playlist' plays one pattern at a "
         + "time — the one with active=true; 'blend' composites all patterns simultaneously — a "
@@ -38,6 +39,25 @@ public final class ListChannels implements LxTool {
         + "Patterns can host their own effect chains — each pattern entry carries its own "
         + "effects list (e.g. a Gradient Mask living inside a pattern rather than on the "
         + "channel; full detail only). "
+        + "Every channel entry — at both detail levels, including summary — carries "
+        + "'containerPatternCount' and 'anyLocalModulation' as channel-wide rollups: they "
+        + "tell you whether hidden structure exists ANYWHERE on the channel, without walking "
+        + "past what this tool already lists. 'containerPatternCount' is how many of the "
+        + "channel's direct patterns are themselves a container (e.g. a PatternRack) whose "
+        + "own child patterns are not in this payload at any detail level — distinct from the "
+        + "channel-level 'patternCount', which counts a channel's own direct patterns, not how "
+        + "many of them are containers; do not conflate the two. 'anyLocalModulation' is true "
+        + "iff any pattern or effect on the channel owns a non-empty device-local modulation "
+        + "engine. Neither rollup says WHICH pattern or effect — for that, use 'detail: full', "
+        + "which puts a 'nestedPatternCount' and 'hasLocalModulation' marker on every pattern "
+        + "and effect entry (call list_parameters on a pattern's path for its 'children' array "
+        + "of nested pattern paths, and list_modulations with scope=<that path> for its local "
+        + "modulation). In summary detail, only the single active pattern in PLAYLIST mode "
+        + "(the 'activePattern' object) carries these per-pattern markers directly — for every "
+        + "other pattern, and for effects (no summary-mode entry; only 'effectCount'), the "
+        + "channel-level rollups are the only summary-detail signal that more exists. The "
+        + "master bus carries 'anyLocalModulation' too (it can only host effects, no "
+        + "patterns, so it has no 'containerPatternCount'). "
         + "The top-level 'mixer' object is the crossfader performance surface: 'crossfader' "
         + "runs 0 (full A) to 1 (full B) — only channels whose 'controls.crossfadeGroup' is "
         + "'A' or 'B' (not 'BYPASS') are affected by it, blended via 'crossfaderBlendMode'. "
@@ -117,6 +137,8 @@ public final class ListChannels implements LxTool {
     entry.put("patterns", patterns(channel.patterns(), blend));
     entry.put("effects", effects(channel.effects()));
     entry.put("controls", channelControls(channel.controls()));
+    entry.put("containerPatternCount", channel.containerPatternCount());
+    entry.put("anyLocalModulation", channel.anyLocalModulation());
     return entry;
   }
 
@@ -146,11 +168,15 @@ public final class ListChannels implements LxTool {
             activePattern.put("path", active.path());
             activePattern.put("label", active.label());
             activePattern.put("class", active.className());
+            activePattern.put("nestedPatternCount", active.nestedPatternCount());
+            activePattern.put("hasLocalModulation", active.hasLocalModulation());
             entry.put("activePattern", activePattern);
           });
     }
     entry.put("patternCount", channel.patterns().size());
     entry.put("effectCount", channel.effects().size());
+    entry.put("containerPatternCount", channel.containerPatternCount());
+    entry.put("anyLocalModulation", channel.anyLocalModulation());
     return entry;
   }
 
@@ -161,6 +187,7 @@ public final class ListChannels implements LxTool {
     entry.put("label", master.label());
     entry.put("fader", master.fader());
     entry.put("effects", effects(master.effects()));
+    entry.put("anyLocalModulation", master.anyLocalModulation());
     return entry;
   }
 
@@ -171,6 +198,7 @@ public final class ListChannels implements LxTool {
     entry.put("label", master.label());
     entry.put("fader", master.fader());
     entry.put("effectCount", master.effects().size());
+    entry.put("anyLocalModulation", master.anyLocalModulation());
     return entry;
   }
 
@@ -263,6 +291,12 @@ public final class ListChannels implements LxTool {
         entry.put("compositeLevel", pattern.compositeLevel());
       }
       entry.put("contributing", pattern.contributing());
+      // Nonzero iff this pattern is itself a container (e.g. a PatternRack) whose own
+      // children are not in this payload — distinct from the channel-level patternCount
+      // above, which counts this channel's own direct patterns, not a pattern's nested
+      // ones. list_parameters on this pattern's path returns those children today.
+      entry.put("nestedPatternCount", pattern.nestedPatternCount());
+      entry.put("hasLocalModulation", pattern.hasLocalModulation());
       entry.put("effects", effects(pattern.effects()));
       result.add(entry);
     }
@@ -278,6 +312,7 @@ public final class ListChannels implements LxTool {
       entry.put("label", effect.label());
       entry.put("class", effect.className());
       entry.put("enabled", effect.enabled());
+      entry.put("hasLocalModulation", effect.hasLocalModulation());
       result.add(entry);
     }
     return result;
