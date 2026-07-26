@@ -74,6 +74,7 @@ async function readTextOrNull(file) {
 
 const catalog = JSON.parse(await readFile(here('../src/data/tools.json'), 'utf8'));
 const toolNames = new Set(catalog.map((t) => t.name));
+const readOnlyToolNames = new Set(catalog.filter((t) => t.readOnly === true).map((t) => t.name));
 
 // Tool names/prefixes may appear bare (get_status) or MCP-prefixed
 // (mcp__chromatik__get_status). Strip the prefix before tokenizing so the remainder is
@@ -177,6 +178,69 @@ if (violations.length) {
   console.error(
     'Update the reference (or regenerate tools.json if the tool was renamed) before merging. ' +
       'If this is a genuine non-tool snake_case token, add it to the IGNORE list in check-plugin-tool-names.mjs with a comment.',
+  );
+  process.exit(1);
+}
+
+// Read-only enforcement: some agents (chromatik-reviewer, project-surveyor) document
+// their `tools:` allowlist as a *guarantee* that they can only read, never mutate, a
+// live show. Nothing checked that guarantee before — a mutating tool name typed into an
+// agent's `tools:` line passed the plain existence check above just as happily as a
+// read-only one. This section is the enforcement the agents' own prose claims exists.
+const agentFiles = files.filter((f) => path.relative(pluginDir, f).startsWith(`agents${path.sep}`));
+const readOnlyViolations = [];
+const missingReadOnlyViolations = [];
+
+for (const file of agentFiles) {
+  const text = await readTextOrNull(file);
+  if (text === null) continue;
+  const { frontmatter } = splitFrontmatter(text);
+  const toolsLines = toolsFrontmatterLineValues(frontmatter);
+  if (toolsLines.length === 0) continue;
+
+  const grantedTokens = toolsLines.flatMap((line) => tokensIn(line)).map(([token]) => token);
+  const grantedSet = new Set(grantedTokens);
+  const relFile = path.relative(here('../..'), file);
+
+  // (a) Never grant a mutating tool — this applies to every agent, unconditionally: an
+  // agent's `tools:` line should never contain a name whose tools.json entry isn't
+  // readOnly: true, regardless of whether the agent claims to be read-only in prose.
+  for (const token of grantedTokens) {
+    if (toolNames.has(token) && !readOnlyToolNames.has(token)) {
+      readOnlyViolations.push({ file: relFile, token });
+    }
+  }
+
+  // (b) A newly added read-only tool should not silently skip an existing read-only
+  // agent's allowlist. Scoped to agents that already list get_status — the marker both
+  // current read-only agents (chromatik-reviewer, project-surveyor) share — so a future,
+  // deliberately narrow agent can opt out of this check simply by not listing get_status.
+  if (grantedSet.has('get_status')) {
+    for (const name of readOnlyToolNames) {
+      if (!grantedSet.has(name)) {
+        missingReadOnlyViolations.push({ file: relFile, token: name });
+      }
+    }
+  }
+}
+
+if (readOnlyViolations.length) {
+  console.error('check-plugin-tool-names.mjs: agent tools: line grants a tool that is not readOnly in tools.json:');
+  for (const { file, token } of readOnlyViolations) {
+    console.error(`  ${file}: ${token}`);
+  }
+  console.error('Remove the mutating tool from the agent allowlist, or document why this agent is allowed to mutate state.');
+  process.exit(1);
+}
+
+if (missingReadOnlyViolations.length) {
+  console.error('check-plugin-tool-names.mjs: agent tools: line lists get_status (a read-only agent marker) but is missing a read-only tool from tools.json:');
+  for (const { file, token } of missingReadOnlyViolations) {
+    console.error(`  ${file}: ${token}`);
+  }
+  console.error(
+    'Add the tool to the agent allowlist, or (if this agent is deliberately narrower than the full read-only set) ' +
+      'remove get_status from its tools: line to opt out of this check.',
   );
   process.exit(1);
 }

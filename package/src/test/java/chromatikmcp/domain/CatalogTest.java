@@ -579,13 +579,16 @@ class CatalogTest {
   // ── regression: candidate bytesMatch must agree with get_component_doc's per-class
   // staleness verdict, both backed by the one cached hash ──────────────────────────────
   //
-  // Before this fix, Catalog.rank computed its own liveHash uncached, while
-  // GetComponentDoc separately recomputed bytesMatch from Catalog.computeBytesHash(Class)
-  // (the fqcn-keyed static cache) — two independent computations that could disagree,
-  // most concretely right after a Chromatik content reload replaces a class's loader
-  // without invalidating that cache. Routing both through the one hash computed here
-  // (via the 4-arg resolveCandidates a real Class enables) makes them the same value by
-  // construction. This also exercises Fix 5's replacement for the old
+  // Before #148, Catalog.rank computed its own liveHash uncached, while GetComponentDoc
+  // separately recomputed bytesMatch from Catalog.computeBytesHash(Class) (the fqcn-keyed
+  // static cache) — two independent computations that could disagree, most concretely
+  // right after a Chromatik content reload replaces a class's loader without invalidating
+  // that cache. Routing both through the one hash computed here (via the 4-arg
+  // resolveCandidates a real Class enables) makes them the same value by construction.
+  // GetComponentDoc's top-level `stale` field now reads candidates().get(0).bytesMatch()
+  // directly (rather than a second Catalog.staleness call), so this test also protects
+  // the invariant that makes that safe: see the merged-entry assertion below. This also
+  // exercises Fix 5's replacement for the old
   // target/test-classes/ planting trick: a throwaway URLClassLoader stands in for a
   // second package jar shipping the same entry name, so nothing touches the build's own
   // classpath (a leftover planted directory there would shadow the real catalog for every
@@ -615,15 +618,16 @@ class CatalogTest {
       assertEquals(Catalog.Staleness.STALE, planted.bytesMatch(),
           "the planted fixture's all-zero hash cannot match live GradientPattern bytecode");
 
-      // The exact defect this fixes: read off the Candidate, this is definitionally the
-      // same verdict Catalog.staleness (what get_component_doc's top-level `stale` field
-      // uses) reports for the winner — not a second, independent computation that could
-      // disagree with it.
+      // get_component_doc's top-level `stale` field now reads
+      // resolution.candidates().get(0).bytesMatch() directly rather than recomputing via
+      // Catalog.staleness — correct only if mergeCandidates carries the winning candidate's
+      // classBytesSha256 through untouched onto the merged entry. Assert that invariant
+      // directly, rather than comparing two calls into the same compareHashes() helper
+      // (which agree by construction and would make this assertion a tautology).
       assertEquals(
-          Catalog.staleness(GradientPattern.class, real.entry().frontmatter().get("classBytesSha256")),
-          real.bytesMatch(),
-          "candidate bytesMatch must be backed by the same cached hash as the top-level "
-              + "staleness verdict, not recomputed independently");
+          real.entry().frontmatter().get("classBytesSha256"),
+          result.merged().entry().frontmatter().get("classBytesSha256"),
+          "merged entry must carry the winning candidate's classBytesSha256 through unchanged");
     } finally {
       deleteRecursively(plantedDir);
     }

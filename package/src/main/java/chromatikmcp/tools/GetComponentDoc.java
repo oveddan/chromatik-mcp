@@ -140,7 +140,14 @@ public final class GetComponentDoc implements LxTool {
 
     Catalog.Frontmatter fm = entry.frontmatter();
     String recordedHash = fm.get("classBytesSha256");
-    Catalog.Staleness staleness = Catalog.staleness(clazz, recordedHash);
+    // Read the domain's verdict rather than recomputing it here: candidates() is always
+    // winner-first (overlay prepended, ranked otherwise) and non-empty whenever merged().entry()
+    // is non-null, and mergeCandidates copies the base's classBytesSha256 through untouched, so
+    // candidates().get(0).bytesMatch() is by construction the verdict for the same frontmatter
+    // hash this merged entry carries. Recomputing separately (as this used to) is how this field
+    // could disagree with the ranking that actually picked the winner (see the candidates loop
+    // below, and #148, which fixed the same defect for candidates[].bytesMatch).
+    Catalog.Staleness staleness = resolution.candidates().get(0).bytesMatch();
     Object stale = switch (staleness) {
       case FRESH -> Boolean.FALSE;
       case STALE -> Boolean.TRUE;

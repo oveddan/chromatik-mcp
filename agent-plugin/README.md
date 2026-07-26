@@ -13,14 +13,17 @@ agents) working on the plugin itself.
 .codex-plugin/plugin.json    Codex plugin manifest (points "skills" at ./skills/)
 .mcp.json                    Bundled MCP server connection (chromatik, over HTTP)
 LICENSE                      Copy of the repo LICENSE — the tarball ships standalone
-skills/driving-chromatik/    The one skill this plugin currently carries
+agents/                      chromatik-reviewer, project-surveyor
+commands/                    /chromatik-review, /chromatik-learn
+skills/driving-chromatik/    House rules for driving a live Chromatik
+skills/project-profile/      House rules for surveying an existing project
 ```
 
 Both ecosystem manifests live at the plugin root, one directory apart
 (`.claude-plugin/` and `.codex-plugin/`) — Claude Code ignores manifest fields it doesn't
 recognize, so a single `agent-plugin/` tree serves both toolchains without duplication.
-Component directories (`skills/`, and future `agents/`, `commands/`) live at the plugin
-root, never inside either dotted manifest directory.
+Component directories (`skills/`, `agents/`, `commands/`) live at the plugin root, never
+inside either dotted manifest directory.
 
 ## Dogfooding locally
 
@@ -59,3 +62,6 @@ untouched by the generator and is fine to hand-edit.
   directory's `.mcp.json` is a Claude Code feature; Codex's own MCP dependency
   declaration (`skills/driving-chromatik/agents/openai.yaml`) uses a literal port instead
   for that reason.
+- `.codex-plugin/plugin.json` declares only `"skills": "./skills/"`, so Codex picks up
+  both skills but has no manifest field declaring `agents/` or `commands/` — whether
+  Codex has any equivalent mechanism for those is unverified.

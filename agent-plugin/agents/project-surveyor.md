@@ -82,12 +82,12 @@ If `get_status` succeeds, you have live tool access. Proceed with your assigned 
   effect* instance: one row per parameter including unmodulated ones, FQCN in the
   heading. This is the only concern that emits per-instance target tables.
 - **global-modulation** — every modulator by class and engine scope (`list_modulations`,
-  both the global engine and per-device scopes you can reach), the wiring graph, tempo
-  sync usage (excluding, from any tempo-synced fraction, modulator classes with no
-  tempo-sync parameter at all — e.g. `CycleModulator`, which extends `LXModulator`
-  directly rather than `LXPeriodicModulator`). Report which instance each modulator
-  targets by path so `pattern-modulation` can cross-reference, but do not produce
-  per-instance tables yourself — that duplicates `pattern-modulation`'s ground.
+  both the global engine and per-device scopes you can reach), the wiring graph, depth
+  distribution, tempo sync usage (excluding, from any tempo-synced fraction, modulator
+  classes with no tempo-sync parameter at all — e.g. `CycleModulator`, which extends
+  `LXModulator` directly rather than `LXPeriodicModulator`). Report which instance each
+  modulator targets by path so `pattern-modulation` can cross-reference, but do not
+  produce per-instance tables yourself — that duplicates `pattern-modulation`'s ground.
 - **external-control** — MIDI devices/surfaces/mappings, OSC receive/transmit state and
   clock source (`get_tempo`, `get_project_info`). Note explicitly that DAW-side (e.g.
   Bitwig/Ableton project) mapping is out of reach of any tool here — you can report what
