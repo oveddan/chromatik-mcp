@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -823,6 +824,19 @@ class ToolsIntegrationTest {
     assertEquals(lx.engine.framesPerSecond.getValue(),
         ((Number) engine.get("framesPerSecond")).doubleValue());
     assertEquals(lx.engine.framesPerSecond.getCanonicalPath(), engine.get("framesPerSecondPath"));
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> model = (Map<String, Object>) payload.get("model");
+    assertNotNull(model, "get_project_info reports the model's link to an external .lxm file");
+    assertEquals(lx.structure.modelName.getString(), model.get("name"));
+    assertNull(model.get("file"), "the fixture in this suite has no linked .lxm, so file is absent");
+    assertFalse(model.containsKey("file"), "absent file must be an omitted key, not a JSON null");
+    assertEquals(lx.structure.isExternalModel(), model.get("external"));
+    assertEquals(lx.structure.isStatic.isOn(), model.get("isStatic"));
+    assertFalse(model.containsKey("hasUnsavedChanges"),
+        "hasUnsavedChanges is omitted when the model isn't external");
+    assertEquals(lx.structure.syncModelFile.isOn(), model.get("syncModelFile"));
+    assertEquals(Resolve.canonicalPath(lx.structure.syncModelFile), model.get("syncModelFilePath"));
 
     assertFalse(result.content().isEmpty(), "success also carries a text mirror");
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
@@ -3064,10 +3078,10 @@ class ToolsIntegrationTest {
   void getProjectInfoPayloadContainsNoNullPaths() {
     // Regression guard, not a live reproduction: every component reachable from
     // get_project_info (LXOutput's enabled/brightness/gamma/gammaMode, LXEngine's
-    // speed/framesPerSecond) is addParameter'd at construction, so reverting
-    // GetProjectInfo's conditional-put guards would not fail this test. See
-    // getPalettePayloadContainsNoNullPaths for the one currently-reachable instance of the
-    // hazard this PR guards against.
+    // speed/framesPerSecond, LXStructure's syncModelFile) is addParameter'd at
+    // construction, so reverting GetProjectInfo's conditional-put guards would not fail
+    // this test. See getPalettePayloadContainsNoNullPaths for the one currently-reachable
+    // instance of the hazard this PR guards against.
     Map<String, Object> payload = structured(call("get_project_info", Map.of()));
     StringBuilder errors = new StringBuilder();
     walkForNullPaths(payload, "", errors);

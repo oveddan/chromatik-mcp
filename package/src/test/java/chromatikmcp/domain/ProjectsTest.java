@@ -1,15 +1,22 @@
 package chromatikmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.File;
+import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import chromatikmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXPath;
+import heronarts.lx.structure.GridFixture;
 
 class ProjectsTest extends HeadlessLxTest {
 
@@ -79,5 +86,88 @@ class ProjectsTest extends HeadlessLxTest {
     assertSame(lx.engine.speed, LXPath.get(lx, engine.speedPath()));
     assertEquals(lx.engine.framesPerSecond.getValue(), engine.framesPerSecond());
     assertSame(lx.engine.framesPerSecond, LXPath.get(lx, engine.framesPerSecondPath()));
+  }
+
+  @Test
+  void reportsModelInfoWithNoLinkedModelFile() {
+    LX lx = newHeadlessLx();
+    Projects.ModelInfo model = Projects.info(lx).model();
+    assertNull(model.file(), "headless LX with no import/export has no linked model file");
+    assertFalse(model.external());
+    assertEquals(lx.structure.modelName.getString(), model.name(),
+        "name mirrors LXStructure's own default, not a hardcoded literal");
+  }
+
+  @Test
+  void reportsModelInfoForAProjectBoundToAnExternalModelFile(@TempDir Path tempDir) {
+    LX.Flags flags = new LX.Flags();
+    flags.mediaPath = tempDir.toString();
+    LX lx = track(new LX(flags));
+    File modelFile = tempDir.resolve("Test.lxm").toFile();
+    lx.structure.exportModel(modelFile);
+
+    Projects.ModelInfo model = Projects.info(lx).model();
+    assertEquals(modelFile.getAbsolutePath(), model.file());
+    assertEquals(modelFile.getName(), model.name());
+    assertTrue(model.external());
+    assertFalse(model.isStatic());
+    assertFalse(model.hasUnsavedChanges());
+    assertEquals(lx.structure.syncModelFile.isOn(), model.syncModelFile());
+    assertEquals(Resolve.canonicalPath(lx.structure.syncModelFile), model.syncModelFilePath());
+    // lx.structure isn't parented under lx.engine, so its parameters are unreachable
+    // through the raw LXPath.get(lx, ...) used above for engine-descendant paths;
+    // Resolve.parameter is the domain-level resolver that special-cases the structure
+    // tree (see Resolve.canonicalPath's javadoc) and is what set_parameter uses.
+    assertSame(lx.structure.syncModelFile, Resolve.parameter(lx, model.syncModelFilePath()),
+        "syncModelFilePath must round-trip through Resolve");
+  }
+
+  @Test
+  void reportsSyncModelFileWhenEnabled(@TempDir Path tempDir) {
+    LX.Flags flags = new LX.Flags();
+    flags.mediaPath = tempDir.toString();
+    LX lx = track(new LX(flags));
+    File modelFile = tempDir.resolve("Test.lxm").toFile();
+    lx.structure.exportModel(modelFile);
+    lx.structure.syncModelFile.setValue(true);
+
+    Projects.ModelInfo model = Projects.info(lx).model();
+    assertTrue(model.external());
+    assertEquals(modelFile.getAbsolutePath(), model.file());
+    assertTrue(model.syncModelFile());
+  }
+
+  @Test
+  void syncModelFilePathCanBeSetFalseThroughSetParameter(@TempDir Path tempDir) {
+    LX.Flags flags = new LX.Flags();
+    flags.mediaPath = tempDir.toString();
+    LX lx = track(new LX(flags));
+    File modelFile = tempDir.resolve("Test.lxm").toFile();
+    lx.structure.exportModel(modelFile);
+    lx.structure.syncModelFile.setValue(true);
+
+    Projects.ModelInfo model = Projects.info(lx).model();
+    Parameters.set(lx, model.syncModelFilePath(), false);
+
+    assertFalse(lx.structure.syncModelFile.isOn());
+
+    lx.command.undo();
+
+    assertTrue(lx.structure.syncModelFile.isOn());
+  }
+
+  @Test
+  void reportsUnsavedChangesAfterStructureMutation(@TempDir Path tempDir) {
+    LX.Flags flags = new LX.Flags();
+    flags.mediaPath = tempDir.toString();
+    LX lx = track(new LX(flags));
+    File modelFile = tempDir.resolve("Test.lxm").toFile();
+    lx.structure.exportModel(modelFile);
+
+    Fixtures.addFixtureByClass(lx, GridFixture.class, null, null, null);
+
+    Projects.ModelInfo model = Projects.info(lx).model();
+    assertTrue(model.hasUnsavedChanges());
+    assertTrue(model.name().endsWith("*"), "dirty external model name carries a trailing *");
   }
 }
