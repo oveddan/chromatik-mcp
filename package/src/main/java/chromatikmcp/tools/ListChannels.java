@@ -9,6 +9,7 @@ import java.util.Map;
 import heronarts.lx.LX;
 
 import chromatikmcp.domain.Channels;
+import chromatikmcp.domain.Views;
 
 public final class ListChannels implements LxTool {
 
@@ -22,7 +23,7 @@ public final class ListChannels implements LxTool {
     return "List the mixer's channels with their patterns and effects, plus the master bus. "
         + "Defaults to 'detail: summary' — a compact per-channel shape (path, id, label, "
         + "index, type, enabled, fader, patternMode, activePattern, patternCount, "
-        + "effectCount, containerPatternCount, anyLocalModulation) that is the right choice "
+        + "effectCount, containerPatternCount, anyLocalModulation, view) that is the right choice "
         + "for surveying a project; a real project can carry dozens of channels and hundreds "
         + "of patterns/effects, and the full shape blows past client response limits. Pass "
         + "'detail: full' for today's complete shape (controls block, full patterns array "
@@ -58,6 +59,43 @@ public final class ListChannels implements LxTool {
         + "channel-level rollups are the only summary-detail signal that more exists. The "
         + "master bus carries 'anyLocalModulation' too (it can only host effects, no "
         + "patterns, so it has no 'containerPatternCount'). "
+        + "Every channel, pattern, and effect entry — at both detail levels for channels; "
+        + "pattern/effect entries only exist at 'detail: full', plus the summary-mode "
+        + "'activePattern' object — carries a 'view' object reporting its model-view "
+        + "assignment when there is something to report (the master bus itself never has a "
+        + "'view' key; it has no view selector, though its own effects do). An entry with NO "
+        + "'view' key is on Default and renders to the whole model — the settable selector "
+        + "for any channel, pattern, or effect entry is always that entry's own 'path' + "
+        + "'/view', so no key is needed to address it via set_parameter (the master bus is "
+        + "the one exception: it has no view selector at all, so no such path exists for "
+        + "it). When 'view' IS present: 'selected'/'selectedPath' "
+        + "are omitted when the selector is on 'Default' (inherits from its parent: a channel "
+        + "inherits from its group, a pattern/effect inherits from its host channel or "
+        + "pattern; a master-bus effect on Default inherits the whole model, because the "
+        + "master bus has no view of its own to inherit — but it can set its own view, and "
+        + "then renders to that); 'effective'/"
+        + "'effectivePath' are omitted when this component renders to the whole model. "
+        + "Read the combinations: 'selected' present and 'effective' present = this entry "
+        + "sets its own view (they are always the same view in this case); 'selected' absent "
+        + "but 'effective' present = it is on Default and inherited that view from its "
+        + "parent; 'selected' present but 'effective' absent = LX built no view object for "
+        + "the selected view, so this entry falls back to the whole model. LX builds one only "
+        + "when the model is non-empty AND the view is enabled AND its selector string is "
+        + "non-blank — if any of those fails, everything pointing at that view falls back. "
+        + "That is NOT the same as 'the view matches no fixtures': an enabled view with a "
+        + "non-blank selector in a non-empty model still gets a view object even when it "
+        + "currently matches zero fixtures, so 'effective' stays set to it and get_views "
+        + "reports it with numGroups/numFixtures of 0 — detect 'assigned to a view that "
+        + "lights nothing' by checking those counts via 'effectivePath', never by "
+        + "presence/absence. A pattern's own 'view' can "
+        + "override its channel's — do not assume a channel's view describes what its active "
+        + "pattern renders to; check the pattern's own 'view' (or 'activePattern.view' in "
+        + "summary detail). 'effectivePath' joins to get_views, which reports each view's "
+        + "'selector', 'numGroups', 'numFixtures', 'normalization', and 'orientation' — a "
+        + "pattern whose 'effective' view differs from its channel's may normalize its "
+        + "coordinates differently (not just light a different set of points), so compare "
+        + "'normalization'/'orientation' between the two views before reasoning about a "
+        + "pattern's coordinate-space behavior. "
         + "The top-level 'mixer' object is the crossfader performance surface: 'crossfader' "
         + "runs 0 (full A) to 1 (full B) — only channels whose 'controls.crossfadeGroup' is "
         + "'A' or 'B' (not 'BYPASS') are affected by it, blended via 'crossfaderBlendMode'. "
@@ -139,6 +177,10 @@ public final class ListChannels implements LxTool {
     entry.put("controls", channelControls(channel.controls()));
     entry.put("containerPatternCount", channel.containerPatternCount());
     entry.put("anyLocalModulation", channel.anyLocalModulation());
+    Map<String, Object> view = viewRefOrNull(channel.view());
+    if (view != null) {
+      entry.put("view", view);
+    }
     return entry;
   }
 
@@ -170,6 +212,10 @@ public final class ListChannels implements LxTool {
             activePattern.put("class", active.className());
             activePattern.put("nestedPatternCount", active.nestedPatternCount());
             activePattern.put("hasLocalModulation", active.hasLocalModulation());
+            Map<String, Object> activeView = viewRefOrNull(active.view());
+            if (activeView != null) {
+              activePattern.put("view", activeView);
+            }
             entry.put("activePattern", activePattern);
           });
     }
@@ -177,6 +223,10 @@ public final class ListChannels implements LxTool {
     entry.put("effectCount", channel.effects().size());
     entry.put("containerPatternCount", channel.containerPatternCount());
     entry.put("anyLocalModulation", channel.anyLocalModulation());
+    Map<String, Object> view = viewRefOrNull(channel.view());
+    if (view != null) {
+      entry.put("view", view);
+    }
     return entry;
   }
 
@@ -208,6 +258,29 @@ public final class ListChannels implements LxTool {
     // Same object shape as full detail minus the long options array — a key whose JSON type
     // changed with `detail` would silently break clients reading .current or .path.
     entry.put("crossfaderBlendMode", enumField(controls.crossfaderBlendMode(), false));
+    return entry;
+  }
+
+  // See the tool description for how to read the presence/absence of each key: 'selected'
+  // absent means Default (inherits); 'effective' absent means "renders to the whole model".
+  // Returns null (key omitted entirely) when both are absent — selectorPath alone is pure
+  // derivable string (<entry path> + "/view") and not worth a key on every entry.
+  private static Map<String, Object> viewRefOrNull(Views.ViewRef view) {
+    if (view.selectedLabel() == null && view.effectiveLabel() == null) {
+      return null;
+    }
+    Map<String, Object> entry = new LinkedHashMap<>();
+    if (view.selectorPath() != null) {
+      entry.put("selectorPath", view.selectorPath());
+    }
+    if (view.selectedLabel() != null) {
+      entry.put("selected", view.selectedLabel());
+      entry.put("selectedPath", view.selectedPath());
+    }
+    if (view.effectiveLabel() != null) {
+      entry.put("effective", view.effectiveLabel());
+      entry.put("effectivePath", view.effectivePath());
+    }
     return entry;
   }
 
@@ -297,6 +370,10 @@ public final class ListChannels implements LxTool {
       // ones. list_parameters on this pattern's path returns those children today.
       entry.put("nestedPatternCount", pattern.nestedPatternCount());
       entry.put("hasLocalModulation", pattern.hasLocalModulation());
+      Map<String, Object> view = viewRefOrNull(pattern.view());
+      if (view != null) {
+        entry.put("view", view);
+      }
       entry.put("effects", effects(pattern.effects()));
       result.add(entry);
     }
@@ -313,6 +390,10 @@ public final class ListChannels implements LxTool {
       entry.put("class", effect.className());
       entry.put("enabled", effect.enabled());
       entry.put("hasLocalModulation", effect.hasLocalModulation());
+      Map<String, Object> view = viewRefOrNull(effect.view());
+      if (view != null) {
+        entry.put("view", view);
+      }
       result.add(entry);
     }
     return result;

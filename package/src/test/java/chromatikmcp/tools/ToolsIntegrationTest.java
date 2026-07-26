@@ -1029,6 +1029,9 @@ class ToolsIntegrationTest {
     assertNotNull(entry.get("path"));
     assertNotNull(entry.get("label"));
     assertEquals("playlist", entry.get("patternMode"));
+    assertFalse(entry.containsKey("view"),
+        "a fully-Default entry carries no view key — selectorPath alone is derivable "
+            + "(path + \"/view\") and not worth reporting");
 
     Map<String, Object> master = (Map<String, Object>) payload.get("master");
     assertFalse(master.containsKey("effects"), "master summary omits the effects array");
@@ -1482,6 +1485,177 @@ class ToolsIntegrationTest {
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listChannelsReportsModelViewAssignmentAcrossChannelPatternAndEffect() {
+    // Issue #153. Two distinct view definitions (same selector text — GridModel's root
+    // carries "grid" but no descendant submodels, so neither matches a fixture; each
+    // LXViewDefinition still owns its own distinct LXView instance, which is exactly what
+    // the identity-match in Views.viewRef relies on).
+    Map<String, Object> addedA = structured(
+        call("add_view", Map.of("label", "Reporting Whole", "selector", "grid")));
+    Map<String, Object> addedB = structured(
+        call("add_view", Map.of("label", "Reporting Override", "selector", "grid")));
+    String viewAPath = (String) addedA.get("path");
+    String viewBPath = (String) addedB.get("path");
+    heronarts.lx.structure.view.LXViewDefinition viewA = lx.structure.views.views.stream()
+        .filter(v -> Resolve.canonicalPath(v).equals(viewAPath)).findFirst().orElseThrow();
+    heronarts.lx.structure.view.LXViewDefinition viewB = lx.structure.views.views.stream()
+        .filter(v -> Resolve.canonicalPath(v).equals(viewBPath)).findFirst().orElseThrow();
+
+    class Holder {
+      LXChannel channel;
+      GradientPattern defaultPattern;
+      GradientPattern overridingPattern;
+      BlurEffect channelEffect;
+    }
+    Holder h = new Holder();
+    try {
+      withChannel(() -> {
+        h.channel = lx.engine.mixer.addChannel();
+        h.channel.view.setValue(viewA);
+        // First pattern added to an empty channel auto-activates — lands as summary's
+        // 'activePattern', which is exactly the case this test wants to cover for 'view'.
+        h.defaultPattern = new GradientPattern(lx);
+        h.channel.addPattern(h.defaultPattern);
+        h.overridingPattern = new GradientPattern(lx);
+        h.channel.addPattern(h.overridingPattern);
+        h.overridingPattern.view.setValue(viewB);
+        h.channelEffect = new BlurEffect(lx);
+        h.channel.addEffect(h.channelEffect);
+        return h.channel;
+      }, () -> {
+        String channelPath = h.channel.getCanonicalPath();
+        Map<String, Object> full =
+            channelEntry(structured(call("list_channels", Map.of("detail", "full"))), channelPath);
+
+        Map<String, Object> channelView = (Map<String, Object>) full.get("view");
+        assertEquals(Resolve.canonicalPathOrNull(h.channel.view), channelView.get("selectorPath"));
+        assertEquals(channelPath + "/view", channelView.get("selectorPath"),
+            "selectorPath is derivable as the entry's own path + '/view'");
+        assertEquals("Reporting Whole", channelView.get("selected"));
+        assertEquals(viewAPath, channelView.get("selectedPath"));
+        assertEquals("Reporting Whole", channelView.get("effective"),
+            "channel's own explicit selection is what it renders to");
+        assertEquals(viewAPath, channelView.get("effectivePath"));
+
+        List<Map<String, Object>> patterns = (List<Map<String, Object>>) full.get("patterns");
+        Map<String, Object> defaultEntry = patterns.stream()
+            .filter(p -> h.defaultPattern.getCanonicalPath().equals(p.get("path")))
+            .findFirst().orElseThrow();
+        Map<String, Object> defaultView = (Map<String, Object>) defaultEntry.get("view");
+        assertFalse(defaultView.containsKey("selected"), "pattern's own selector is on Default");
+        assertFalse(defaultView.containsKey("selectedPath"));
+        assertEquals("Reporting Whole", defaultView.get("effective"), "inherits the channel's view");
+        assertEquals(viewAPath, defaultView.get("effectivePath"));
+
+        Map<String, Object> overridingEntry = patterns.stream()
+            .filter(p -> h.overridingPattern.getCanonicalPath().equals(p.get("path")))
+            .findFirst().orElseThrow();
+        Map<String, Object> overridingView = (Map<String, Object>) overridingEntry.get("view");
+        assertEquals(h.overridingPattern.getCanonicalPath() + "/view", overridingView.get("selectorPath"),
+            "selectorPath is derivable as the entry's own path + '/view'");
+        assertEquals("Reporting Override", overridingView.get("selected"));
+        assertEquals("Reporting Override", overridingView.get("effective"));
+        assertEquals(viewBPath, overridingView.get("effectivePath"));
+        assertNotEquals(channelView.get("effectivePath"), overridingView.get("effectivePath"),
+            "pattern's own view overrides its channel's");
+
+        List<Map<String, Object>> effects = (List<Map<String, Object>>) full.get("effects");
+        Map<String, Object> channelEffectEntry = effects.stream()
+            .filter(e -> h.channelEffect.getCanonicalPath().equals(e.get("path")))
+            .findFirst().orElseThrow();
+        Map<String, Object> channelEffectView = (Map<String, Object>) channelEffectEntry.get("view");
+        assertEquals(h.channelEffect.getCanonicalPath() + "/view", channelEffectView.get("selectorPath"),
+            "selectorPath is derivable as the entry's own path + '/view'");
+        assertFalse(channelEffectView.containsKey("selected"), "effect's own selector is on Default");
+        assertEquals("Reporting Whole", channelEffectView.get("effective"), "inherits the channel's view");
+
+        // Summary detail carries the same channel-level 'view' object, plus 'activePattern.view'.
+        Map<String, Object> summary = channelEntry(structured(call("list_channels", Map.of())), channelPath);
+        assertEquals(channelView, summary.get("view"));
+        Map<String, Object> activePattern = (Map<String, Object>) summary.get("activePattern");
+        assertEquals(h.defaultPattern.getCanonicalPath(), activePattern.get("path"),
+            "the auto-activated first pattern");
+        assertEquals(defaultView, activePattern.get("view"));
+      });
+    } finally {
+      // View paths are index-based and shift on removal — remove the later-added view
+      // first so the earlier-added view's captured path stays valid.
+      structured(call("remove_view", Map.of("path", viewBPath)));
+      structured(call("remove_view", Map.of("path", viewAPath)));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void masterBusEffectHasNoSelectionAndMasterPayloadCarriesNoViewKey() {
+    // Issue #153: LXMasterBus has no view selector of its own (verified against LX
+    // source — it is not an LXAbstractChannel), but its effects are ordinary
+    // LXDeviceComponents with their own settable view; on Default they inherit the
+    // whole model because the master bus has no view of its own to inherit.
+    EngineExecutor executor = new EngineExecutor(lx);
+    BlurEffect masterEffect = executor.call(() -> {
+      BlurEffect e = new BlurEffect(lx);
+      lx.engine.mixer.masterBus.addEffect(e);
+      return e;
+    });
+    try {
+      Map<String, Object> full = structured(call("list_channels", Map.of("detail", "full")));
+      Map<String, Object> master = (Map<String, Object>) full.get("master");
+      assertFalse(master.containsKey("view"), "the master bus itself has no view selector");
+
+      List<Map<String, Object>> masterEffects = (List<Map<String, Object>>) master.get("effects");
+      Map<String, Object> effectEntry = masterEffects.stream()
+          .filter(e -> masterEffect.getCanonicalPath().equals(e.get("path")))
+          .findFirst().orElseThrow();
+      assertFalse(effectEntry.containsKey("view"),
+          "on Default, a master-bus effect inherits the whole model, so 'view' carries nothing and is omitted");
+
+      Map<String, Object> getChannelMaster = structured(
+          call("get_channel", Map.of("path", lx.engine.mixer.masterBus.getCanonicalPath())));
+      assertFalse(getChannelMaster.containsKey("view"), "get_channel(master) matches list_channels' master shape");
+    } finally {
+      executor.execute(() -> lx.engine.mixer.masterBus.removeEffect(masterEffect));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void masterBusEffectWithExplicitViewReportsThatViewNotTheWholeModel() {
+    // Corrects the "master-bus effects always inherit the whole model" claim: a master-bus
+    // effect can set its own view, and then renders to that, not to lx.model.
+    Map<String, Object> addedView = structured(
+        call("add_view", Map.of("label", "Master Effect View", "selector", "grid")));
+    String viewPath = (String) addedView.get("path");
+    heronarts.lx.structure.view.LXViewDefinition view = lx.structure.views.views.stream()
+        .filter(v -> Resolve.canonicalPath(v).equals(viewPath)).findFirst().orElseThrow();
+
+    EngineExecutor executor = new EngineExecutor(lx);
+    BlurEffect masterEffect = executor.call(() -> {
+      BlurEffect e = new BlurEffect(lx);
+      lx.engine.mixer.masterBus.addEffect(e);
+      e.view.setValue(view);
+      return e;
+    });
+    try {
+      Map<String, Object> full = structured(call("list_channels", Map.of("detail", "full")));
+      Map<String, Object> master = (Map<String, Object>) full.get("master");
+      List<Map<String, Object>> masterEffects = (List<Map<String, Object>>) master.get("effects");
+      Map<String, Object> effectEntry = masterEffects.stream()
+          .filter(e -> masterEffect.getCanonicalPath().equals(e.get("path")))
+          .findFirst().orElseThrow();
+      Map<String, Object> effectView = (Map<String, Object>) effectEntry.get("view");
+      assertEquals("Master Effect View", effectView.get("selected"),
+          "master-bus effect set its own view, unlike the Default case");
+      assertEquals("Master Effect View", effectView.get("effective"));
+      assertEquals(viewPath, effectView.get("effectivePath"));
+    } finally {
+      executor.execute(() -> lx.engine.mixer.masterBus.removeEffect(masterEffect));
+      structured(call("remove_view", Map.of("path", viewPath)));
+    }
   }
 
   @Test

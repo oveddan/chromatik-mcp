@@ -20,6 +20,7 @@ import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.pattern.PatternRack;
 import heronarts.lx.pattern.color.GradientPattern;
 import heronarts.lx.pattern.color.SolidPattern;
+import heronarts.lx.structure.view.LXViewDefinition;
 
 class ChannelsTest extends HeadlessLxTest {
 
@@ -300,5 +301,32 @@ class ChannelsTest extends HeadlessLxTest {
     assertEquals(BlurEffect.class.getName(), effectInfo.className());
     assertSame(pattern.getEffects().get(pattern.getEffects().size() - 1), LXPath.get(lx, effectInfo.path()),
         "pattern effect path must round-trip through LXPath");
+  }
+
+  @Test
+  void channelPatternAndEffectInfoCarryTheirViewAssignment() {
+    // Issue #153: describe()/effects() must thread Views.viewRef through for every
+    // channel, pattern and effect entry — assert against the same primitive Views owns,
+    // rather than re-deriving the expected shape here.
+    LX lx = newHeadlessLx();
+    LXViewDefinition view = lx.structure.views.addView();
+    view.label.setValue("Some View");
+    view.selector.setValue("no-such-tag"); // enabled, matches nothing on GridModel — still a
+                                            // real (empty) LXView, see ViewsTest.
+
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.view.setValue(view);
+    SolidPattern pattern = new SolidPattern(lx);
+    channel.addPattern(pattern);
+    pattern.view.setValue(view);
+    BlurEffect effect = new BlurEffect(lx);
+    channel.addEffect(effect);
+    effect.view.setValue(view);
+
+    Channels.ChannelInfo info = Channels.list(lx).channels().get(channel.getIndex());
+    assertEquals(Views.viewRef(channel), info.view());
+    assertEquals(Views.viewRef(pattern), findByPath(info, pattern).view());
+    assertEquals(Views.viewRef(effect), findEffectByPath(info, effect).view());
+    assertEquals("Some View", info.view().effectiveLabel());
   }
 }

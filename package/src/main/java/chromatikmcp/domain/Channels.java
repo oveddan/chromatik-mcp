@@ -48,11 +48,11 @@ public final class Channels {
    */
   public record PatternInfo(String path, int id, String label, String className, boolean active,
       boolean enabled, double compositeLevel, boolean contributing, int nestedPatternCount,
-      boolean hasLocalModulation, List<EffectInfo> effects) {}
+      boolean hasLocalModulation, Views.ViewRef view, List<EffectInfo> effects) {}
 
   /** {@code hasLocalModulation}: see {@link #hasLocalModulation(LXDeviceComponent)}. */
   public record EffectInfo(String path, int id, String label, String className, boolean enabled,
-      boolean hasLocalModulation) {}
+      boolean hasLocalModulation, Views.ViewRef view) {}
 
   /** A single parameter's live value plus its canonical path, for compact performance-surface fields. */
   public record Field<T>(T value, String path) {}
@@ -98,11 +98,15 @@ public final class Channels {
    * true iff any pattern or effect on this channel has a nonempty local modulation engine.
    * Both are markers that hidden structure exists somewhere on the channel, not the data
    * itself — use {@code detail: full} or a per-pattern path to find which pattern/effect.
+   * {@code view} is this channel's model-view assignment; see {@link Views.ViewRef}. Every
+   * pattern and effect on the channel carries its own {@code view} too — a pattern/effect
+   * can override its channel's view, so the channel-level assignment alone doesn't say what
+   * a specific pattern renders to.
    */
   public record ChannelInfo(String path, int id, String label, int index, BusType type,
       boolean enabled, double fader, String groupPath, PatternMode patternMode,
       List<PatternInfo> patterns, List<EffectInfo> effects, ChannelControls controls,
-      int containerPatternCount, boolean anyLocalModulation) {}
+      int containerPatternCount, boolean anyLocalModulation, Views.ViewRef view) {}
 
   /**
    * {@code anyLocalModulation}: the master bus can only host effects (no patterns), so
@@ -430,6 +434,7 @@ public final class Channels {
             contributing,
             nestedPatternCount,
             patternHasLocalModulation,
+            Views.viewRef(pattern),
             patternEffects));
       }
       patternEngineControls = patternEngineControls(c.getPatternEngine());
@@ -453,7 +458,8 @@ public final class Channels {
         channelEffects,
         channelControls(channel, patternEngineControls),
         containerPatternCount,
-        anyLocalModulation);
+        anyLocalModulation,
+        Views.viewRef(channel));
   }
 
   /** Snapshot the master bus. Exposed for get_channel's O(1) drill-down. */
@@ -583,7 +589,8 @@ public final class Channels {
           effect.getLabel(),
           effect.getClass().getName(),
           effect.enabled.isOn(),
-          hasLocalModulation(effect)));
+          hasLocalModulation(effect),
+          Views.viewRef(effect)));
     }
     return result;
   }

@@ -1,6 +1,8 @@
 package chromatikmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -13,26 +15,38 @@ import org.junit.jupiter.api.Test;
 import chromatikmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXDeviceComponent;
+import heronarts.lx.effect.BlurEffect;
+import heronarts.lx.mixer.LXAbstractChannel;
 import heronarts.lx.mixer.LXChannel;
+import heronarts.lx.mixer.LXMasterBus;
 import heronarts.lx.model.LXModel;
 import heronarts.lx.model.LXPoint;
 import heronarts.lx.model.LXView;
+import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.pattern.color.SolidPattern;
 import heronarts.lx.structure.view.LXViewDefinition;
 
 class ViewsTest extends HeadlessLxTest {
 
-  // Two "cube"-tagged submodels so view selectors have something to match.
+  // Two "cube"-tagged and two "sphere"-tagged submodels, so view selectors have distinct
+  // fixture sets to match — needed to test a pattern's view overriding its channel's.
   @Override
   protected LXModel newModel() {
     List<LXPoint> cube1Points = List.of(new LXPoint(0, 0, 0), new LXPoint(1, 0, 0));
     List<LXPoint> cube2Points = List.of(new LXPoint(0, 1, 0), new LXPoint(1, 1, 0));
+    List<LXPoint> sphere1Points = List.of(new LXPoint(0, 0, 1), new LXPoint(1, 0, 1));
+    List<LXPoint> sphere2Points = List.of(new LXPoint(0, 1, 1), new LXPoint(1, 1, 1));
     LXModel cube1 = new LXModel(cube1Points, "cube");
     LXModel cube2 = new LXModel(cube2Points, "cube");
+    LXModel sphere1 = new LXModel(sphere1Points, "sphere");
+    LXModel sphere2 = new LXModel(sphere2Points, "sphere");
     List<LXPoint> allPoints = new ArrayList<>();
     allPoints.addAll(cube1Points);
     allPoints.addAll(cube2Points);
-    return new LXModel(allPoints, new LXModel[] { cube1, cube2 });
+    allPoints.addAll(sphere1Points);
+    allPoints.addAll(sphere2Points);
+    return new LXModel(allPoints, new LXModel[] { cube1, cube2, sphere1, sphere2 });
   }
 
   @Test
@@ -230,5 +244,214 @@ class ViewsTest extends HeadlessLxTest {
 
     Views.ViewsSnapshot snapshot = Views.describe(lx);
     assertTrue(snapshot.assignments().isEmpty(), "assignments: " + snapshot.assignments());
+  }
+
+  // ── viewRef: issue #153, model-view assignment reporting ────────────────────────────
+
+  @Test
+  void viewRefOnAChannelWithAnExplicitViewReportsSelectedEqualToEffective() {
+    LX lx = newHeadlessLx();
+    LXViewDefinition cubes = lx.structure.views.addView();
+    cubes.label.setValue("Cubes");
+    cubes.selector.setValue("cube");
+
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.view.setValue(cubes);
+
+    Views.ViewRef ref = Views.viewRef(channel);
+    assertEquals(Resolve.canonicalPathOrNull(channel.view), ref.selectorPath());
+    assertEquals("Cubes", ref.selectedLabel());
+    assertEquals(Resolve.canonicalPath(cubes), ref.selectedPath());
+    assertEquals("Cubes", ref.effectiveLabel());
+    assertEquals(Resolve.canonicalPath(cubes), ref.effectivePath());
+  }
+
+  @Test
+  void viewRefOnADefaultPatternInheritsItsChannelsView() {
+    // The Highlights/Brando trap, inverted: a pattern left on Default renders to whatever
+    // its channel resolves to, even though the pattern's own selector shows nothing set.
+    LX lx = newHeadlessLx();
+    LXViewDefinition cubes = lx.structure.views.addView();
+    cubes.label.setValue("Cubes");
+    cubes.selector.setValue("cube");
+
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.view.setValue(cubes);
+    SolidPattern pattern = new SolidPattern(lx);
+    channel.addPattern(pattern);
+
+    Views.ViewRef ref = Views.viewRef(pattern);
+    assertNull(ref.selectedLabel(), "pattern's own selector is on Default");
+    assertNull(ref.selectedPath());
+    assertEquals("Cubes", ref.effectiveLabel(), "inherits the channel's view");
+    assertEquals(Resolve.canonicalPath(cubes), ref.effectivePath());
+  }
+
+  @Test
+  void viewRefOnAPatternOverridingItsChannelsViewReportsBothAndTheyDiffer() {
+    LX lx = newHeadlessLx();
+    LXViewDefinition cubes = lx.structure.views.addView();
+    cubes.label.setValue("Cubes");
+    cubes.selector.setValue("cube");
+    LXViewDefinition spheres = lx.structure.views.addView();
+    spheres.label.setValue("Spheres");
+    spheres.selector.setValue("sphere");
+
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.view.setValue(cubes);
+    SolidPattern pattern = new SolidPattern(lx);
+    channel.addPattern(pattern);
+    pattern.view.setValue(spheres);
+
+    Views.ViewRef channelRef = Views.viewRef(channel);
+    Views.ViewRef patternRef = Views.viewRef(pattern);
+
+    assertEquals("Cubes", channelRef.effectiveLabel());
+    assertEquals("Spheres", patternRef.selectedLabel());
+    assertEquals("Spheres", patternRef.effectiveLabel());
+    assertNotEquals(channelRef.effectivePath(), patternRef.effectivePath(),
+        "pattern's own view overrides its channel's — effective differs from the channel's");
+    assertEquals(Resolve.canonicalPath(spheres), patternRef.effectivePath());
+  }
+
+  @Test
+  void viewRefOnAMasterBusEffectHasNoSelectionAndRendersTheWholeModel() {
+    LX lx = newHeadlessLx();
+    LXMasterBus master = lx.engine.mixer.masterBus;
+    BlurEffect effect = new BlurEffect(lx);
+    master.addEffect(effect);
+
+    Views.ViewRef ref = Views.viewRef(effect);
+    assertNull(ref.selectedLabel());
+    assertNull(ref.selectedPath());
+    assertNull(ref.effectiveLabel(), "a master-bus effect on Default inherits the whole model");
+    assertNull(ref.effectivePath());
+    assertSame(lx.getModel(), effect.getModelView());
+  }
+
+  @Test
+  void viewRefOnADisabledViewFallsBackToTheWholeModel() {
+    // Verified against LX source (LXViewDefinition.rebuild()), not assumed: a *disabled*
+    // view's internal LXView is null, so getModelView() falls back to the whole model. A
+    // non-disabled view whose selector matches zero fixtures behaves differently — see
+    // viewRefOnANonMatchingButEnabledViewDoesNotFallBackToTheWholeModel below.
+    LX lx = newHeadlessLx();
+    LXViewDefinition disabled = lx.structure.views.addView();
+    disabled.label.setValue("Disabled");
+    disabled.selector.setValue("cube");
+    disabled.enabled.setValue(false);
+
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.view.setValue(disabled);
+
+    Views.ViewRef ref = Views.viewRef(channel);
+    assertEquals("Disabled", ref.selectedLabel());
+    assertEquals(Resolve.canonicalPath(disabled), ref.selectedPath());
+    assertNull(ref.effectiveLabel(), "a disabled view's LXView is null; LX falls back to the whole model");
+    assertNull(ref.effectivePath());
+    assertSame(lx.getModel(), channel.getModelView(), "cross-check against LX's own answer");
+  }
+
+  @Test
+  void viewRefOnANonMatchingButEnabledViewDoesNotFallBackToTheWholeModel() {
+    // The surprising half of the case above: LXView.create() returns a non-null LXView.Empty
+    // when a selector matches zero fixtures (LXView.java) — it does NOT return null, so
+    // getModelView() does NOT fall back to the whole model here. 'effective' stays set to
+    // that (empty) view; get_views reports its numFixtures/numGroups as 0.
+    LX lx = newHeadlessLx();
+    LXViewDefinition empty = lx.structure.views.addView();
+    empty.label.setValue("Empty");
+    empty.selector.setValue("no-such-tag");
+
+    LXChannel channel = lx.engine.mixer.addChannel();
+    channel.view.setValue(empty);
+
+    Views.ViewRef ref = Views.viewRef(channel);
+    assertEquals("Empty", ref.selectedLabel());
+    assertEquals("Empty", ref.effectiveLabel(), "an empty-but-enabled view does not fall back");
+    assertEquals(Resolve.canonicalPath(empty), ref.effectivePath());
+    assertNotSame(lx.getModel(), channel.getModelView());
+  }
+
+  @Test
+  void viewRefEffectivePathAgreesWithLxsOwnGetModelViewAcrossAFixtureProject() {
+    // Objective cross-check, not a restatement of the inheritance rule: for every channel,
+    // pattern, and effect this builds, resolving 'effectivePath' back through
+    // lx.structure.views (or falling back to lx.getModel() when absent) must reproduce
+    // exactly what LX's own getModelView() returns. This fails if LX's inheritance rule
+    // ever changes, instead of agreeing with a stale copy of it here.
+    LX lx = newHeadlessLx();
+    LXViewDefinition cubes = lx.structure.views.addView();
+    cubes.label.setValue("Cubes");
+    cubes.selector.setValue("cube");
+    LXViewDefinition spheres = lx.structure.views.addView();
+    spheres.label.setValue("Spheres");
+    spheres.selector.setValue("sphere");
+    LXViewDefinition disabled = lx.structure.views.addView();
+    disabled.label.setValue("Disabled");
+    disabled.selector.setValue("cube");
+    disabled.enabled.setValue(false);
+
+    LXChannel channelA = lx.engine.mixer.addChannel();
+    channelA.view.setValue(cubes);
+    SolidPattern defaultPattern = new SolidPattern(lx);
+    channelA.addPattern(defaultPattern);
+    SolidPattern overridingPattern = new SolidPattern(lx);
+    channelA.addPattern(overridingPattern);
+    overridingPattern.view.setValue(spheres);
+    BlurEffect channelEffect = new BlurEffect(lx);
+    channelA.addEffect(channelEffect);
+    BlurEffect patternEffect = new BlurEffect(lx);
+    defaultPattern.addEffect(patternEffect);
+
+    LXChannel channelB = lx.engine.mixer.addChannel();
+    channelB.view.setValue(disabled);
+
+    LXChannel channelC = lx.engine.mixer.addChannel(); // Default throughout
+    channelC.addPattern(new SolidPattern(lx));
+
+    BlurEffect masterEffect = new BlurEffect(lx);
+    lx.engine.mixer.masterBus.addEffect(masterEffect);
+
+    // LXChannel.getModelView() is a separate override that delegates to the group's
+    // getModelView() when the channel is grouped and its own selector is on Default —
+    // LXAbstractChannel.getModelView() never runs for this case, so it needs its own
+    // exercise here rather than relying on the ungrouped channels above.
+    LXChannel groupedChild = lx.engine.mixer.addChannel();
+    heronarts.lx.mixer.LXGroup group = lx.engine.mixer.addGroup(List.of(groupedChild));
+    group.view.setValue(spheres);
+
+    List<LXAbstractChannel> channels =
+        List.of(channelA, channelB, channelC, group, groupedChild);
+    List<LXPattern> patterns = List.of(defaultPattern, overridingPattern, channelC.patterns.get(0));
+    List<LXDeviceComponent> devices = List.of(channelEffect, patternEffect, masterEffect);
+
+    for (LXAbstractChannel channel : channels) {
+      assertMatchesLxsOwnAnswer(lx, Views.viewRef(channel), channel.getModelView());
+    }
+    for (LXPattern pattern : patterns) {
+      assertMatchesLxsOwnAnswer(lx, Views.viewRef(pattern), pattern.getModelView());
+    }
+    for (LXDeviceComponent device : devices) {
+      assertMatchesLxsOwnAnswer(lx, Views.viewRef(device), device.getModelView());
+    }
+
+    Views.ViewRef groupedChildRef = Views.viewRef(groupedChild);
+    assertNull(groupedChildRef.selectedLabel(),
+        "the grouped child's own selector is on Default");
+    assertNull(groupedChildRef.selectedPath());
+    assertEquals("Spheres", groupedChildRef.effectiveLabel(), "inherits the group's view");
+    assertEquals(Resolve.canonicalPath(spheres), groupedChildRef.effectivePath());
+  }
+
+  private static void assertMatchesLxsOwnAnswer(LX lx, Views.ViewRef ref, LXModel expected) {
+    LXModel resolved;
+    if (ref.effectivePath() == null) {
+      resolved = lx.getModel();
+    } else {
+      LXViewDefinition def = (LXViewDefinition) Resolve.component(lx, ref.effectivePath());
+      resolved = def.getModelView();
+    }
+    assertSame(expected, resolved, "effectivePath must resolve to exactly what getModelView() returns");
   }
 }
