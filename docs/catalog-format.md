@@ -94,6 +94,53 @@ present it is the winner by outright override, not by ranking (see tier 1 above)
 sit ahead of a classpath candidate that would otherwise rank higher on bytecode match or
 recency — "winner first" and "ranked first" agree except in that one case.
 
+**Ranking picks a whole-file winner; it does not decide what gets served.** That distinction
+matters once more than one candidate is visible for a class, because the sections have
+different lifetimes: `Summary` describes the code and should track whichever candidate's
+bytecode hash actually matches, but `Parameter interactions` and `Usage tips` can be
+hand-authored insight (a [curated section](#curated-sections)) that does not expire just
+because a newer or upstream copy of the file exists. Forcing the whole file to come from one
+winner would silently delete that insight the moment a fresher or upstream-bundled copy of
+the same class ever shows up (see [heronarts/LX#153](https://github.com/heronarts/LX/pull/153)).
+So resolution runs a **merge** step after ranking, not instead of it:
+
+1. The **base** is the ranked (or overlay) winner from the steps above, unchanged.
+2. For each of the two curatable sections (`parameterInteractions`, `usageTips`), every
+   candidate — base included — that names that section in its own `curated:` list, and
+   actually contains the section in its body, is a *declarer*. If no candidate declares a
+   section, the base's own content for it stands, whether or not that content happens to
+   also be curated.
+3. If exactly one candidate declares a section, that candidate's body for it is served
+   (grafted onto the base if the declarer isn't the base itself).
+4. If two or more candidates declare the *same* section, the existing ranking order breaks
+   the tie — the highest-ranked declarer's content wins — and the tie is reported (see
+   below) rather than silently resolved.
+5. A candidate whose `curated:` list names a section the document doesn't actually contain
+   is malformed: logged via `LX.error` and excluded from consideration for that section,
+   the same "log and skip, don't abort" treatment a candidate that fails to parse at all
+   gets above.
+
+**An overlay is never a merge input.** It already wins outright as an explicit,
+machine-local override (tier 1); its own content is served verbatim, with no grafting from
+any classpath candidate it shadows, even if one of those declares a curated section the
+overlay itself lacks.
+
+`get_component_doc`'s `catalog.merged.grafts` array reports a section whenever it was
+contested — the winning declarer wasn't the base, or two or more candidates named the same
+section (step 4 above): `section` (the `curated:` token), `source`/`url` (the winning
+declarer, same shape as a `catalog.candidates` entry), `tied` (true when step 4 applied), and
+`base` (true when the winning declarer is the base itself — possible only in the tied case,
+since an uncontested base declarer isn't reported at all). A section the base curates
+without contest grafts onto itself — a no-op — and is not reported; the common case (one
+visible copy, or no curated sections in play) is an empty array, always present rather than
+omitted, matching `catalog.candidates`'s "always emitted" convention.
+
+The top-level `catalog.curated` / `catalog.curatedAt` keys describe the entry actually
+served, post-merge, not the base file's own frontmatter: `curated` lists every section that
+ended up curated by *any* declarer (whether or not that declarer was the base), and
+`curatedAt` is the latest `curatedAt` among those declarers. A class with no curated section
+in play across any visible candidate omits both keys, same as today.
+
 A class with no entry at any tier is simply *undocumented* (`documented: false` over
 MCP) — never fabricate an entry for a class whose source is unavailable.
 
@@ -138,11 +185,20 @@ structure the live tools already serve.
 
 **What this costs, stated plainly.** Two guarantees weaken, and both are accepted knowingly:
 
-- *Preservation is an instruction to the generator, not a mechanism.* `CatalogFormatTest`
-  validates that the keys are well-formed; nothing can force a regeneration run to actually
-  carry the prose through. The skill's step 5 says to, and a run that ignores it silently
-  loses the curation. Treat `curated` as a marker that makes the loss reviewable in a diff,
-  not as write protection.
+- *Preservation is an instruction to the generator, not a mechanism* **for the file that
+  actually holds the curated prose.** `CatalogFormatTest` validates that the keys are
+  well-formed; nothing stops a regeneration run over *this same file* from ignoring the
+  marker and overwriting the section it names. The skill's step 5 says to preserve it, and
+  a run that ignores it silently loses the curation. Treat `curated` as a marker that makes
+  that loss reviewable in a diff, not as write protection. Runtime merging (see
+  [Location](#location) above) offers a weaker, narrower guarantee across files: if a
+  second, independently regenerated copy of the same class's entry (e.g. once LX ships its
+  own catalog) *also* declares the section curated, step 4 above still lets ranking (bytecode
+  match, then `generatedAt`) pick which copy's prose wins — `curatedAt` is not itself a
+  ranking criterion, so a copy with fresher bytecode but staler curated prose can still
+  overwrite ours. And an overlay (tier 1) never merges at all — it wins outright and its own
+  content, curated or not, is served verbatim. Merging only helps when this file remains the
+  ranked winner, or when a competing copy doesn't re-declare the section itself.
 - *The staleness hash no longer covers the whole body.* A regeneration rewrites the
   uncurated sections and stamps a fresh `classBytesSha256`, so an entry can report
   `stale: false` over curated prose that was never re-derived from the new bytes. That is

@@ -75,15 +75,42 @@ public final class Catalog {
   public record Candidate(String source, String url, CatalogEntry entry, Staleness bytesMatch) {}
 
   /**
-   * The outcome of resolving a class's catalog entry: the winner (same value
-   * {@link #locateEntry(LX, Class)} returns) plus every candidate considered — winner
-   * first, then the rest ranked most-significant first. When an overlay is present it is
+   * A body section grafted onto the merged entry from a candidate other than the ranked
+   * winner (or, when {@code tied} is true, a section two or more candidates each declared
+   * {@code curated} for — reported even when the ranking order happens to resolve the tie
+   * in the winner's own favor, since the tie itself is worth surfacing). {@code section} is
+   * the {@code curated:} frontmatter token ({@code parameterInteractions} or {@code
+   * usageTips}); {@code source}/{@code url} identify the candidate the grafted body came
+   * from, same shape as {@link Candidate#source()}/{@link Candidate#url()}.
+   */
+  public record Graft(String section, String source, String url, boolean tied, boolean base) {}
+
+  /**
+   * The entry actually served after section-level merging: {@link #entry()}'s {@code
+   * Summary} always comes from the ranked winner (or the overlay) unchanged — only {@code
+   * Parameter interactions} and {@code Usage tips} are ever eligible for a graft, since
+   * {@code curated:} never names {@code Summary} (docs/catalog-format.md). {@link
+   * #grafts()} lists only the sections that actually came from (or were contested between)
+   * a candidate other than the base; a section the base itself curates without contest
+   * grafts onto itself, which is a no-op and is not reported. An overlay entry is never
+   * merged into — it wins outright as an explicit override, so its own content stands
+   * verbatim and {@link #grafts()} is always empty in that case.
+   */
+  public record Merged(CatalogEntry entry, List<Graft> grafts) {}
+
+  /**
+   * The outcome of resolving a class's catalog entry: the ranked (or overlay) winner
+   * unmerged ({@link #winner()}, same value the pre-merge resolution always returned),
+   * every candidate considered ({@link #candidates()}, winner first, then the rest ranked
+   * most-significant first, each candidate's own parsed entry — never merged), and the
+   * entry actually meant to be served ({@link #merged()}, the winner with any
+   * candidate-declared curated section grafted on top). When an overlay is present it is
    * the winner by outright override, not by ranking, so it may be the least-accurate
    * element by the bytecode/recency criteria below; the overlay case is the only reason
    * "winner first" and "ranked first" can differ. {@code candidates} has more than one
    * element only when more than one copy of the entry was actually visible.
    */
-  public record Resolution(CatalogEntry winner, List<Candidate> candidates) {}
+  public record Resolution(CatalogEntry winner, List<Candidate> candidates, Merged merged) {}
 
   private Catalog() {}
 
@@ -117,17 +144,21 @@ public final class Catalog {
   }
 
   /**
-   * Locates the catalog entry for {@code clazz}: the overlay file if present, otherwise the
-   * winner of {@link #resolve(LX, Class)}'s ranking. See {@link #resolve(LX, Class)} to also
-   * see every candidate considered.
+   * Locates the catalog entry for {@code clazz}: the overlay file if present (verbatim, no
+   * merge), otherwise the winner of {@link #resolve(LX, Class)}'s ranking with any
+   * candidate-declared curated section grafted on top ({@link Resolution#merged()}). See
+   * {@link #resolve(LX, Class)} to also see every candidate considered and which sections
+   * were grafted from where.
    */
   public static CatalogEntry locateEntry(LX lx, Class<?> clazz) {
-    return resolve(lx, clazz).winner();
+    return resolve(lx, clazz).merged().entry();
   }
 
   /**
    * Locates the catalog entry for {@code clazz} plus every candidate considered along the
-   * way, ranked. {@code winner()} is the same value {@link #locateEntry(LX, Class)} returns.
+   * way, ranked, plus the merged entry actually meant to be served. {@code winner()} is the
+   * pre-merge ranked/overlay winner; {@code merged().entry()} is the same value {@link
+   * #locateEntry(LX, Class)} returns.
    *
    * <p>Passes {@code clazz} through to the bytecode hash so it lands in the same
    * per-class cache {@link #computeBytesHash(Class)} (and therefore {@code get_component_doc}'s
@@ -156,7 +187,7 @@ public final class Catalog {
    * the winner.
    */
   static CatalogEntry locateEntry(String fqcn, ClassLoader classLoader, ClassLoader pluginJarLoader) {
-    return resolveCandidates(fqcn, classLoader, pluginJarLoader).winner();
+    return resolveCandidates(fqcn, classLoader, pluginJarLoader).merged().entry();
   }
 
   /**
@@ -230,11 +261,157 @@ public final class Catalog {
       List<Candidate> all = new ArrayList<>(ranked.size() + 1);
       all.add(overlayCandidate);
       all.addAll(ranked);
-      return new Resolution(overlayCandidate.entry(), all);
+      // Overlay wins outright as an explicit override — it is never merged into.
+      return new Resolution(
+          overlayCandidate.entry(), all, new Merged(overlayCandidate.entry(), List.of()));
     }
 
     CatalogEntry winner = ranked.isEmpty() ? null : ranked.get(0).entry();
-    return new Resolution(winner, ranked);
+    return new Resolution(winner, ranked, mergeCandidates(ranked));
+  }
+
+  /**
+   * The two sections a {@code curated:} list may name (never {@code Summary} — see
+   * {@link Merged}), paired with the {@link CatalogEntry} accessor that reads it. Order
+   * here is the order sections are considered and, incidentally, the order
+   * {@code docs/catalog-format.md}'s frontmatter example lists them in.
+   */
+  private enum CuratableSection {
+    PARAMETER_INTERACTIONS("parameterInteractions", CatalogEntry::parameterInteractions),
+    USAGE_TIPS("usageTips", CatalogEntry::usageTips);
+
+    final String key;
+    final java.util.function.Function<CatalogEntry, String> accessor;
+
+    CuratableSection(String key, java.util.function.Function<CatalogEntry, String> accessor) {
+      this.key = key;
+      this.accessor = accessor;
+    }
+  }
+
+  /**
+   * The full set of valid {@code curated:} tokens, single-sourced from {@link
+   * CuratableSection} so a test's own copy of this vocabulary can't drift from the one the
+   * runtime actually grafts on. Package-private: only {@code CatalogFormatTest} needs it.
+   */
+  static Set<String> curatableSectionKeys() {
+    Set<String> keys = new LinkedHashSet<>();
+    for (CuratableSection section : CuratableSection.values()) {
+      keys.add(section.key);
+    }
+    return keys;
+  }
+
+  /**
+   * Grafts curated sections onto the ranked winner: for each {@link CuratableSection}, every
+   * candidate (in ranked order, base included) that names it in {@code curated:} *and*
+   * actually contains that section is a "declarer"; the first declarer in ranked order
+   * supplies the section's final content. A candidate naming a section it doesn't contain is
+   * malformed — logged via {@link LX#error} and excluded from the declarer list, not
+   * aborting the whole lookup (consistent with how a malformed candidate file is handled
+   * elsewhere in this class). A {@link Graft} is only recorded when the winning declarer
+   * isn't the base, or when two or more candidates declared the same section (a tie the
+   * ranking order resolved silently, which is still worth reporting) — a section the base
+   * curates uncontested grafts onto itself and is not reported.
+   */
+  private static Merged mergeCandidates(List<Candidate> ranked) {
+    if (ranked.isEmpty()) {
+      return new Merged(null, List.of());
+    }
+    Candidate base = ranked.get(0);
+    CatalogEntry baseEntry = base.entry();
+
+    String parameterInteractions = baseEntry.parameterInteractions();
+    String usageTips = baseEntry.usageTips();
+    List<Graft> grafts = new ArrayList<>();
+    Set<String> curatedKeys = new LinkedHashSet<>();
+    String latestCuratedAt = null;
+
+    Set<String> knownSectionKeys = curatableSectionKeys();
+    for (Candidate candidate : ranked) {
+      for (String token : curatedKeys(candidate.entry().frontmatter())) {
+        if (!knownSectionKeys.contains(token)) {
+          LX.error("Malformed catalog entry: " + candidate.url() + " curated: names "
+              + "unrecognized section '" + token + "'; ignoring it");
+        }
+      }
+    }
+
+    for (CuratableSection section : CuratableSection.values()) {
+      List<Candidate> declarers = new ArrayList<>();
+      for (Candidate candidate : ranked) {
+        if (!curatedKeys(candidate.entry().frontmatter()).contains(section.key)) {
+          continue;
+        }
+        String sectionBody = section.accessor.apply(candidate.entry());
+        if (sectionBody == null || sectionBody.isBlank()) {
+          LX.error("Malformed catalog entry: " + candidate.url() + " declares curated section '"
+              + section.key + "' but the section is "
+              + (sectionBody == null ? "absent" : "empty") + "; skipping the graft");
+          continue;
+        }
+        declarers.add(candidate);
+      }
+      if (declarers.isEmpty()) {
+        continue; // base's own content (curated or not) stands as-is
+      }
+
+      Candidate winner = declarers.get(0);
+      boolean tied = declarers.size() > 1;
+      String content = section.accessor.apply(winner.entry());
+      switch (section) {
+        case PARAMETER_INTERACTIONS -> parameterInteractions = content;
+        case USAGE_TIPS -> usageTips = content;
+      }
+      curatedKeys.add(section.key);
+      // Only the winner's curatedAt is pooled: it's the only prose actually served for this
+      // section. A losing declarer's curatedAt describes text that isn't in the response.
+      String winnerCuratedAt = winner.entry().frontmatter().get("curatedAt");
+      if (winnerCuratedAt != null
+          && (latestCuratedAt == null || winnerCuratedAt.compareTo(latestCuratedAt) > 0)) {
+        latestCuratedAt = winnerCuratedAt;
+      }
+      if (winner != base || tied) {
+        grafts.add(new Graft(section.key, winner.source(), winner.url(), tied, winner == base));
+      }
+    }
+
+    Map<String, String> mergedFrontmatter = new LinkedHashMap<>(baseEntry.frontmatter().values());
+    if (curatedKeys.isEmpty()) {
+      mergedFrontmatter.remove("curated");
+      mergedFrontmatter.remove("curatedAt");
+    } else {
+      mergedFrontmatter.put("curated", String.join(", ", curatedKeys));
+      if (latestCuratedAt != null) {
+        mergedFrontmatter.put("curatedAt", latestCuratedAt);
+      } else {
+        mergedFrontmatter.remove("curatedAt");
+      }
+    }
+
+    CatalogEntry mergedEntry = new CatalogEntry(
+        new Frontmatter(mergedFrontmatter),
+        baseEntry.summary(),
+        parameterInteractions,
+        usageTips,
+        baseEntry.source());
+    return new Merged(mergedEntry, grafts);
+  }
+
+  /** Parses a {@code curated:} frontmatter value into its comma-separated section tokens. */
+  private static Set<String> curatedKeys(Frontmatter frontmatter) {
+    String raw = frontmatter.get("curated");
+    if (raw == null || raw.isBlank()) {
+      return Set.of();
+    }
+    Set<String> keys = new LinkedHashSet<>();
+    for (String token : raw.split(",")) {
+      String trimmed = token.trim();
+      if (!trimmed.isEmpty()) {
+        keys.add(trimmed);
+      }
+    }
+    return keys;
   }
 
   /** Enumerates every {@code catalog/<filename>} resource visible from {@code loader}. */

@@ -31,9 +31,12 @@ class CatalogFormatTest {
 
   private static final Set<String> VALID_KINDS = Set.of("pattern", "effect", "modulator");
 
-  /** Summary is deliberately absent — it must stay derivable from source. */
-  private static final Set<String> CURATABLE_SECTIONS =
-      Set.of("parameterInteractions", "usageTips");
+  /**
+   * Single-sourced from {@link Catalog#curatableSectionKeys()} — a hand-copied constant here
+   * could silently drift from the enum that actually drives grafting, validating cleanly
+   * while never grafting the section it claims to recognize.
+   */
+  private static final Set<String> CURATABLE_SECTIONS = Catalog.curatableSectionKeys();
 
   @AutoClose("dispose")
   private static final LX lx = new LX(new GridModel(8, 8));

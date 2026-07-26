@@ -10,7 +10,7 @@ lxVersion: 1.2.1
 generatedAt: 2026-07-17T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 curated: parameterInteractions, usageTips
-curatedAt: 2026-07-24T00:00:00Z
+curatedAt: 2026-07-25T00:00:00Z
 tags: color, gradient, palette, geometric, generative
 ---
 
@@ -30,7 +30,10 @@ Fills the model with a continuous gradient computed from a weighted sum of per-a
 - Only a Y-axis amount gives a top-to-bottom gradient; equal X/Y amounts a diagonal sweep; Radial mode on all axes a spherical gradient from center.
 - A scale control zooms the coordinate range before lookup; with wrap or mirror clamping this produces repeating bands rather than one sweep.
 - A phase offset shifts the lookup position and is the natural animation target — an LFO on it gives a scrolling wash, where animating a per-axis amount reshapes geometry instead.
+- Center coordinate mode mirrors the gradient around an axis's midpoint.
 
 ## Usage tips
 
 - Works well as a static or slow-moving color backdrop beneath texture or motion patterns.
+- Combining more than two axes at full amount without compression clips the gradient at its color-stop endpoints, losing the smooth blend in the middle.
+- Animate phase for a scrolling wash rather than per-axis amount, which reshapes geometry instead of moving it.

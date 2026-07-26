@@ -40,7 +40,13 @@ public final class GetComponentDoc implements LxTool {
         + "first, then the rest ranked by accuracy (bytecode match, then recency) — a "
         + "single-element array is the common case; more than one appears when, e.g., a "
         + "stock class is documented by both LX and this plugin, so the choice of winner "
-        + "is auditable.";
+        + "is auditable. The served summary/parameterInteractions/usageTips are merged, "
+        + "not just the ranked winner's: Summary comes from the ranked winner, but any "
+        + "candidate that names parameterInteractions or usageTips in its curated: "
+        + "frontmatter contributes that section even if it lost the ranking. "
+        + "catalog.merged.grafts reports a section whenever the winning declarer isn't the "
+        + "ranked winner, or two or more candidates contested it (base:false and/or "
+        + "tied:true) — empty is the common case.";
   }
 
   @Override
@@ -117,7 +123,7 @@ public final class GetComponentDoc implements LxTool {
     payload.put("tags", tags);
 
     Catalog.Resolution resolution = Catalog.resolve(lx, clazz);
-    Catalog.CatalogEntry entry = resolution.winner();
+    Catalog.CatalogEntry entry = resolution.merged().entry();
     if (entry == null) {
       payload.put("documented", false);
       return Result.ok(payload);
@@ -196,6 +202,24 @@ public final class GetComponentDoc implements LxTool {
       candidates.add(candidatePayload);
     }
     catalogMeta.put("candidates", candidates);
+
+    // Always emitted, same rationale as candidates above: an empty grafts array means
+    // "merging was considered and nothing needed grafting" (the common case), not
+    // "this server predates section-level merging."
+    List<Map<String, Object>> grafts = new ArrayList<>();
+    for (Catalog.Graft graft : resolution.merged().grafts()) {
+      Map<String, Object> graftPayload = new LinkedHashMap<>();
+      graftPayload.put("section", graft.section());
+      graftPayload.put("source", graft.source());
+      graftPayload.put("url", graft.url());
+      graftPayload.put("tied", graft.tied());
+      graftPayload.put("base", graft.base());
+      grafts.add(graftPayload);
+    }
+    Map<String, Object> mergedMeta = new LinkedHashMap<>();
+    mergedMeta.put("grafts", grafts);
+    catalogMeta.put("merged", mergedMeta);
+
     payload.put("catalog", catalogMeta);
 
     return Result.ok(payload);

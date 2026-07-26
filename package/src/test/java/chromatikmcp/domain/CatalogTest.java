@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +19,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Comparator;
+import java.util.List;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterAll;
@@ -624,6 +627,316 @@ class CatalogTest {
     } finally {
       deleteRecursively(plantedDir);
     }
+  }
+
+  // ── section-level merging ────────────────────────────────────────────────────
+  //
+  // Ranking still picks one winner (unchanged, tested above); merging is a graft step
+  // applied after that winner is chosen. These fixtures deliberately put the curated
+  // prose on the *losing* candidate, mirroring the real GradientPattern scenario this
+  // exists to protect: once heronarts/LX#153 ships, an upstream-generated entry wins the
+  // ranking on bytecode match or recency, but must not erase this plugin's hand-written
+  // parameter-interaction/usage-tip prose.
+
+  @Test
+  void mergeGraftsCuratedSectionsFromStaleCandidateOntoFreshWinner() throws Exception {
+    String fqcn = "test.catalog.MergeFreshWinsFixture";
+    byte[] classBytes = "merge-fresh-wins".getBytes(StandardCharsets.UTF_8);
+    String liveHash = sha256Hex(classBytes);
+
+    Path classDir = newClassBytesDir(fqcn, classBytes);
+    Path freshDir = newCatalogDir(fqcn, curatedFixture(fqcn, liveHash, "2030-01-01T00:00:00Z",
+        "Fresh summary.", null, null, "Fresh interactions.", "Fresh tips."));
+    Path staleDir = newCatalogDir(fqcn, curatedFixture(fqcn, "d".repeat(64), "2020-01-01T00:00:00Z",
+        "Stale summary.", "parameterInteractions, usageTips", "2026-07-01T00:00:00Z",
+        "Stale interactions.", "Stale tips."));
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {
+        classDir.toUri().toURL(), freshDir.toUri().toURL(), staleDir.toUri().toURL()
+    }, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+
+      assertEquals("Fresh summary.", result.winner().summary(),
+          "pre-merge winner is still the bytecode-matched candidate, unchanged");
+
+      Catalog.CatalogEntry merged = result.merged().entry();
+      assertEquals("Fresh summary.", merged.summary(), "Summary always tracks the winner's bytecode");
+      assertEquals("Stale interactions.", merged.parameterInteractions(),
+          "parameterInteractions is grafted from the candidate that curates it");
+      assertEquals("Stale tips.", merged.usageTips(),
+          "usageTips is grafted from the candidate that curates it");
+      assertEquals("parameterInteractions, usageTips", merged.frontmatter().get("curated"),
+          "merged frontmatter reports which sections are curated post-merge");
+      assertEquals("2026-07-01T00:00:00Z", merged.frontmatter().get("curatedAt"));
+
+      assertEquals(2, result.merged().grafts().size());
+      for (Catalog.Graft graft : result.merged().grafts()) {
+        assertEquals(catalogFileUrl(staleDir, fqcn), graft.url());
+        assertFalse(graft.tied());
+      }
+    } finally {
+      deleteRecursively(classDir);
+      deleteRecursively(freshDir);
+      deleteRecursively(staleDir);
+    }
+  }
+
+  @Test
+  void singleCandidateResolutionHasNoGrafts() {
+    Catalog.Resolution result = Catalog.resolve(lx, GradientPattern.class);
+    assertEquals(1, result.candidates().size());
+    assertTrue(result.merged().grafts().isEmpty(),
+        "a single visible copy has nothing to merge from");
+    assertEquals(result.winner(), result.merged().entry(),
+        "merging a single candidate is a no-op — merged entry equals the raw winner");
+  }
+
+  @Test
+  void overlayWinsOutrightWithNoMergeEvenWhenAClasspathCandidateCuratesTheSameSection()
+      throws IOException {
+    Path tempDir = Files.createTempDirectory("catalog-overlay-merge-test");
+    try {
+      String overlayContent = """
+          ---
+          class: heronarts.lx.pattern.color.GradientPattern
+          kind: pattern
+          generatedAt: 2026-01-01T00:00:00Z
+          lxVersion: 1.2.1
+          tags: test-overlay
+          ---
+
+          ## Summary
+
+          Overlay summary sentinel.
+
+          ## Parameter interactions
+
+          Overlay interactions sentinel.
+
+          ## Usage tips
+
+          Overlay tips sentinel.
+          """;
+      Files.writeString(
+          tempDir.resolve("heronarts.lx.pattern.color.GradientPattern.md"), overlayContent);
+
+      Catalog.setOverlayDir(tempDir);
+      Catalog.Resolution result = Catalog.resolveCandidates(
+          GradientPattern.class.getName(), GradientPattern.class.getClassLoader(),
+          Catalog.class.getClassLoader());
+
+      assertEquals("overlay", result.winner().source());
+      assertTrue(result.merged().grafts().isEmpty(),
+          "an overlay is an outright override, not a merge input");
+      assertEquals("Overlay interactions sentinel.", result.merged().entry().parameterInteractions(),
+          "the overlay's own content stands verbatim, even though the shadowed class-jar "
+              + "candidate curates parameterInteractions/usageTips");
+      assertEquals("Overlay tips sentinel.", result.merged().entry().usageTips());
+    } finally {
+      Catalog.setOverlayDir(DEFAULT_OVERLAY);
+      Files.deleteIfExists(tempDir.resolve("heronarts.lx.pattern.color.GradientPattern.md"));
+      Files.deleteIfExists(tempDir);
+    }
+  }
+
+  @Test
+  void mergeReportsATieWhenTwoCandidatesDeclareTheSameCuratedSection() throws Exception {
+    String fqcn = "test.catalog.MergeTieFixture";
+    byte[] classBytes = "merge-tie-fixture".getBytes(StandardCharsets.UTF_8);
+    String liveHash = sha256Hex(classBytes);
+
+    Path classDir = newClassBytesDir(fqcn, classBytes);
+    Path freshDir = newCatalogDir(fqcn, curatedFixture(fqcn, liveHash, "2030-01-01T00:00:00Z",
+        "Fresh summary.", null, null, "Fresh interactions.", "Fresh tips."));
+    Path staleBDir = newCatalogDir(fqcn, curatedFixture(fqcn, "d".repeat(64), "2025-06-01T00:00:00Z",
+        "Stale B summary.", "usageTips", "2026-01-01T00:00:00Z", "Stale B interactions.", "Stale B tips."));
+    Path staleCDir = newCatalogDir(fqcn, curatedFixture(fqcn, "e".repeat(64), "2020-01-01T00:00:00Z",
+        "Stale C summary.", "usageTips", "2020-01-01T00:00:00Z", "Stale C interactions.", "Stale C tips."));
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {
+        classDir.toUri().toURL(), freshDir.toUri().toURL(), staleBDir.toUri().toURL(), staleCDir.toUri().toURL()
+    }, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+
+      assertEquals("Fresh summary.", result.winner().summary());
+      // staleB ranks ahead of staleC (newer generatedAt, both bytecode-mismatched) — that
+      // ranking order is what breaks the curated-section tie.
+      assertEquals("Stale B tips.", result.merged().entry().usageTips());
+
+      List<Catalog.Graft> usageTipsGrafts = result.merged().grafts().stream()
+          .filter(g -> g.section().equals("usageTips")).toList();
+      assertEquals(1, usageTipsGrafts.size());
+      assertTrue(usageTipsGrafts.get(0).tied(),
+          "two candidates both declared usageTips curated — the tie is reported");
+      assertEquals(catalogFileUrl(staleBDir, fqcn), usageTipsGrafts.get(0).url(),
+          "the ranking order's winner supplies the content and provenance");
+
+      // parameterInteractions was never declared curated by anyone — the fresh winner's
+      // own content stands, and no graft is reported for it.
+      assertEquals("Fresh interactions.", result.merged().entry().parameterInteractions());
+      assertTrue(result.merged().grafts().stream().noneMatch(g -> g.section().equals("parameterInteractions")));
+    } finally {
+      deleteRecursively(classDir);
+      deleteRecursively(freshDir);
+      deleteRecursively(staleBDir);
+      deleteRecursively(staleCDir);
+    }
+  }
+
+  @Test
+  void curatedSectionNamingAnAbsentBodySectionIsSkippedNotAborted() throws Exception {
+    String fqcn = "test.catalog.MergeMalformedCuratedFixture";
+    byte[] classBytes = "merge-malformed-curated".getBytes(StandardCharsets.UTF_8);
+    String liveHash = sha256Hex(classBytes);
+
+    Path classDir = newClassBytesDir(fqcn, classBytes);
+    Path freshDir = newCatalogDir(fqcn, curatedFixture(fqcn, liveHash, "2030-01-01T00:00:00Z",
+        "Fresh summary.", null, null, "Fresh interactions.", "Fresh tips."));
+    // Declares curated: usageTips but the document has no "## Usage tips" section at all —
+    // a malformed entry that must be logged and skipped, not crash or deny the lookup.
+    Path malformedDir = newCatalogDir(fqcn, curatedFixture(fqcn, "d".repeat(64), "2020-01-01T00:00:00Z",
+        "Malformed summary.", "usageTips", "2026-01-01T00:00:00Z", "Malformed interactions.", null));
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {
+        classDir.toUri().toURL(), freshDir.toUri().toURL(), malformedDir.toUri().toURL()
+    }, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+
+      assertEquals(2, result.candidates().size(),
+          "the malformed curated declaration doesn't exclude the candidate itself from ranking");
+      assertEquals("Fresh summary.", result.winner().summary());
+      assertEquals("Fresh tips.", result.merged().entry().usageTips(),
+          "a curated: usageTips naming an absent section is skipped, not grafted");
+      assertTrue(result.merged().grafts().isEmpty());
+    } finally {
+      deleteRecursively(classDir);
+      deleteRecursively(freshDir);
+      deleteRecursively(malformedDir);
+    }
+  }
+
+  @Test
+  void unrecognizedCuratedTokenIsLoggedNotSilentlyStripped() throws Exception {
+    String fqcn = "test.catalog.MergeUnrecognizedCuratedTokenFixture";
+    byte[] classBytes = "merge-unrecognized-curated-token".getBytes(StandardCharsets.UTF_8);
+    String liveHash = sha256Hex(classBytes);
+
+    Path classDir = newClassBytesDir(fqcn, classBytes);
+    // "summary" is not a curatable token (Summary must stay derivable from source) — this
+    // is a malformed declaration that must be logged, the same as the absent-section case.
+    Path onlyDir = newCatalogDir(fqcn, curatedFixture(fqcn, liveHash, "2026-01-01T00:00:00Z",
+        "Summary.", "summary, usageTips", "2026-01-01T00:00:00Z", "Interactions.", "Tips."));
+    PrintStream originalErr = System.err;
+    ByteArrayOutputStream captured = new ByteArrayOutputStream();
+    System.setErr(new PrintStream(captured, true, StandardCharsets.UTF_8));
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {
+        classDir.toUri().toURL(), onlyDir.toUri().toURL()
+    }, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+
+      assertEquals("Tips.", result.merged().entry().usageTips());
+      assertEquals("usageTips", result.merged().entry().frontmatter().get("curated"),
+          "the unrecognized 'summary' token is dropped from the re-served curated list");
+    } finally {
+      System.setErr(originalErr);
+      deleteRecursively(classDir);
+      deleteRecursively(onlyDir);
+    }
+    String logged = captured.toString(StandardCharsets.UTF_8);
+    assertTrue(logged.contains("summary"),
+        "an unrecognized curated: token must be logged, not silently stripped: " + logged);
+  }
+
+  @Test
+  void curatedAtReflectsTheServedDeclarerNotTheMaxAcrossLosers() throws Exception {
+    String fqcn = "test.catalog.MergeCuratedAtScopeFixture";
+    byte[] classBytes = "merge-curated-at-scope".getBytes(StandardCharsets.UTF_8);
+    String liveHash = sha256Hex(classBytes);
+
+    Path classDir = newClassBytesDir(fqcn, classBytes);
+    Path freshDir = newCatalogDir(fqcn, curatedFixture(fqcn, liveHash, "2030-01-01T00:00:00Z",
+        "Fresh summary.", null, null, "Fresh interactions.", "Fresh tips."));
+    // Ranked ahead of loserDir (newer generatedAt) and its curatedAt is older than the
+    // loser's — the served curatedAt must reflect this candidate's timestamp, not the
+    // loser's newer one, since the loser's prose is not what's served.
+    Path winnerDir = newCatalogDir(fqcn, curatedFixture(fqcn, "d".repeat(64), "2025-06-01T00:00:00Z",
+        "Winner summary.", "usageTips", "2020-01-01T00:00:00Z", "Winner interactions.", "Winner tips."));
+    Path loserDir = newCatalogDir(fqcn, curatedFixture(fqcn, "e".repeat(64), "2020-01-01T00:00:00Z",
+        "Loser summary.", "usageTips", "2026-01-01T00:00:00Z", "Loser interactions.", "Loser tips."));
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {
+        classDir.toUri().toURL(), freshDir.toUri().toURL(), winnerDir.toUri().toURL(), loserDir.toUri().toURL()
+    }, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+
+      assertEquals("Winner tips.", result.merged().entry().usageTips(),
+          "winnerDir ranks ahead of loserDir and supplies the served prose");
+      assertEquals("2020-01-01T00:00:00Z", result.merged().entry().frontmatter().get("curatedAt"),
+          "curatedAt must describe the served declarer, not the max across all declarers "
+              + "including the loser whose prose was not served");
+    } finally {
+      deleteRecursively(classDir);
+      deleteRecursively(freshDir);
+      deleteRecursively(winnerDir);
+      deleteRecursively(loserDir);
+    }
+  }
+
+  @Test
+  void curatedSectionWithEmptyHeadingIsSkippedNotGrafted() throws Exception {
+    String fqcn = "test.catalog.MergeEmptyCuratedSectionFixture";
+    byte[] classBytes = "merge-empty-curated-section".getBytes(StandardCharsets.UTF_8);
+    String liveHash = sha256Hex(classBytes);
+
+    Path classDir = newClassBytesDir(fqcn, classBytes);
+    Path freshDir = newCatalogDir(fqcn, curatedFixture(fqcn, liveHash, "2030-01-01T00:00:00Z",
+        "Fresh summary.", null, null, "Fresh interactions.", "Fresh tips."));
+    // Declares curated: usageTips and has a "## Usage tips" heading, but nothing under it —
+    // an empty section must be treated like an absent one, not graft "" over the base's
+    // real prose.
+    Path emptySectionDir = newCatalogDir(fqcn, curatedFixture(fqcn, "d".repeat(64), "2020-01-01T00:00:00Z",
+        "Empty-section summary.", "usageTips", "2026-01-01T00:00:00Z", "Empty-section interactions.", ""));
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {
+        classDir.toUri().toURL(), freshDir.toUri().toURL(), emptySectionDir.toUri().toURL()
+    }, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+
+      assertEquals(2, result.candidates().size(),
+          "the empty curated declaration doesn't exclude the candidate itself from ranking");
+      assertEquals("Fresh summary.", result.winner().summary());
+      assertEquals("Fresh tips.", result.merged().entry().usageTips(),
+          "a curated: usageTips whose heading has no content is skipped, not grafted as \"\"");
+      assertTrue(result.merged().grafts().isEmpty());
+    } finally {
+      deleteRecursively(classDir);
+      deleteRecursively(freshDir);
+      deleteRecursively(emptySectionDir);
+    }
+  }
+
+  private static String curatedFixture(String fqcn, String classBytesSha256, String generatedAt,
+      String summary, String curated, String curatedAt,
+      String parameterInteractions, String usageTips) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("---\n");
+    sb.append("class: ").append(fqcn).append("\n");
+    sb.append("kind: pattern\n");
+    sb.append("classBytesSha256: ").append(classBytesSha256).append("\n");
+    sb.append("generatedAt: ").append(generatedAt).append("\n");
+    sb.append("lxVersion: 1.2.1\n");
+    if (curated != null) {
+      sb.append("curated: ").append(curated).append("\n");
+      sb.append("curatedAt: ").append(curatedAt).append("\n");
+    }
+    sb.append("---\n\n");
+    sb.append("## Summary\n\n").append(summary).append("\n\n");
+    if (parameterInteractions != null) {
+      sb.append("## Parameter interactions\n\n").append(parameterInteractions).append("\n\n");
+    }
+    if (usageTips != null) {
+      sb.append("## Usage tips\n\n").append(usageTips).append("\n\n");
+    }
+    return sb.toString();
+  }
+
+  private static String catalogFileUrl(Path dir, String fqcn) throws IOException {
+    return dir.resolve("catalog").resolve(fqcn + ".md").toUri().toURL().toString();
   }
 
   private static Path newCatalogDir(String fqcn, String content) throws IOException {
