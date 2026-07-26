@@ -166,7 +166,8 @@ if (unmapped.length || duplicateMapped.length || unknownMapped.length) {
 }
 
 const docPath = here('../src/content/docs/tools.md');
-let doc = await readFile(docPath, 'utf8');
+const originalDoc = await readFile(docPath, 'utf8');
+let doc = originalDoc;
 
 for (const [category, names] of Object.entries(CATEGORIES)) {
   const startMarker = `<!-- generated:start:${category} -->`;
@@ -184,6 +185,18 @@ for (const [category, names] of Object.entries(CATEGORIES)) {
   }
   const generated = renderCategory(toolsByName, names);
   doc = doc.slice(0, contentStart) + '\n\n' + generated + '\n' + doc.slice(endIdx);
+}
+
+if (process.argv.includes('--check')) {
+  if (doc !== originalDoc) {
+    console.error(
+      'generate-tool-reference.mjs: src/content/docs/tools.md is stale relative to ' +
+        'src/data/tools.json — run `npm run tools-ref`.',
+    );
+    process.exit(1);
+  }
+  console.log('tools.md is up to date with tools.json');
+  process.exit(0);
 }
 
 await writeFile(docPath, doc);

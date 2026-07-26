@@ -58,6 +58,11 @@ jobs:
       - name: driving.md matches SKILL.md
         run: npm run driving-ref -- --check
 
+      # src/content/docs/tools.md must match what generate-tool-reference.mjs would
+      # produce from src/data/tools.json.
+      - name: tools.md matches tools.json
+        run: npm run tools-ref -- --check
+
       # Every tool-shaped name referenced under agent-plugin/ must exist in the live
       # tool catalog (src/data/tools.json).
       - name: agent-plugin tool names match tools.json
