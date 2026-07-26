@@ -1,6 +1,6 @@
 ---
 title: Tool reference
-description: The full MCP tool surface — discovery, parameters, structure, modulation, palette, snapshots, views, rendering, and batching.
+description: The full MCP tool surface — discovery, parameters, project persistence, structure, modulation, palette, snapshots, views, rendering, and batching.
 ---
 
 Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`), as
@@ -154,6 +154,42 @@ Return the semantic catalog entry for an LX pattern, effect, or modulator class:
 |---|---|---|---|---|
 | `class` | string | no | — | Class name, as returned by list_available_* tools — full class name (e.g. heronarts.lx.pattern.color.GradientPattern) or short name (e.g. GradientPattern). Exactly one of 'class' or 'path' is required. |
 | `path` | string | no | — | Canonical path of a live component instance (e.g. /lx/mixer/channel/1/pattern/1) whose class is documented. Exactly one of 'class' or 'path' is required. |
+
+<!-- generated:end -->
+
+## Save the project & model
+
+Everything built over this API lives only in the running engine until `save_project`
+writes a `.lxp` file — restart Chromatik without saving and it's gone. Neither tool is
+`LXCommand`-backed (writing a file is an action, not undoable engine state), so neither
+appears in Chromatik's undo history. `save_project` writes through to a linked external
+model file whenever `get_project_info`'s `model.syncModelFile` is on — `save_model` to a
+new path first if that file is shared with other projects on the rig and shouldn't be
+touched.
+
+<!-- generated:start:project -->
+
+### `save_project`
+
+_mutating_
+
+Persist the running session to a .lxp project file — the only way structure/mixer/modulation changes made over this API survive a restart; until this is called, they exist only in the running engine. path omitted saves in place over the currently open project (invalid_argument if none is open yet — save-as with a path first); a given path resolves relative paths under LX's Projects media folder, absolute paths are used as-is. overwrite (default false) is required to replace an existing file other than the currently open project — omitting it against an existing target returns invalid_argument naming the resolved path instead of clobbering it. Hazard: when the project's model is linked to an external .lxm with syncModelFile on (see get_project_info's model block), saving the project ALSO rewrites that .lxm — even though nothing about this call mentions the model — and that file may be shared by other projects on the rig; check model.syncModelFile first, or save_model to a new path before calling this if you don't want the shared file touched. The response echoes get_project_info's model block so a client can tell, without a separate call, whether this save also rewrote a linked .lxm. This is a file write, not undoable engine state — it does not appear in undo history. In the Chromatik UI, saving over a dirty external model may raise a confirmation dialog; this call does not suppress it. When batched via apply_operations, check this operation's own result — apply_operations reports top-level ok regardless of individual operation failures (see apply_operations' description).
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | no | — | Target .lxp path. Omit to save in place over the currently open project. Relative paths resolve under LX's Projects media folder; absolute paths are used as-is. |
+| `overwrite` | boolean | no | — | Required (true) to replace an existing file other than the currently open project (default false) |
+
+### `save_model`
+
+_mutating_
+
+"Save Model As": export the project's structure (fixtures, normalization, label config) to an external .lxm file and re-point the project's model link at it (LXStructure.exportModel). path omitted re-exports to the currently linked model file (invalid_argument if the model isn't linked to one yet — see get_project_info's model.file); a given path resolves relative paths under LX's Models media folder and moves the link there, absolute paths are used as-is. overwrite (default false) is required to replace an existing file other than the currently linked one — omitting it against an existing target returns invalid_argument naming the resolved path instead of clobbering it. This is the fix for the shared-.lxm hazard save_project's description warns about: export to a NEW path here before calling save_project, rather than disabling syncModelFile, so the .lxm other projects on the rig load is never touched. The response echoes get_project_info's model block so a client can confirm the link moved. model.external false while model.file is set means the link will not survive a reload (see get_project_info's model.file/model.external description). This is a file write, not undoable engine state — it does not appear in undo history. Requires a dynamic structure — invalid_argument if model.isStatic is true, since a static model has no fixture-based model to export.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | no | — | Target .lxm path. Omit to re-export to the currently linked model file. Relative paths resolve under LX's Models media folder; absolute paths are used as-is. |
+| `overwrite` | boolean | no | — | Required (true) to replace an existing file other than the currently linked model file (default false) |
 
 <!-- generated:end -->
 
@@ -765,7 +801,7 @@ earlier operations in that same batch even though they still report success.
 
 _mutating_
 
-Apply up to 50 mutation-tool calls in one MCP round-trip. Every handler already runs on the LX engine thread, so a batch schedules onto it once and every operation lands in the same engine frame — no intermediate half-built state is ever rendered or output between operations, unlike issuing the same calls one at a time. Each entry is {tool, args}: 'tool' names any registered mutation tool (by its normal tool name) and 'args' is exactly the argument object a top-level call to that tool would take. Every operations[i].tool is validated up front — an unknown name, a read-only tool, or apply_operations itself (batches cannot nest) fails the whole call with invalid_argument and applies nothing. Once validated, execution is continue-on-error: an operation that fails does not stop the ones after it. The response's results array has one entry per operation, in order: {index, ok: true, result} on success or {index, ok: false, code, message} on failure, using the same error codes a top-level call would return. Two sharp edges this tool does NOT smooth over: (1) it does not collapse the batch into one undo step — each operation still produces its own undo entry (or entries) exactly as if called individually, so undoing an N-operation batch takes N presses of Cmd-Z; (2) LX's lx.command.perform() wipes the entire undo/redo history when a command fails — in a batch, one failing operation can silently erase undo history for every earlier operation in the SAME batch, even though those operations still report ok: true; (3) all operations run inside one engine frame, so an I/O-heavy operation stalls the whole batch's cost onto that single frame — reload_fixtures (which re-reads every .lxf from disk) is a representative worst case, and a large or slow batch can hit the 30s executor timeout, after which the batch is NOT cancelled and still applies once the engine drains it.
+Apply up to 50 mutation-tool calls in one MCP round-trip. Every handler already runs on the LX engine thread, so a batch schedules onto it once and every operation lands in the same engine frame — no intermediate half-built state is ever rendered or output between operations, unlike issuing the same calls one at a time. Each entry is {tool, args}: 'tool' names any registered mutation tool (by its normal tool name) and 'args' is exactly the argument object a top-level call to that tool would take. Every operations[i].tool is validated up front — an unknown name, a read-only tool, or apply_operations itself (batches cannot nest) fails the whole call with invalid_argument and applies nothing. Once validated, execution is continue-on-error: an operation that fails does not stop the ones after it. The response's results array has one entry per operation, in order: {index, ok: true, result} on success or {index, ok: false, code, message} on failure, using the same error codes a top-level call would return. Two sharp edges this tool does NOT smooth over: (1) it does not collapse the batch into one undo step — each operation still produces its own undo entry (or entries) exactly as if called individually, so undoing an N-operation batch takes N presses of Cmd-Z; (2) LX's lx.command.perform() wipes the entire undo/redo history when a command fails — in a batch, one failing operation can silently erase undo history for every earlier operation in the SAME batch, even though those operations still report ok: true; (3) all operations run inside one engine frame, so an I/O-heavy operation stalls the whole batch's cost onto that single frame — save_project (full project serialization plus a disk write, plus a .lxm write-through when syncModelFile is on) is now the worst case, ahead of reload_fixtures (which re-reads every .lxf from disk); a large or slow batch can hit the 30s executor timeout, after which the batch is NOT cancelled and still applies once the engine drains it.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|

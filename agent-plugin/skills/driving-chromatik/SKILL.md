@@ -53,6 +53,8 @@ path held from before the restart.
 
 A restart also resets engine state you might assume is sticky — `output.enabled`, for
 instance, comes back off. Don't infer the show is in the state you left it; ask.
+Unsaved work is lost along with it — mutation tools change only the running engine's
+in-memory state, so call `save_project` before a restart is likely, not just at session end.
 
 ## Timeouts are not cancellations
 

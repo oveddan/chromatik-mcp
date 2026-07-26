@@ -96,17 +96,27 @@ public final class GetProjectInfo implements LxTool {
     engine.put("framesPerSecond", info.engine().framesPerSecond());
     putIfPresent(engine, "framesPerSecondPath", info.engine().framesPerSecondPath());
     payload.put("engine", engine);
-    Map<String, Object> model = new LinkedHashMap<>();
-    model.put("name", info.model().name());
-    putIfPresent(model, "file", info.model().file());
-    model.put("external", info.model().external());
-    model.put("isStatic", info.model().isStatic());
-    if (info.model().external()) {
-      model.put("hasUnsavedChanges", info.model().hasUnsavedChanges());
-    }
-    model.put("syncModelFile", info.model().syncModelFile());
-    putIfPresent(model, "syncModelFilePath", info.model().syncModelFilePath());
-    payload.put("model", model);
+    payload.put("model", modelPayload(info.model()));
     return Result.ok(payload);
+  }
+
+  /**
+   * The {@code model} block's payload shape, shared with {@link SaveModel} so a "Save
+   * Model As" response echoes exactly what a follow-up {@code get_project_info} call would
+   * report (docs/tool-conventions.md's shared-helper drill-down pattern — see {@code
+   * GetChannel}/{@code ListChannels}).
+   */
+  static Map<String, Object> modelPayload(Projects.ModelInfo model) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("name", model.name());
+    putIfPresent(payload, "file", model.file());
+    payload.put("external", model.external());
+    payload.put("isStatic", model.isStatic());
+    if (model.external()) {
+      payload.put("hasUnsavedChanges", model.hasUnsavedChanges());
+    }
+    payload.put("syncModelFile", model.syncModelFile());
+    putIfPresent(payload, "syncModelFilePath", model.syncModelFilePath());
+    return payload;
   }
 }

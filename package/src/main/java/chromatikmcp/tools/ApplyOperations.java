@@ -63,10 +63,11 @@ public final class ApplyOperations implements LxTool {
         + "silently erase undo history for every earlier operation in the SAME batch, even "
         + "though those operations still report ok: true; (3) all operations run inside one "
         + "engine frame, so an I/O-heavy operation stalls the whole batch's cost onto that "
-        + "single frame — reload_fixtures (which re-reads every .lxf from disk) is a "
-        + "representative worst case, and a large or slow batch can hit the 30s executor "
-        + "timeout, after which the batch is NOT cancelled and still applies once the engine "
-        + "drains it.";
+        + "single frame — save_project (full project serialization plus a disk write, plus a "
+        + ".lxm write-through when syncModelFile is on) is now the worst case, ahead of "
+        + "reload_fixtures (which re-reads every .lxf from disk); a large or slow batch can "
+        + "hit the 30s executor timeout, after which the batch is NOT cancelled and still "
+        + "applies once the engine drains it.";
   }
 
   @Override

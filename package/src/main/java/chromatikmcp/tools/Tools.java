@@ -78,7 +78,9 @@ public final class Tools {
           + "immediately, deferring to the next tempo boundary. Snapshots (list_snapshots, "
           + "add_snapshot, recall_snapshot) capture and recall whole-look state — mixer, "
           + "pattern, effect, and modulation values together — with an optional fade "
-          + "controlled by the engine's transition settings.";
+          + "controlled by the engine's transition settings. Every mutation tool above "
+          + "changes only the running engine's in-memory state — nothing reaches disk until "
+          + "save_project writes it; a restart or crash before that call loses the work.";
 
   private Tools() {}
 
@@ -91,6 +93,8 @@ public final class Tools {
   public static List<LxTool> allTools(GetStatus getStatus) {
     List<LxTool> tools = new ArrayList<>(List.of(
             new GetProjectInfo(),
+            new SaveProject(),
+            new SaveModel(),
             getStatus,
             new ListChannels(),
             new GetChannel(),

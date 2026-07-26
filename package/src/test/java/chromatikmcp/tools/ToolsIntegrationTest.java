@@ -1,14 +1,18 @@
 package chromatikmcp.tools;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,6 +24,7 @@ import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXPath;
@@ -42,6 +47,7 @@ import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTranspor
 import io.modelcontextprotocol.spec.McpSchema;
 
 import chromatikmcp.ServerStatus;
+import chromatikmcp.domain.Projects;
 import chromatikmcp.domain.Registry;
 import chromatikmcp.domain.Resolve;
 import chromatikmcp.engine.EngineExecutor;
@@ -193,7 +199,7 @@ class ToolsIntegrationTest {
     McpSchema.ListToolsResult tools = client.listTools();
     Set<String> names = tools.tools().stream().map(McpSchema.Tool::name).collect(Collectors.toSet());
     assertEquals(
-        Set.of("get_project_info", "get_status", "list_channels", "get_channel", "list_available_patterns",
+        Set.of("get_project_info", "save_project", "save_model", "get_status", "list_channels", "get_channel", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
             "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
@@ -213,7 +219,7 @@ class ToolsIntegrationTest {
             "update_snapshot", "remove_snapshot",
             "apply_operations"),
         names);
-    Set<String> mutators = Set.of("set_parameter", "add_modulator", "wire_modulator",
+    Set<String> mutators = Set.of("save_project", "save_model", "set_parameter", "add_modulator", "wire_modulator",
         "wire_trigger", "remove_modulation", "remove_modulator", "fire_trigger",
         "add_view", "remove_view", "add_fixture", "remove_fixture", "move_fixture",
         "duplicate_fixture", "set_fixture_params", "set_fixture_tags", "reload_fixtures",
@@ -829,7 +835,10 @@ class ToolsIntegrationTest {
     Map<String, Object> model = (Map<String, Object>) payload.get("model");
     assertNotNull(model, "get_project_info reports the model's link to an external .lxm file");
     assertEquals(lx.structure.modelName.getString(), model.get("name"));
-    assertNull(model.get("file"), "the fixture in this suite has no linked .lxm, so file is absent");
+    // This class's structure is permanently static (see class javadoc), so
+    // lx.structure.getModelFile() is unconditionally null and nothing in this class can
+    // ever link a model file — save_model's happy path (the link moving) is covered by
+    // SaveModelIntegrationTest, which constructs its own dynamic-structure LX.
     assertFalse(model.containsKey("file"), "absent file must be an omitted key, not a JSON null");
     assertEquals(lx.structure.isExternalModel(), model.get("external"));
     assertEquals(lx.structure.isStatic.isOn(), model.get("isStatic"));
@@ -841,6 +850,22 @@ class ToolsIntegrationTest {
     assertFalse(result.content().isEmpty(), "success also carries a text mirror");
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith("{"), "text mirror is the serialized JSON payload");
+  }
+
+  /**
+   * Deterministic, order-independent coverage of the "omitted, never JSON null" rule for
+   * {@code model.file} (tool-conventions.md): the integration assertion above only
+   * exercises the null-file branch when this shared class-level lx happens to have no
+   * linked model file yet, which depends on test execution order (JUnit 5's default order
+   * is unspecified) relative to save_model's own tests, which permanently link it. This
+   * constructs the record directly instead of depending on live state.
+   */
+  @Test
+  void modelPayloadOmitsFileKeyWhenModelInfoFileIsNull() {
+    Projects.ModelInfo info = new Projects.ModelInfo(
+        "<Embedded in Project>", null, false, false, false, false, "/lx/structure/syncModelFile");
+    Map<String, Object> payload = GetProjectInfo.modelPayload(info);
+    assertFalse(payload.containsKey("file"), "absent file must be an omitted key, not a JSON null");
   }
 
   @Test
@@ -3087,6 +3112,106 @@ class ToolsIntegrationTest {
     walkForNullPaths(payload, "", errors);
     assertEquals("", errors.toString(),
         "payload contains no unregistered-parameter \"/null\" paths: " + errors);
+  }
+
+  @Test
+  void saveProjectWithBlankPathIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("save_project", Map.of("path", "   "));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void saveModelWithBlankPathIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("save_model", Map.of("path", "   "));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void saveProjectOverwriteGuardOverMcpReturnsInvalidArgumentAndLeavesTheFileUnchanged(
+      @TempDir Path tempDir) throws IOException {
+    File target = tempDir.resolve("existing.lxp").toFile();
+    Files.writeString(target.toPath(), "not a project file");
+    byte[] before = Files.readAllBytes(target.toPath());
+
+    McpSchema.CallToolResult result =
+        call("save_project", Map.of("path", target.getAbsolutePath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    assertTrue(text.text().contains(target.getAbsolutePath()), "message names the resolved path");
+    assertArrayEquals(before, Files.readAllBytes(target.toPath()),
+        "overwrite=false must leave the existing file's bytes untouched");
+  }
+
+  // save_model's overwrite guard over MCP now requires a dynamic structure to reach at
+  // all (Projects.resolveModelSaveFile checks requireDynamicStructure before the guard —
+  // issue #154's Fix 3), and this class's structure is permanently static (see class
+  // javadoc), so that path can't be exercised here — see
+  // SaveModelIntegrationTest.saveModelOverwriteGuardOverMcpReturnsInvalidArgumentAndLeavesTheFileUnchanged,
+  // which runs against a dynamic-structure LX.
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void saveProjectOverMcpWritesAFileAndReportsItsAbsolutePath(@TempDir Path tempDir) {
+    // Absolute path under a per-test @TempDir: the shared class-level lx's media root is
+    // the default "." (working directory), and a real write there would pollute it — this
+    // sidesteps LX.Media.PROJECTS resolution entirely (already covered by ProjectsTest).
+    File target = tempDir.resolve("integration-session.lxp").toFile();
+    Map<String, Object> payload =
+        structured(call("save_project", Map.of("path", target.getAbsolutePath())));
+    assertEquals(target.getAbsolutePath(), payload.get("path"));
+    assertTrue(target.isFile());
+    assertTrue(target.length() > 0);
+    assertNotNull(lx.getProject());
+    assertEquals(target.getAbsolutePath(), lx.getProject().getAbsolutePath());
+
+    // Fix for issue #154's follow-up: save_project also echoes get_project_info's model
+    // block, exactly like save_model, so a client can tell without a separate call whether
+    // this save rewrote a linked .lxm (syncModelFile write-through, LXStructure.java:874-880).
+    Map<String, Object> model = (Map<String, Object>) payload.get("model");
+    assertNotNull(model, "save_project echoes get_project_info's model block");
+    assertEquals(lx.structure.modelName.getString(), model.get("name"));
+  }
+
+  @Test
+  void saveModelOnAStaticStructureIsInvalidArgumentAndWritesNothing(@TempDir Path tempDir) {
+    // lx's model is static/immutable (see class javadoc, and
+    // addFixtureOnAStaticStructureIsInvalidArgument above) — Projects.saveModel's guard
+    // (added for issue #154's Fix 2: a static model has no fixture-based model to export,
+    // and LXStructure.load discards any link it would write on the next project load
+    // anyway) must reject this end-to-end over real HTTP, the same way the static-fixture
+    // guard does for add_fixture. The write-a-file/move-the-link/echo-the-model-block happy
+    // path is covered at the domain level in ProjectsTest against a dynamic-structure LX —
+    // this class's single shared, permanently-static lx (constructed once in @BeforeAll;
+    // see the class javadoc on why a second LX can't be constructed here) cannot exercise
+    // it without bypassing the guard this test exists to prove is wired up.
+    File target = tempDir.resolve("integration-rig.lxm").toFile();
+    McpSchema.CallToolResult result =
+        call("save_model", Map.of("path", target.getAbsolutePath()));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    assertFalse(target.exists(), "the guard must fire before any write is attempted");
+  }
+
+  @Test
+  void saveModelWithNoPathOnAStaticStructureReportsTheStaticReasonNotTheMissingLinkReason() {
+    // Issue #154's Fix 3: with no path, Projects.resolveModelSaveFile used to run its
+    // "no linked model file" check before requireDynamicStructure, so a static structure
+    // reported an error that told the caller to retry with a path — advice that cannot
+    // work, since save_model rejects a static structure regardless of path. Hoisting the
+    // static-mode guard first means the omitted-path call gets the actionable reason on
+    // the very first try.
+    McpSchema.CallToolResult result = call("save_model", Map.of());
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    assertTrue(text.text().contains("static-model mode"),
+        "must report the static-mode reason, not \"no linked model file\": " + text.text());
   }
 
   private static void walkForNullPaths(Object obj, String path, StringBuilder errors) {
