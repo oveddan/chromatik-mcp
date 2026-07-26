@@ -40,9 +40,7 @@ public final class RemoveModulation implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("path") instanceof String path)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: path");
-    }
+    String path = Args.requireString(args, "path");
     LXParameterModulation modulation =
         Resolve.component(lx, path, LXParameterModulation.class);
     String kind = Modulators.remove(lx, modulation);

@@ -92,6 +92,34 @@ class ToolSeamTest extends HeadlessLxTest {
     }
   }
 
+  private static final class RequiresIntTool implements LxTool {
+    @Override
+    public String name() {
+      return "requires_int_tool";
+    }
+
+    @Override
+    public String description() {
+      return "requires an integer 'index' argument, via Args.requireInt";
+    }
+
+    @Override
+    public Map<String, Object> inputSchema() {
+      return Schemas.noArgs();
+    }
+
+    @Override
+    public boolean readOnly() {
+      return true;
+    }
+
+    @Override
+    public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
+      int index = Args.requireInt(args, "index");
+      return Result.ok(Map.of("index", index));
+    }
+  }
+
   private static final class ImageTool implements LxTool {
     private final java.util.function.Supplier<byte[]> png;
 
@@ -221,6 +249,25 @@ class ToolSeamTest extends HeadlessLxTest {
         assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INTERNAL + ":"),
         "executor-level failure maps to internal, no thrown exception: " + text.text());
+  }
+
+  @Test
+  void argsResolveExceptionMapsToInvalidArgumentNotInternal() {
+    // Args throws Resolve.ResolveException (not a plain RuntimeException) precisely so it
+    // is caught by the ResolveException branch above the generic RuntimeException catch at
+    // Tools.java:203 — if that ever regressed to a plain exception type, every malformed
+    // argument would silently surface as "internal" instead of "invalid_argument".
+    McpServerFeatures.SyncToolSpecification spec =
+        Tools.specification(new RequiresIntTool(), this.lx, new EngineExecutor(this.lx));
+
+    McpSchema.CallToolResult result = spec.callHandler().apply(
+        null, new McpSchema.CallToolRequest("requires_int_tool", Map.of("index", 1.5)));
+
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text =
+        assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT + ": Required integer argument: index"),
+        "Args failure surfaces as invalid_argument, not internal: " + text.text());
   }
 
   @Test

@@ -38,10 +38,8 @@ public final class RemoveMidiMapping implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("index") instanceof Number n)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required integer argument: index");
-    }
-    Midi.MappingInfo removed = Midi.removeMapping(lx, n.intValue());
+    int index = Args.requireInt(args, "index");
+    Midi.MappingInfo removed = Midi.removeMapping(lx, index);
     return Result.ok(AddMidiMapping.toMap(removed));
   }
 }

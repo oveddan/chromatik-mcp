@@ -38,11 +38,8 @@ public final class AddSnapshot implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    Object labelArg = args.get("label");
-    if (labelArg != null && !(labelArg instanceof String)) {
-      return Result.error(Result.INVALID_ARGUMENT, "label must be a string");
-    }
-    LXGlobalSnapshot snapshot = Snapshots.addSnapshot(lx, (String) labelArg);
+    String labelArg = Args.optionalString(args, "label");
+    LXGlobalSnapshot snapshot = Snapshots.addSnapshot(lx, labelArg);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("path", snapshot.getCanonicalPath());
     payload.put("id", snapshot.getId());

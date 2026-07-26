@@ -41,14 +41,9 @@ public final class MoveSwatch implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("path") instanceof String path)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: path");
-    }
-    if (!(args.get("index") instanceof Number n)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required integer argument: index");
-    }
+    String path = Args.requireString(args, "path");
+    int index = Args.requireInt(args, "index");
     LXSwatch swatch = Resolve.component(lx, path, LXSwatch.class);
-    int index = n.intValue();
     if (index < 0 || index >= lx.engine.palette.swatches.size()) {
       return Result.error(Result.INVALID_ARGUMENT,
           "index out of range: " + index + " (swatch count "

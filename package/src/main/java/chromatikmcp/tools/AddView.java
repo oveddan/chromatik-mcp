@@ -55,9 +55,7 @@ public final class AddView implements LxTool {
     if (!(args.get("label") instanceof String label) || label.isEmpty()) {
       return Result.error(Result.INVALID_ARGUMENT, "Required non-empty string argument: label");
     }
-    if (!(args.get("selector") instanceof String selector)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: selector");
-    }
+    String selector = Args.requireString(args, "selector");
     LXView.Normalization normalization;
     try {
       normalization = parseNormalization(args.get("normalization"));

@@ -91,11 +91,7 @@ public final class ListChannels implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    Object detailArg = args.get("detail");
-    if (detailArg != null && !(detailArg instanceof String)) {
-      return Result.error(Result.INVALID_ARGUMENT, "detail must be a string");
-    }
-    String detail = (String) detailArg;
+    String detail = Args.optionalString(args, "detail");
     if (detail != null && !detail.equals("summary") && !detail.equals("full")) {
       return Result.error(Result.INVALID_ARGUMENT, "detail must be 'summary' or 'full'");
     }

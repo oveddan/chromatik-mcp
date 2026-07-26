@@ -66,16 +66,9 @@ public final class WireModulator implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("sourcePath") instanceof String sourcePath)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: sourcePath");
-    }
-    if (!(args.get("targetPath") instanceof String targetPath)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: targetPath");
-    }
-    Object scope = args.get("scope");
-    if (scope != null && !(scope instanceof String)) {
-      return Result.error(Result.INVALID_ARGUMENT, "scope must be a string path");
-    }
+    String sourcePath = Args.requireString(args, "sourcePath");
+    String targetPath = Args.requireString(args, "targetPath");
+    String scope = Args.optionalString(args, "scope", "scope must be a string path");
     Double range = null;
     Object rangeArg = args.get("range");
     if (rangeArg != null) {
@@ -99,7 +92,7 @@ public final class WireModulator implements LxTool {
           + "modulation — only compound parameters can");
     }
     Parameters.requireWritable(target);
-    LXModulationEngine engine = Modulators.selectEngine(lx, (String) scope, source);
+    LXModulationEngine engine = Modulators.selectEngine(lx, scope, source);
     LXCompoundModulation modulation =
         Modulators.wireModulation(lx, engine, normalizedSource, compoundTarget, range);
     Map<String, Object> payload = new LinkedHashMap<>();

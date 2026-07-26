@@ -107,6 +107,8 @@ plugin logs a loud warning on startup whenever a non-loopback host is configured
   "url": "http://127.0.0.1:51234/mcp",
   "projectPath": "/Users/you/Chromatik/Projects/MyShow.lxp",
   "lxVersion": "1.2.1",
+  "serverVersion": "0.1.0",
+  "buildTime": "2026-07-20T18:04:33Z",
   "connected": false,
   "lastActivityAt": null
 }

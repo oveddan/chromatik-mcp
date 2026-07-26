@@ -41,6 +41,17 @@ public final class Resolve {
     }
   }
 
+  /**
+   * Builds a {@code TYPE_MISMATCH} {@link ResolveException} for a caller outside this package
+   * (e.g. {@code chromatikmcp.tools.Args}, validating a tool's raw argument map) that needs to
+   * fail the way a {@code Resolve} lookup does, without being able to construct a
+   * {@code NOT_FOUND} or {@code INVALID_PATH} exception itself — only this class's own
+   * resolution logic decides those.
+   */
+  public static ResolveException invalidArgument(String message) {
+    return new ResolveException(Failure.TYPE_MISMATCH, message);
+  }
+
   private Resolve() {}
 
   /** Resolve to a parameter; call on the engine thread. */

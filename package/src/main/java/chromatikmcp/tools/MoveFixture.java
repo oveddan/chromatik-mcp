@@ -46,15 +46,10 @@ public final class MoveFixture implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("path") instanceof String path)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: path");
-    }
-    Object indexArg = args.get("index");
-    if (!(indexArg instanceof Number number) || number.doubleValue() != Math.rint(number.doubleValue())) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required integer argument: index");
-    }
+    String path = Args.requireString(args, "path");
+    int index = Args.requireInt(args, "index");
     LXFixture fixture = Resolve.component(lx, path, LXFixture.class);
-    Fixtures.FixtureInfo info = Fixtures.moveFixture(lx, fixture, number.intValue());
+    Fixtures.FixtureInfo info = Fixtures.moveFixture(lx, fixture, index);
     return Result.ok(ListFixtures.toMap(info));
   }
 }

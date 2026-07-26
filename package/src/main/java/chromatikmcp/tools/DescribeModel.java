@@ -67,10 +67,7 @@ public final class DescribeModel implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    int depth = DEFAULT_DEPTH;
-    if (args.get("depth") instanceof Number n) {
-      depth = n.intValue();
-    }
+    int depth = Args.optionalInt(args, "depth", DEFAULT_DEPTH);
     if (depth < 0) {
       return Result.error(Result.INVALID_ARGUMENT, "depth must be >= 0");
     }

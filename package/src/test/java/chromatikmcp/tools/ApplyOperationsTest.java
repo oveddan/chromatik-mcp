@@ -18,8 +18,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXPath;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.model.GridModel;
+import heronarts.lx.pattern.LXPattern;
+import heronarts.lx.pattern.color.GradientPattern;
 
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -312,5 +315,82 @@ class ApplyOperationsTest {
     assertEquals(Boolean.FALSE, results.get(0).get("ok"));
     assertEquals(Result.INVALID_ARGUMENT, results.get(0).get("code"),
         "remove_channel's own guard on a missing 'path' fires even called through invoke()");
+  }
+
+  @Test
+  void batchedMovePatternFractionalIndexIsRejectedAndDoesNotMutate() {
+    // apply_operations's re-entrant Tools.invoke() path (see
+    // missingRequiredArgOnABatchedOpIsInvalidArgumentNotInternal above) skips the SDK's own
+    // inputSchema validation for each sub-op's args — unlike a top-level move_pattern call,
+    // where the SDK's integer-typed schema would reject a fractional index before our handler
+    // ever saw it (see ToolsIntegrationTest#movePatternFractionalIndexIsInvalidArgumentAndDoesNotMutate).
+    // This is the one reachable-over-real-HTTP path that bypasses that validator, so it must
+    // still hit Args.requireInt's own check rather than truncating 1.5 into a silent move to
+    // index 1.
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> p0 = structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      String p0path = (String) p0.get("path");
+      LXPattern pattern = (LXPattern) LXPath.get(lx, p0path);
+      int indexBefore = pattern.getIndex();
+
+      Map<String, Object> payload = structured(call("apply_operations", Map.of(
+          "operations", List.of(op("move_pattern", Map.of("path", p0path, "index", 1.5))))));
+
+      List<Map<String, Object>> results = resultsOf(payload);
+      assertEquals(1, results.size());
+      assertEquals(Boolean.FALSE, results.get(0).get("ok"),
+          "a fractional index must not silently truncate through apply_operations");
+      assertEquals(Result.INVALID_ARGUMENT, results.get(0).get("code"));
+      assertEquals(indexBefore, pattern.getIndex(), "no mutation occurred");
+
+      // The same batch path with a whole-valued double must still be accepted, exactly as a
+      // top-level call is (moveEffectIntegralDoubleIndexIsAcceptedLikeInt et al.) — the fix
+      // must not have broken legitimate JSON clients that send integers as doubles.
+      Map<String, Object> acceptedPayload = structured(call("apply_operations", Map.of(
+          "operations", List.of(op("move_pattern", Map.of("path", p0path, "index", 1.0))))));
+      List<Map<String, Object>> acceptedResults = resultsOf(acceptedPayload);
+      assertEquals(1, acceptedResults.size());
+      assertEquals(Boolean.TRUE, acceptedResults.get(0).get("ok"),
+          "a whole-valued double must still be accepted");
+      assertEquals(1, pattern.getIndex(), "the whole-valued double actually moved the pattern");
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  void batchedMovePatternOutOfIntRangeIndexIsRejectedAndDoesNotMutate() {
+    // Same bypass-the-SDK-schema path as the fractional-index case above, but for a JSON
+    // integer literal past Integer.MAX_VALUE: Jackson hands Args.requireInt a Long, and
+    // Long.intValue() narrows by taking the low 32 bits (4294967297L -> 1) rather than
+    // failing — a client sending this value would otherwise see a silent move to index 1.
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> p0 = structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      String p0path = (String) p0.get("path");
+      LXPattern pattern = (LXPattern) LXPath.get(lx, p0path);
+      int indexBefore = pattern.getIndex();
+
+      Map<String, Object> payload = structured(call("apply_operations", Map.of(
+          "operations", List.of(op("move_pattern", Map.of("path", p0path, "index", 4294967297L))))));
+
+      List<Map<String, Object>> results = resultsOf(payload);
+      assertEquals(1, results.size());
+      assertEquals(Boolean.FALSE, results.get(0).get("ok"),
+          "an out-of-int-range index must not silently narrow through apply_operations");
+      assertEquals(Result.INVALID_ARGUMENT, results.get(0).get("code"));
+      assertEquals(indexBefore, pattern.getIndex(), "no mutation occurred");
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
   }
 }

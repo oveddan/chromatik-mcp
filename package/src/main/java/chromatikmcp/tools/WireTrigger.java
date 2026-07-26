@@ -51,16 +51,9 @@ public final class WireTrigger implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("sourcePath") instanceof String sourcePath)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: sourcePath");
-    }
-    if (!(args.get("targetPath") instanceof String targetPath)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: targetPath");
-    }
-    Object scope = args.get("scope");
-    if (scope != null && !(scope instanceof String)) {
-      return Result.error(Result.INVALID_ARGUMENT, "scope must be a string path");
-    }
+    String sourcePath = Args.requireString(args, "sourcePath");
+    String targetPath = Args.requireString(args, "targetPath");
+    String scope = Args.optionalString(args, "scope", "scope must be a string path");
     LXParameter source = Resolve.parameter(lx, sourcePath);
     LXParameter target = Resolve.parameter(lx, targetPath);
     if (!(source instanceof BooleanParameter booleanSource)) {
@@ -72,7 +65,7 @@ public final class WireTrigger implements LxTool {
           + " (" + target.getClass().getSimpleName() + ") must be a boolean parameter");
     }
     Parameters.requireWritable(booleanTarget);
-    LXModulationEngine engine = Modulators.selectEngine(lx, (String) scope, source);
+    LXModulationEngine engine = Modulators.selectEngine(lx, scope, source);
     LXTriggerModulation trigger =
         Modulators.wireTrigger(lx, engine, booleanSource, booleanTarget);
     Map<String, Object> payload = new LinkedHashMap<>();

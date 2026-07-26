@@ -49,9 +49,7 @@ public final class SetMidiInput implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("index") instanceof Number n)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required integer argument: index");
-    }
+    int index = Args.requireInt(args, "index");
     Boolean channelEnabled = boolArg(args, "channelEnabled");
     Boolean controlEnabled = boolArg(args, "controlEnabled");
     Boolean syncEnabled = boolArg(args, "syncEnabled");
@@ -60,7 +58,7 @@ public final class SetMidiInput implements LxTool {
           "At least one of channelEnabled, controlEnabled, syncEnabled is required");
     }
     Midi.InputInfo info =
-        Midi.setInputFlags(lx, n.intValue(), channelEnabled, controlEnabled, syncEnabled);
+        Midi.setInputFlags(lx, index, channelEnabled, controlEnabled, syncEnabled);
     return Result.ok(ListMidiDevices.toMap(info));
   }
 

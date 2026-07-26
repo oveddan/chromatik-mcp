@@ -548,6 +548,11 @@ public final class Catalog {
   /**
    * Staleness of a catalog entry relative to the current class bytecode.
    *
+   * <p>Deliberate test seam: production code (e.g. {@code GetComponentDoc}) always reads
+   * staleness off a resolved {@link Candidate#bytesMatch()} instead, so exercising the
+   * {@code recordedHash}-vs-live-bytecode comparison directly (rather than via a full
+   * catalog resolution) needs this entry point. No production caller.
+   *
    * @return {@link Staleness#FRESH} (bytecode identical — entry is trustworthy),
    *         {@link Staleness#STALE} (bytecode differs — regenerate), or
    *         {@link Staleness#UNKNOWN} (no recorded hash, or bytecode unreadable).

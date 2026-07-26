@@ -40,9 +40,7 @@ public final class RemoveSnapshot implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("path") instanceof String path)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: path");
-    }
+    String path = Args.requireString(args, "path");
     LXGlobalSnapshot snapshot = Resolve.component(lx, path, LXGlobalSnapshot.class);
     Snapshots.removeSnapshot(lx, snapshot);
     Map<String, Object> payload = new LinkedHashMap<>();

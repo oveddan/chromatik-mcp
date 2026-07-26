@@ -57,10 +57,10 @@ For each `list_modulations` scope, a `modulators[]` entry is reached when its `p
 matches, exactly or as a `<path>/...` prefix, the `sourcePath` of some `modulations[]` or
 `triggers[]` entry (in that scope or any other scope you reached — a global modulator can
 target a device-local parameter). A modulator's `path` is the modulator itself; its
-`sourcePath` may instead be one of its own child parameters — a `MacroKnobs`/
-`MacroSwitches`/`MacroTriggers` modulator's source is `<modulatorPath>/macro1` (or
-`switch1`/`trigger1`), not the modulator's own path (`list_modulations`' own description
-says knob paths derive this way). An entry with no such match is a DEFECT.
+`sourcePath` may instead be one of its own child parameters — `MacroKnobs`, `MacroSwitches`,
+and `MacroTriggers` all name their eight child parameters `macro1`..`macro8`, so a source
+path like `<modulatorPath>/macro1` is not the modulator's own path (`list_modulations`' own
+description says knob paths derive this way). An entry with no such match is a DEFECT.
 Downgrade to a QUESTION when `get_project_info`'s `osc.transmitActive` is `true` — an
 external OSC consumer could be reading the modulator's value at its own `oscAddress`
 (from `list_modulations`, `detail: full`) with no tool able to see that consumer.

@@ -39,13 +39,11 @@ public final class SetMidiSurfaceEnabled implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("index") instanceof Number n)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required integer argument: index");
-    }
+    int index = Args.requireInt(args, "index");
     if (!(args.get("enabled") instanceof Boolean enabled)) {
       return Result.error(Result.INVALID_ARGUMENT, "Required boolean argument: enabled");
     }
-    Midi.SurfaceInfo info = Midi.setSurfaceEnabled(lx, n.intValue(), enabled);
+    Midi.SurfaceInfo info = Midi.setSurfaceEnabled(lx, index, enabled);
     return Result.ok(ListMidiSurfaces.toMap(info));
   }
 }

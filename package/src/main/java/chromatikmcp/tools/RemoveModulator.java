@@ -40,9 +40,7 @@ public final class RemoveModulator implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("path") instanceof String path)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: path");
-    }
+    String path = Args.requireString(args, "path");
     // Resolution failures are typed ResolveExceptions; the seam maps them to wire codes.
     LXModulator modulator = Resolve.component(lx, path, LXModulator.class);
     Modulators.removeModulator(lx, modulator);

@@ -49,22 +49,15 @@ public final class ListModulations implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    Object scope = args.get("scope");
-    if (scope != null && !(scope instanceof String)) {
-      return Result.error(Result.INVALID_ARGUMENT, "scope must be a string path");
-    }
-    Object detailArg = args.get("detail");
-    if (detailArg != null && !(detailArg instanceof String)) {
-      return Result.error(Result.INVALID_ARGUMENT, "detail must be a string");
-    }
-    String detail = (String) detailArg;
+    String scope = Args.optionalString(args, "scope", "scope must be a string path");
+    String detail = Args.optionalString(args, "detail");
     if (detail != null && !detail.equals("summary") && !detail.equals("full")) {
       return Result.error(Result.INVALID_ARGUMENT, "detail must be 'summary' or 'full'");
     }
     boolean full = "full".equals(detail);
 
     Modulators.EngineInfo info =
-        Modulators.listEngine(lx, Modulators.resolveEngine(lx, (String) scope));
+        Modulators.listEngine(lx, Modulators.resolveEngine(lx, scope));
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("enginePath", info.path());
 

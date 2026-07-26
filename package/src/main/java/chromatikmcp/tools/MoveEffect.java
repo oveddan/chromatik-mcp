@@ -47,13 +47,9 @@ public final class MoveEffect implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("path") instanceof String path)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: path");
-    }
-    if (!(args.get("index") instanceof Number n)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required integer argument: index");
-    }
-    Channels.EffectMoveResult result = Channels.moveEffect(lx, path, n.intValue());
+    String path = Args.requireString(args, "path");
+    int index = Args.requireInt(args, "index");
+    Channels.EffectMoveResult result = Channels.moveEffect(lx, path, index);
     LXEffect effect = result.effect();
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("path", effect.getCanonicalPath());

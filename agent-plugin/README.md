@@ -16,7 +16,7 @@ LICENSE                      Copy of the repo LICENSE — the tarball ships stan
 agents/                      chromatik-reviewer, project-surveyor
 commands/                    /chromatik-review, /chromatik-learn
 skills/driving-chromatik/    House rules for driving a live Chromatik
-skills/project-profile/      House rules for surveying an existing project
+skills/project-profile/      The project-profile document format and the rules for deriving one
 ```
 
 Both ecosystem manifests live at the plugin root, one directory apart

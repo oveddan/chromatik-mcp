@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -26,12 +27,14 @@ import heronarts.lx.color.LXDynamicColor;
 import heronarts.lx.color.LXSwatch;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.BlurEffect;
+import heronarts.lx.effect.LXEffect;
 import heronarts.lx.midi.MidiControlChange;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.modulator.MacroTriggers;
+import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.pattern.PatternRack;
 import heronarts.lx.pattern.color.GradientPattern;
 
@@ -732,6 +735,53 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void moveEffectFractionalIndexIsInvalidArgumentAndDoesNotMutate() {
+    // The MCP SDK's own JSON-schema validation rejects a fractional value for an
+    // "integer"-typed argument before a request over real HTTP ever reaches the handler,
+    // so this exercises Args.requireInt directly — exactly the layer that regressed
+    // silently before this PR (see Args.java).
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> e1 = structured(call("add_effect", Map.of(
+          "containerPath", channelPath, "class", BlurEffect.class.getName())));
+      structured(call("add_effect", Map.of(
+          "containerPath", channelPath, "class", BlurEffect.class.getName())));
+      String e1path = (String) e1.get("path");
+      LXEffect effect = (LXEffect) LXPath.get(lx, e1path);
+      int indexBefore = effect.getIndex();
+
+      Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+          () -> new MoveEffect().handle(lx, Map.of("path", e1path, "index", 1.5)));
+
+      assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+      assertEquals("Required integer argument: index", e.getMessage());
+      assertEquals(indexBefore, effect.getIndex(), "no mutation occurred");
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  void moveEffectIntegralDoubleIndexIsAcceptedLikeInt() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> e1 = structured(call("add_effect", Map.of(
+          "containerPath", channelPath, "class", BlurEffect.class.getName())));
+      structured(call("add_effect", Map.of(
+          "containerPath", channelPath, "class", BlurEffect.class.getName())));
+      String e1path = (String) e1.get("path");
+
+      Map<String, Object> moved = structured(
+          call("move_effect", Map.of("path", e1path, "index", 1.0)));
+      assertEquals(1, ((Number) moved.get("index")).intValue());
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void movePatternReportsOscChanges() {
     Map<String, Object> ch = structured(call("add_channel", Map.of()));
@@ -752,6 +802,54 @@ class ToolsIntegrationTest {
 
       List<Map<String, Object>> oscChanges = (List<Map<String, Object>>) assertOscChanges(moved.get("oscChanges"));
       assertEquals(3, oscChanges.size(), "moved pattern plus the two shifted siblings");
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  void movePatternFractionalIndexIsInvalidArgumentAndDoesNotMutate() {
+    // Same rationale as moveEffectFractionalIndexIsInvalidArgumentAndDoesNotMutate: the
+    // SDK's schema validation would swallow the fractional value over HTTP, so this
+    // exercises Args.requireInt directly.
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> p0 = structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      String p0path = (String) p0.get("path");
+      LXPattern pattern = (LXPattern) LXPath.get(lx, p0path);
+      int indexBefore = pattern.getIndex();
+
+      Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+          () -> new MovePattern().handle(lx, Map.of("path", p0path, "index", 1.5)));
+
+      assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+      assertEquals("Required integer argument: index", e.getMessage());
+      assertEquals(indexBefore, pattern.getIndex(), "no mutation occurred");
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  void movePatternIntegralDoubleIndexIsAcceptedLikeInt() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> p0 = structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", GradientPattern.class.getName())));
+      String p0path = (String) p0.get("path");
+
+      // A client sending an integer over JSON may arrive as a Double (e.g. 1.0) — this
+      // must be accepted exactly like the int 1.
+      Map<String, Object> moved = structured(
+          call("move_pattern", Map.of("path", p0path, "index", 1.0)));
+      assertEquals(1, ((Number) moved.get("index")).intValue());
     } finally {
       structured(call("remove_channel", Map.of("path", channelPath)));
     }
@@ -1567,6 +1665,37 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void removeMidiMappingIntegralDoubleIndexIsAcceptedLikeInt() {
+    int before = lx.engine.midi.mappings.size();
+
+    Map<String, Object> added = structured(call("add_midi_mapping", Map.of(
+        "type", "cc", "channel", 2, "number", 21,
+        "targetPath", channel.fader.getCanonicalPath())));
+    int index = ((Number) added.get("index")).intValue();
+
+    // A client sending an integer over JSON may arrive as a Double — this must be
+    // accepted exactly like the int.
+    Map<String, Object> removed =
+        structured(call("remove_midi_mapping", Map.of("index", (double) index)));
+    assertEquals("cc", removed.get("type"));
+    assertEquals(before, lx.engine.midi.mappings.size(), "round trip leaves mapping count unchanged");
+  }
+
+  @Test
+  void removeMidiMappingFractionalIndexIsInvalidArgumentAndDoesNotMutate() {
+    // The SDK's schema validation would swallow the fractional value over HTTP, so this
+    // exercises Args.requireInt directly.
+    int before = lx.engine.midi.mappings.size();
+
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> new RemoveMidiMapping().handle(lx, Map.of("index", 0.5)));
+
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+    assertEquals("Required integer argument: index", e.getMessage());
+    assertEquals(before, lx.engine.midi.mappings.size(), "no mutation occurred");
+  }
+
+  @Test
   void removeMidiMappingUnknownIndexIsInvalidArgument() {
     int outOfRange = lx.engine.midi.mappings.size() + 99;
     McpSchema.CallToolResult result = call("remove_midi_mapping", Map.of("index", outOfRange));
@@ -1597,11 +1726,31 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void setMidiInputFractionalIndexIsInvalidArgument() {
+    // The SDK's schema validation would swallow the fractional value over HTTP, so this
+    // exercises Args.requireInt directly.
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> new SetMidiInput().handle(lx, Map.of("index", 0.5, "channelEnabled", true)));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+    assertEquals("Required integer argument: index", e.getMessage());
+  }
+
+  @Test
   void setMidiInputRequiresAtLeastOneFlag() {
     McpSchema.CallToolResult result = call("set_midi_input", Map.of("index", 0));
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void setMidiSurfaceEnabledFractionalIndexIsInvalidArgument() {
+    // The SDK's schema validation would swallow the fractional value over HTTP, so this
+    // exercises Args.requireInt directly.
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> new SetMidiSurfaceEnabled().handle(lx, Map.of("index", 0.5, "enabled", true)));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+    assertEquals("Required integer argument: index", e.getMessage());
   }
 
   @Test
@@ -2684,6 +2833,52 @@ class ToolsIntegrationTest {
 
       lx.command.undo();
       assertEquals(before, firstSwatch.getIndex(), "undo restores the original order");
+    } finally {
+      lx.engine.palette.removeSwatch(firstSwatch);
+      lx.engine.palette.removeSwatch(secondSwatch);
+    }
+  }
+
+  @Test
+  void moveSwatchFractionalIndexIsInvalidArgumentAndDoesNotMutate() {
+    // Same rationale as moveEffectFractionalIndexIsInvalidArgumentAndDoesNotMutate: the
+    // SDK's schema validation would swallow the fractional value over HTTP, so this
+    // exercises Args.requireInt directly.
+    int before = lx.engine.palette.swatches.size();
+    Map<String, Object> first = structured(call("save_swatch", Map.of()));
+    Map<String, Object> second = structured(call("save_swatch", Map.of()));
+    LXSwatch firstSwatch = (LXSwatch) LXPath.get(lx, (String) first.get("path"));
+    LXSwatch secondSwatch = (LXSwatch) LXPath.get(lx, (String) second.get("path"));
+    try {
+      int indexBefore = firstSwatch.getIndex();
+
+      Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+          () -> new MoveSwatch().handle(lx, Map.of(
+              "path", firstSwatch.getCanonicalPath(), "index", (before + 1) + 0.5)));
+
+      assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+      assertEquals("Required integer argument: index", e.getMessage());
+      assertEquals(indexBefore, firstSwatch.getIndex(), "no mutation occurred");
+    } finally {
+      lx.engine.palette.removeSwatch(firstSwatch);
+      lx.engine.palette.removeSwatch(secondSwatch);
+    }
+  }
+
+  @Test
+  void moveSwatchIntegralDoubleIndexIsAcceptedLikeInt() {
+    int before = lx.engine.palette.swatches.size();
+    Map<String, Object> first = structured(call("save_swatch", Map.of()));
+    Map<String, Object> second = structured(call("save_swatch", Map.of()));
+    LXSwatch firstSwatch = (LXSwatch) LXPath.get(lx, (String) first.get("path"));
+    LXSwatch secondSwatch = (LXSwatch) LXPath.get(lx, (String) second.get("path"));
+    try {
+      // A client sending an integer over JSON may arrive as a Double — this must be
+      // accepted exactly like the int (before + 1).
+      Map<String, Object> moved = structured(call("move_swatch",
+          Map.of("path", firstSwatch.getCanonicalPath(), "index", (double) (before + 1))));
+      assertEquals(before + 1, ((Number) moved.get("index")).intValue());
+      assertEquals(before + 1, firstSwatch.getIndex());
     } finally {
       lx.engine.palette.removeSwatch(firstSwatch);
       lx.engine.palette.removeSwatch(secondSwatch);

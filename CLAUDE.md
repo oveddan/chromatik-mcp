@@ -26,7 +26,7 @@ branch, carrying another session's uncommitted edits.
 
 A single Java package (`package/`) — drop-in LX jar (Maven). The jar embeds an HTTP MCP server inside the LX runtime, so AI clients (any MCP-speaking agentic platform — Claude Code, Claude Desktop, Cursor, Codex, custom orchestrators) connect to it directly and call tools that mutate LX state in-process. No separate Node server, no `.lxp` file editing, no file watcher.
 
-The only filesystem touchpoint is `~/.chromatik-mcp/status.json`, which the plugin writes on startup so clients can discover the HTTP port.
+The filesystem touchpoints are `~/.chromatik-mcp/status.json`, which the plugin writes on startup so clients can discover the HTTP port, and the optional `~/.chromatik-mcp/config.json` (fixed port / bind host).
 
 Reference LX source at `/Users/danoved/Source/LX/`; the scaffolding convention mirrors `/Users/danoved/Source/Apotheneum/` (see its `pom.xml` and `lx.package`).
 
@@ -69,7 +69,7 @@ Scoped to *mutation primitives*: no speculative abstraction layers until two rea
 
 ## Driving a live instance
 
-Port comes from `~/.chromatik-mcp/status.json` — the one by-design filesystem touchpoint.
+Port comes from `~/.chromatik-mcp/status.json` — one of two by-design filesystem touchpoints (the other being the optional `~/.chromatik-mcp/config.json`).
 
 - **Never answer live-state questions from cached responses.** Re-query; a saved response file is for parsing one large payload, not a source of truth minutes later.
 - **Connection failure ⇒ Chromatik restarted**: re-read `status.json`, re-initialize the session, re-list before reusing any held canonical path (indices shift and project state resets — e.g. `output/enabled` comes back off).

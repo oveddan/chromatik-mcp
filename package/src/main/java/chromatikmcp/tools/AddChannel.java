@@ -40,13 +40,10 @@ public final class AddChannel implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    Object patternArg = args.get("class");
-    if (patternArg != null && !(patternArg instanceof String)) {
-      return Result.error(Result.INVALID_ARGUMENT, "class must be a string class name");
-    }
+    String patternArg = Args.optionalString(args, "class", "class must be a string class name");
     Class<? extends LXPattern> patternClass = null;
-    if (patternArg instanceof String patternName) {
-      patternClass = Channels.resolvePatternClass(lx, patternName);
+    if (patternArg != null) {
+      patternClass = Channels.resolvePatternClass(lx, patternArg);
     }
     LXChannel channel = Channels.addChannel(lx, patternClass);
     Map<String, Object> payload = new LinkedHashMap<>();

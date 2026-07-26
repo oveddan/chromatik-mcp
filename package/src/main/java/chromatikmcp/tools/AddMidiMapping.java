@@ -53,17 +53,10 @@ public final class AddMidiMapping implements LxTool {
     if (!(args.get("type") instanceof String type) || !(type.equals("note") || type.equals("cc"))) {
       return Result.error(Result.INVALID_ARGUMENT, "type must be 'note' or 'cc'");
     }
-    if (!(args.get("channel") instanceof Number channelN)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required integer argument: channel");
-    }
-    if (!(args.get("number") instanceof Number numberN)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required integer argument: number");
-    }
-    if (!(args.get("targetPath") instanceof String targetPath)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: targetPath");
-    }
-    Midi.MappingInfo mapping =
-        Midi.addMapping(lx, type, channelN.intValue(), numberN.intValue(), targetPath);
+    int channel = Args.requireInt(args, "channel");
+    int number = Args.requireInt(args, "number");
+    String targetPath = Args.requireString(args, "targetPath");
+    Midi.MappingInfo mapping = Midi.addMapping(lx, type, channel, number, targetPath);
     return Result.ok(toMap(mapping));
   }
 

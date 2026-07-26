@@ -41,9 +41,7 @@ public final class SetSwatch implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("path") instanceof String path)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: path");
-    }
+    String path = Args.requireString(args, "path");
     LXSwatch swatch = Resolve.component(lx, path, LXSwatch.class);
     Palettes.setSwatch(lx, swatch);
     return Result.ok(Map.of(

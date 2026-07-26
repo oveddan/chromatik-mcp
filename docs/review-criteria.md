@@ -87,7 +87,7 @@ concrete instances of the checkpoints above catching real bugs, not style nits.
    **Why it mattered:** breaks an agent's ability to generically dispatch on `kind`
    across all remove tools; fixed in PR #53 by aligning all six.
 
-5. **Context:** `LxMcpUiPlugin` added a status section to `ui.leftPane.global` on enable
+5. **Context:** `ChromatikMcpUiPlugin` added a status section to `ui.leftPane.global` on enable
    but had no matching teardown.
    **Finding:** missing symmetric dispose — the UI section and its `ServerStatus`
    parameter listener were orphaned on plugin disable/re-enable, verified against glx

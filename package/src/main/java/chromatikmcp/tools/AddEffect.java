@@ -43,12 +43,8 @@ public final class AddEffect implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("containerPath") instanceof String containerPath)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: containerPath");
-    }
-    if (!(args.get("class") instanceof String typeName)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: class");
-    }
+    String containerPath = Args.requireString(args, "containerPath");
+    String typeName = Args.requireString(args, "class");
     Class<? extends LXEffect> effectClass = Channels.resolveEffectClass(lx, typeName);
     LXEffect effect = Channels.addEffect(lx, containerPath, effectClass);
     Map<String, Object> payload = new LinkedHashMap<>();

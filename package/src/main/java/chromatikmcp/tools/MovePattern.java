@@ -48,13 +48,9 @@ public final class MovePattern implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("path") instanceof String path)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: path");
-    }
-    if (!(args.get("index") instanceof Number n)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required integer argument: index");
-    }
-    Channels.PatternMoveResult result = Channels.movePattern(lx, path, n.intValue());
+    String path = Args.requireString(args, "path");
+    int index = Args.requireInt(args, "index");
+    Channels.PatternMoveResult result = Channels.movePattern(lx, path, index);
     LXPattern pattern = result.pattern();
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("path", pattern.getCanonicalPath());

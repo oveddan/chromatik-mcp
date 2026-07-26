@@ -50,14 +50,9 @@ public final class AddModulator implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("class") instanceof String type)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: class");
-    }
-    Object scope = args.get("scope");
-    if (scope != null && !(scope instanceof String)) {
-      return Result.error(Result.INVALID_ARGUMENT, "scope must be a string path");
-    }
-    LXModulationEngine engine = Modulators.resolveEngine(lx, (String) scope);
+    String type = Args.requireString(args, "class");
+    String scope = Args.optionalString(args, "scope", "scope must be a string path");
+    LXModulationEngine engine = Modulators.resolveEngine(lx, scope);
     LXModulator modulator = Modulators.addModulator(lx, engine,
         Modulators.resolveModulatorClass(lx, type));
     Map<String, Object> payload = new LinkedHashMap<>();

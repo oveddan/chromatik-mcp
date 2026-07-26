@@ -119,8 +119,10 @@ public final class GetFrame implements LxTool {
   }
 
   private static int intArg(Map<String, Object> args, String key, int fallback, int min, int max) {
-    // JSON numerics may arrive as Integer, Long, or Double depending on the client.
-    int value = (args.get(key) instanceof Number n) ? n.intValue() : fallback;
+    // JSON numerics may arrive as Integer, Long, or Double depending on the client;
+    // Args.optionalInt rejects non-integral or out-of-int-range values rather than
+    // silently truncating them before the clamp below has a chance to run.
+    int value = Args.optionalInt(args, key, fallback);
     return Math.max(min, Math.min(max, value));
   }
 }

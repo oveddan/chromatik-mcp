@@ -46,16 +46,9 @@ public final class AddPattern implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    if (!(args.get("containerPath") instanceof String channelPath)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: containerPath");
-    }
-    if (!(args.get("class") instanceof String typeName)) {
-      return Result.error(Result.INVALID_ARGUMENT, "Required string argument: class");
-    }
-    int index = -1;
-    if (args.get("index") instanceof Number n) {
-      index = n.intValue();
-    }
+    String channelPath = Args.requireString(args, "containerPath");
+    String typeName = Args.requireString(args, "class");
+    int index = Args.optionalInt(args, "index", -1);
     Class<? extends LXPattern> patternClass = Channels.resolvePatternClass(lx, typeName);
     LXPattern pattern = Channels.addPattern(lx, channelPath, patternClass, index);
     Map<String, Object> payload = new LinkedHashMap<>();

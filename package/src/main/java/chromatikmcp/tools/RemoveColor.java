@@ -42,13 +42,10 @@ public final class RemoveColor implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    Object swatchArg = args.get("swatch");
-    if (swatchArg != null && !(swatchArg instanceof String)) {
-      return Result.error(Result.INVALID_ARGUMENT, "swatch must be a string path");
-    }
+    String swatchArg = Args.optionalString(args, "swatch", "swatch must be a string path");
     LXSwatch swatch = (swatchArg == null)
         ? lx.engine.palette.swatch
-        : Resolve.component(lx, (String) swatchArg, LXSwatch.class);
+        : Resolve.component(lx, swatchArg, LXSwatch.class);
     String removed = Palettes.removeColor(lx, swatch);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("removed", removed);

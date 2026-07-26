@@ -2,7 +2,7 @@
 
 A drop-in LX/Chromatik package that lets an agent read, explain, compose into, and debug a running Chromatik show over MCP.
 
-**Status**: the v1 tool surface is working end-to-end — discovery, parameters, tempo, modulation wiring, channels/patterns/effect chains, mixer performance controls (crossfader, cue/aux), palette (read-write), snapshots, model views, render previews, OSC addressing, and a generated semantic catalog of what each component does. MIDI mapping is the remaining slice. See [docs/build-plan.md](docs/build-plan.md) for the roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
+**Status**: the v1 tool surface is working end-to-end — discovery, parameters, tempo, modulation wiring, channels/patterns/effect chains, mixer performance controls (crossfader, cue/aux), MIDI mapping, palette (read-write), snapshots, model views, render previews, OSC addressing, and a generated semantic catalog of what each component does. See [docs/build-plan.md](docs/build-plan.md) for the roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
 
 **Docs**: [oveddan.github.io/chromatik-mcp](https://oveddan.github.io/chromatik-mcp/) — for AI agents, the full docs are available as plain markdown at [llms-full.txt](https://oveddan.github.io/chromatik-mcp/llms-full.txt) ([llms.txt](https://oveddan.github.io/chromatik-mcp/llms.txt) index).
 
@@ -75,6 +75,18 @@ add_modulator {class: heronarts.lx.modulator.MacroKnobs}      → knob bank + 8 
 wire_modulator {sourcePath: <bank>/macro1, targetPath: <fader path>} → undoable mapping
 set_parameter {path: <bank>/macro1, value: 0.75}             → turn the knob
 ```
+
+### MIDI mapping
+
+| tool | what it does |
+|---|---|
+| `list_midi_devices` | discovered MIDI input/output ports — each input's three independent routing flags (`channelEnabled` forwards notes/CCs to channel and modulator devices, `controlEnabled` feeds the mapping layer below, `syncEnabled` drives the engine tempo when `get_tempo` reports `clockSource: MIDI`) plus `connected` state. Ports are addressed by 0-based index (no canonical path) — indices shift as devices connect/disconnect, so re-list before reusing one |
+| `list_midi_mappings` | parameter mappings driven by incoming MIDI (`type` note/cc, channel, number → `targetPath`). Only inputs with `controlEnabled` actually apply them. Addressed by 0-based index — indices shift when a mapping is removed, so re-list before reusing one |
+| `list_midi_surfaces` | instantiated control surfaces (e.g. an APC40, a MidiFighterTwister) — two-way hardware LX drives with a dedicated protocol, distinct from the ad-hoc mappings above. Addressed by 0-based index |
+| `add_midi_mapping {type, number, channel, targetPath}` | map an incoming note-on or CC to a parameter by its canonical path; fires on channel+pitch/cc identity, not a specific velocity/value. Most numeric/bounded/toggle/discrete parameters can be targeted — aggregate parameters (color, MIDI filter) are rejected, map their component paths instead. Undoable |
+| `remove_midi_mapping {index}` | delete a mapping by its `list_midi_mappings` index; remaining mappings reindex afterward — re-list before reusing one. Undoable |
+| `set_midi_input {index, ...flags}` | set one or more of an input's routing flags by its `list_midi_devices` index; unset flags are left unchanged. **Not undoable** — LX has no undo command for these flags |
+| `set_midi_surface_enabled {index, enabled}` | enable/disable a control surface by its `list_midi_surfaces` index. **Not undoable** — LX has no undo command for surface enablement |
 
 ### Palette & snapshots: colors and whole looks
 

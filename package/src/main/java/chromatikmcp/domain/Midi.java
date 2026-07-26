@@ -160,9 +160,12 @@ public final class Midi {
           "Invalid MIDI mapping (channel " + channel + ", number " + number + "): " + e.getMessage());
     }
     List<LXMidiMapping> mappings = lx.engine.midi.mappings;
+    int before = mappings.size();
     Commands.perform(lx, new LXCommand.Midi.AddMapping(message, normalized));
-    int index = mappings.size() - 1;
-    return mappingInfo(index, mappings.get(index));
+    if (mappings.size() != before + 1) {
+      throw new IllegalStateException("AddMapping did not add a mapping");
+    }
+    return mappingInfo(before, mappings.get(before));
   }
 
   /**

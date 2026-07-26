@@ -99,8 +99,13 @@ Decided once (#108) so it isn't re-litigated per tool:
 
 ## List tool detail levels
 
-- `list_*` tools accept an optional `detail` argument with values `summary` (default) or
-  `full`. **`summary` is the default** — an agent that never reads the docs gets the cheap
+- Where a `list_*` tool's payload is expensive enough to warrant it, it accepts an
+  optional `detail` argument with values `summary` (default) or `full` — today that's
+  `list_channels` and `list_modulations`; other `list_*` tools (`list_fixtures`,
+  `list_snapshots`, `list_midi_mappings`, `list_parameters`, `list_midi_devices`,
+  `list_midi_surfaces`, …) return a single shape and may adopt `detail` later if their
+  payload size warrants it. The rules below apply to any tool that implements it.
+  **`summary` is the default** — an agent that never reads the docs gets the cheap
   path.
 - `summary` omits expensive per-entry data (full `patterns`/`effects` arrays,
   `controls` blocks, range/polarity metadata on wirings) but includes per-entry
