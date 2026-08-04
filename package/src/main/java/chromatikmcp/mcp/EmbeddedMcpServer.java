@@ -7,6 +7,7 @@ import org.apache.catalina.Context;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Wrapper;
 import org.apache.catalina.core.StandardServer;
+import org.apache.catalina.filters.SetCharacterEncodingFilter;
 import org.apache.catalina.startup.Tomcat;
 import org.apache.tomcat.util.descriptor.web.FilterDef;
 import org.apache.tomcat.util.descriptor.web.FilterMap;
@@ -218,6 +219,25 @@ public final class EmbeddedMcpServer {
     wrapper.setAsyncSupported(true);
     context.addChild(wrapper);
     context.addServletMappingDecoded("/*", "mcp");
+
+    // The SDK reads JSON through request.getReader(). Servlet containers otherwise
+    // default a request without an explicit charset to ISO-8859-1, even though JSON is
+    // UTF-8 on the wire. Force the MCP endpoint to UTF-8 before the SDK obtains its
+    // reader; this covers clients that send the common bare application/json content
+    // type and prevents non-ASCII tool arguments from becoming mojibake.
+    SetCharacterEncodingFilter encodingFilter = new SetCharacterEncodingFilter();
+    encodingFilter.setEncoding("UTF-8");
+    encodingFilter.setIgnore(true);
+    FilterDef encodingFilterDef = new FilterDef();
+    encodingFilterDef.setFilterName("mcp-utf8");
+    encodingFilterDef.setFilter(encodingFilter);
+    encodingFilterDef.setAsyncSupported("true");
+    context.addFilterDef(encodingFilterDef);
+    FilterMap encodingFilterMap = new FilterMap();
+    encodingFilterMap.setFilterName("mcp-utf8");
+    encodingFilterMap.addURLPattern(ENDPOINT);
+    encodingFilterMap.addURLPattern(ENDPOINT + "/*");
+    context.addFilterMap(encodingFilterMap);
 
     // Exact-path mappings (e.g. "/osc-params") outrank the "/*" wildcard mapping above
     // per the servlet spec's mapping-precedence rules, so these never shadow /mcp.

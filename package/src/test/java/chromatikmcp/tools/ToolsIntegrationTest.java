@@ -2908,6 +2908,40 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void unicodeStringArgumentsRoundTripAndSetDiscreteOptionsByName() {
+    String label = "Trigger → Café 東京 🌈";
+    HttpClientStreamableHttpTransport transport =
+        HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
+            .endpoint(EmbeddedMcpServer.ENDPOINT)
+            // Exercise clients that follow JSON's UTF-8 default but omit a redundant
+            // charset parameter. The servlet container must not fall back to Latin-1.
+            .httpRequestCustomizer((builder, method, uri, body, context) ->
+                builder.setHeader("Content-Type", "application/json"))
+            .build();
+    McpSyncClient unicodeClient = McpClient.sync(transport).build();
+    unicodeClient.initialize();
+
+    Map<String, Object> added = structured(unicodeClient.callTool(new McpSchema.CallToolRequest(
+        "add_view", Map.of("label", label, "selector", "grid"))));
+    try {
+      assertEquals(label, added.get("label"),
+          "generic string arguments must retain their UTF-8 contents");
+
+      Map<String, Object> result = structured(unicodeClient.callTool(new McpSchema.CallToolRequest(
+          "set_parameter", Map.of("path", channel.view.getCanonicalPath(), "value", label))));
+      assertEquals(label, result.get("formatted"),
+          "a non-ASCII discrete option must be selectable by its reported name");
+      assertEquals(Resolve.canonicalPath(channel.view.getObject()), added.get("path"));
+    } finally {
+      structured(unicodeClient.callTool(new McpSchema.CallToolRequest(
+          "set_parameter", Map.of("path", channel.view.getCanonicalPath(), "value", 0))));
+      structured(unicodeClient.callTool(new McpSchema.CallToolRequest(
+          "remove_view", Map.of("path", added.get("path")))));
+      unicodeClient.closeGracefully();
+    }
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void listParametersResolvesIntoTheStructureViewTree() {
     String viewPath = Resolve.canonicalPath(view);
