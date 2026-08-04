@@ -2,9 +2,7 @@ package chromatikmcp.domain;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import heronarts.lx.LX;
@@ -24,9 +22,23 @@ public final class OscParams {
 
   private OscParams() {}
 
+  /** One detached OSC-addressable parameter entry; optional bounds/value are null. */
+  public record OscParamInfo(
+      String oscAddress,
+      String label,
+      String path,
+      String type,
+      String componentPath,
+      String componentLabel,
+      String componentType,
+      String units,
+      Double min,
+      Double max,
+      String value) {}
+
   /**
-   * Every parameter reachable from {@code lx.engine} that LX exposes over OSC, as flat
-   * wire-shape maps. Call on the engine thread.
+   * Every parameter reachable from {@code lx.engine} that LX exposes over OSC, as typed
+   * detached entries. Call on the engine thread.
    *
    * <p>May be polled by an external OSC sender, so this deliberately computes only static
    * metadata ({@link Parameters#describeMeta}) — no modulation scan, no formatting — to avoid
@@ -35,14 +47,14 @@ public final class OscParams {
    * cheap field read with no formatting/modulation cost, and consumers have no other way to
    * read them (e.g. a macro modulator's user-given knob names).
    */
-  public static List<Map<String, Object>> list(LX lx) {
-    List<Map<String, Object>> out = new ArrayList<>();
+  public static List<OscParamInfo> list(LX lx) {
+    List<OscParamInfo> out = new ArrayList<>();
     walk(lx.engine, new HashSet<>(), out);
     return out;
   }
 
   private static void walk(
-      LXComponent component, Set<Integer> visited, List<Map<String, Object>> out) {
+      LXComponent component, Set<Integer> visited, List<OscParamInfo> out) {
     if (component == null || !visited.add(component.getId())) {
       return;
     }
@@ -58,30 +70,16 @@ public final class OscParams {
       if (meta.oscAddress() == null) {
         continue;
       }
-      Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("oscAddress", meta.oscAddress());
-      entry.put("label", meta.label());
-      entry.put("path", meta.path());
-      entry.put("type", meta.type());
-      entry.put("componentPath", componentPath);
-      entry.put("componentLabel", componentLabel);
-      entry.put("componentType", componentType);
-      entry.put("units", meta.units());
-      if (meta.min() != null) {
-        entry.put("min", meta.min());
-      }
-      if (meta.max() != null) {
-        entry.put("max", meta.max());
-      }
       // String values are the one exception to the "no live value reads" rule above: a plain
       // field read with no formatting/modulation work, and consumers need it. Macro knob
       // display names (e.g. from Bitwig) live in a modulator's label1..label8 StringParameter
       // VALUES, not in any static metadata field — without reading it here, a consumer can't
       // show the user-given name for a macro knob at all.
-      if (parameter instanceof StringParameter s && s.getString() != null) {
-        entry.put("value", s.getString());
-      }
-      out.add(entry);
+      String value = (parameter instanceof StringParameter s) ? s.getString() : null;
+      out.add(new OscParamInfo(
+          meta.oscAddress(), meta.label(), meta.path(), meta.type(),
+          componentPath, componentLabel, componentType, meta.units(),
+          meta.min(), meta.max(), value));
     }
     for (LXComponent child : component.children.values()) {
       walk(child, visited, out);

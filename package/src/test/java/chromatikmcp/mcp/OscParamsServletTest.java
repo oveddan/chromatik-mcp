@@ -28,8 +28,8 @@ import chromatikmcp.engine.EngineExecutor;
 /**
  * End-to-end proof that {@code GET /osc-params} is reachable over real HTTP, alongside
  * the MCP endpoint on the same embedded Tomcat listener, and returns the flat wire shape
- * {@link OscParams} produces. Mirrors {@code ToolsIntegrationTest}'s drainer-thread
- * pattern: the headless harness never starts {@code lx.engine}, so a background thread
+ * serialized from {@link OscParams.OscParamInfo}. Mirrors {@code ToolsIntegrationTest}'s
+ * drainer-thread pattern: the headless harness never starts {@code lx.engine}, so a background thread
  * stands in for it to complete the blocking {@code EngineExecutor.call(...)} inside
  * {@code OscParamsServlet.doGet}.
  */

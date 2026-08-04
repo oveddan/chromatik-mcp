@@ -2,10 +2,10 @@ package chromatikmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -18,27 +18,27 @@ import heronarts.lx.osc.LXOscEngine;
 class OscParamsTest extends HeadlessLxTest {
 
   @Test
-  void listIncludesOscAddressableParametersWithFlatWireShape() {
+  void listIncludesTypedOscAddressableParameters() {
     LX lx = newHeadlessLx();
     LXChannel channel = lx.engine.mixer.addChannel();
     String faderOscAddress = LXOscEngine.getOscAddress(channel.fader);
 
-    List<Map<String, Object>> params = OscParams.list(lx);
+    List<OscParams.OscParamInfo> params = OscParams.list(lx);
 
     assertFalse(params.isEmpty(), "a fresh channel's fader is OSC-addressable");
-    Map<String, Object> fader = params.stream()
-        .filter(p -> faderOscAddress.equals(p.get("oscAddress")))
+    OscParams.OscParamInfo fader = params.stream()
+        .filter(p -> faderOscAddress.equals(p.oscAddress()))
         .findFirst()
         .orElseThrow(() -> new AssertionError("fader OSC address not found in " + params));
 
-    assertEquals(channel.fader.getLabel(), fader.get("label"));
-    assertEquals(channel.fader.getCanonicalPath(), fader.get("path"));
-    assertEquals("CompoundParameter", fader.get("type"));
-    assertEquals(0.0, ((Number) fader.get("min")).doubleValue(), 1e-9);
-    assertEquals(1.0, ((Number) fader.get("max")).doubleValue(), 1e-9);
-    assertTrue(fader.containsKey("componentPath"));
-    assertTrue(fader.containsKey("componentLabel"));
-    assertEquals(channel.getClass().getSimpleName(), fader.get("componentType"));
+    assertEquals(channel.fader.getLabel(), fader.label());
+    assertEquals(channel.fader.getCanonicalPath(), fader.path());
+    assertEquals("CompoundParameter", fader.type());
+    assertEquals(0.0, fader.min(), 1e-9);
+    assertEquals(1.0, fader.max(), 1e-9);
+    assertTrue(fader.componentPath() != null);
+    assertTrue(fader.componentLabel() != null);
+    assertEquals(channel.getClass().getSimpleName(), fader.componentType());
   }
 
   @Test
@@ -48,15 +48,15 @@ class OscParamsTest extends HeadlessLxTest {
     channel.label.setValue("My Channel");
     String labelOscAddress = LXOscEngine.getOscAddress(channel.label);
 
-    List<Map<String, Object>> params = OscParams.list(lx);
+    List<OscParams.OscParamInfo> params = OscParams.list(lx);
 
-    Map<String, Object> label = params.stream()
-        .filter(p -> labelOscAddress.equals(p.get("oscAddress")))
+    OscParams.OscParamInfo label = params.stream()
+        .filter(p -> labelOscAddress.equals(p.oscAddress()))
         .findFirst()
         .orElseThrow(() -> new AssertionError("label OSC address not found in " + params));
 
-    assertEquals("StringParameter", label.get("type"));
-    assertEquals("My Channel", label.get("value"));
+    assertEquals("StringParameter", label.type());
+    assertEquals("My Channel", label.value());
   }
 
   @Test
@@ -65,14 +65,14 @@ class OscParamsTest extends HeadlessLxTest {
     LXChannel channel = lx.engine.mixer.addChannel();
     String faderOscAddress = LXOscEngine.getOscAddress(channel.fader);
 
-    List<Map<String, Object>> params = OscParams.list(lx);
+    List<OscParams.OscParamInfo> params = OscParams.list(lx);
 
-    Map<String, Object> fader = params.stream()
-        .filter(p -> faderOscAddress.equals(p.get("oscAddress")))
+    OscParams.OscParamInfo fader = params.stream()
+        .filter(p -> faderOscAddress.equals(p.oscAddress()))
         .findFirst()
         .orElseThrow(() -> new AssertionError("fader OSC address not found in " + params));
 
-    assertFalse(fader.containsKey("value"), "non-string entries must not carry a value field");
+    assertNull(fader.value(), "non-string entries have no value");
   }
 
   @Test
@@ -80,8 +80,9 @@ class OscParamsTest extends HeadlessLxTest {
     LX lx = newHeadlessLx();
     lx.engine.mixer.addChannel();
 
-    for (Map<String, Object> entry : OscParams.list(lx)) {
-      assertTrue(entry.get("oscAddress") != null, "entries with a null oscAddress must be filtered out: " + entry);
+    for (OscParams.OscParamInfo entry : OscParams.list(lx)) {
+      assertTrue(entry.oscAddress() != null,
+          "entries with a null oscAddress must be filtered out: " + entry);
     }
   }
 
@@ -95,7 +96,7 @@ class OscParamsTest extends HeadlessLxTest {
     // Merely completing without a StackOverflowError/infinite loop is the assertion — the
     // visited-set cycle guard is defense-in-depth, not expected to trigger on a normal
     // project, but this proves the walk terminates.
-    List<Map<String, Object>> params = OscParams.list(lx);
+    List<OscParams.OscParamInfo> params = OscParams.list(lx);
     assertFalse(params.isEmpty());
   }
 }

@@ -1,6 +1,7 @@
 package chromatikmcp.mcp;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,7 +42,10 @@ public final class OscParamsServlet extends HttpServlet {
     String body;
     int status;
     try {
-      List<Map<String, Object>> params = this.executor.call(() -> OscParams.list(this.lx));
+      List<Map<String, Object>> params = this.executor.call(() -> OscParams.list(this.lx))
+          .stream()
+          .map(OscParamsServlet::toMap)
+          .toList();
       body = McpJsonDefaults.getMapper()
           .writeValueAsString(Map.of("count", params.size(), "params", params));
       status = HttpServletResponse.SC_OK;
@@ -54,5 +58,27 @@ public final class OscParamsServlet extends HttpServlet {
     response.setContentType("application/json");
     response.setCharacterEncoding("UTF-8");
     response.getWriter().write(body);
+  }
+
+  static Map<String, Object> toMap(OscParams.OscParamInfo info) {
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("oscAddress", info.oscAddress());
+    entry.put("label", info.label());
+    entry.put("path", info.path());
+    entry.put("type", info.type());
+    entry.put("componentPath", info.componentPath());
+    entry.put("componentLabel", info.componentLabel());
+    entry.put("componentType", info.componentType());
+    entry.put("units", info.units());
+    if (info.min() != null) {
+      entry.put("min", info.min());
+    }
+    if (info.max() != null) {
+      entry.put("max", info.max());
+    }
+    if (info.value() != null) {
+      entry.put("value", info.value());
+    }
+    return entry;
   }
 }
