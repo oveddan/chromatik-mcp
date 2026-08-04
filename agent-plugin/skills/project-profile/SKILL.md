@@ -74,8 +74,8 @@ don't invent others and don't merge two into one dispatch:
    targets by path (for `pattern-modulation` to cross-reference), but does not itself
    produce per-instance tables — that would duplicate concern 4 and risk the two passes
    disagreeing.
-6. **external-control** — MIDI devices/surfaces/mappings, OSC receive/transmit state,
-   clock source, what actually drives the show live.
+6. **external-control** — MIDI devices/surfaces/templates/mappings, OSC receive/transmit
+   state, clock source, what actually drives the show live.
 
 ## Profile sections, in this order
 
@@ -144,10 +144,12 @@ Rules that keep this aggregable, non-negotiable:
 ### 4. `## External control`
 
 MIDI mappings (`list_midi_mappings`), MIDI devices/surfaces
-(`list_midi_devices`/`list_midi_surfaces`), OSC state and clock source (`get_tempo`,
-`get_project_info`). Always include a subsection noting explicitly that DAW-side mapping
-(e.g. what a Bitwig/Ableton project sends) is not parsed by this pipeline — that's a
-known, permanent gap for this skill, not a bug to route around.
+(`list_midi_devices`/`list_midi_surfaces`), and instantiated MIDI templates
+(`list_midi_templates`). For each template, use `list_parameters` on its returned path to
+record the named hardware controls it exposes. Also report OSC state and clock source
+(`get_tempo`, `get_project_info`). Always include a subsection noting explicitly that
+DAW-side mapping (e.g. what a Bitwig/Ableton project sends) is not parsed by this pipeline
+— that's a known, permanent gap for this skill, not a bug to route around.
 
 ### 5. `## Confidence`
 

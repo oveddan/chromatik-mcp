@@ -89,10 +89,13 @@ If `get_status` succeeds, you have live tool access. Proceed with your assigned 
   `LXModulator` directly rather than `LXPeriodicModulator`). Report which instance each
   modulator targets by path so `pattern-modulation` can cross-reference, but do not
   produce per-instance tables yourself — that duplicates `pattern-modulation`'s ground.
-- **external-control** — MIDI devices/surfaces/mappings, OSC receive/transmit state and
-  clock source (`get_tempo`, `get_project_info`). Note explicitly that DAW-side (e.g.
-  Bitwig/Ableton project) mapping is out of reach of any tool here — you can report what
-  the engine receives, not what a DAW intends to send.
+- **external-control** — MIDI devices/surfaces/templates/mappings: call
+  `list_midi_templates` as well as the three other MIDI list tools, and use
+  `list_parameters` on each returned template path to record the named hardware controls
+  it exposes. Also report OSC receive/transmit state and clock source (`get_tempo`,
+  `get_project_info`). Note explicitly that DAW-side (e.g. Bitwig/Ableton project) mapping
+  is out of reach of any tool here — you can report what the engine receives, not what a
+  DAW intends to send.
 
 ## What you return
 
