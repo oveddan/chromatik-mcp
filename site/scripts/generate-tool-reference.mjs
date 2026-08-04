@@ -82,7 +82,8 @@ const CATEGORIES = {
     'reload_fixtures',
   ],
   midi: ['list_midi_devices', 'list_midi_mappings', 'list_midi_surfaces',
-    'add_midi_mapping', 'remove_midi_mapping', 'set_midi_input', 'set_midi_surface_enabled'],
+    'list_midi_templates', 'add_midi_template', 'add_midi_mapping', 'remove_midi_mapping',
+    'set_midi_input', 'set_midi_surface_enabled'],
   batch: ['apply_operations'],
 };
 

@@ -129,6 +129,21 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "add_midi_template",
+  "description" : "Add a registered MIDI template to the project. Pass its full or simple class name, template name, or expected MIDI device name as 'class' — for example heronarts.lx.midi.template.AkaiMPD218, AkaiMPD218, Akai MPD218, or MPD218. LX automatically selects a matching connected input/output when available. Returns the new template in list_midi_templates' shape; inspect its path with list_parameters to discover controls for wire_modulator/wire_trigger. Undoable in Chromatik with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "class" : {
+        "type" : "string",
+        "description" : "Registered template class, template name, or MIDI device name (e.g. AkaiMPD218, Akai MPD218, or MPD218)"
+      }
+    },
+    "required" : [ "class" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "add_modulator",
   "description" : "Add a modulator by class name (from list_available_modulators) — e.g. heronarts.lx.modulator.MacroKnobs for a bank of eight mappable knobs, or the short name it lists (e.g. VariableLFO for heronarts.lx.modulator.VariableLFO). Pass the class name as 'class'. By default it lands in the global modulation engine (the Chromatik side panel); pass 'scope' to add it inside a pattern/effect's own chain. The response lists every parameter with its canonical path and OSC address. On projects with a large modulation graph, Chromatik's synchronous UI refresh may make this operation slow. If it times out after already starting, it may still complete; inspect state before retrying. Undoable in Chromatik with Cmd-Z.",
   "readOnly" : false,
@@ -563,6 +578,15 @@
 }, {
   "name" : "list_midi_surfaces",
   "description" : "List the instantiated MIDI control surfaces (e.g. an APC40, a MidiFighterTwister) — a surface is a two-way hardware controller LX drives with a dedicated protocol, distinct from the ad-hoc parameter mappings in list_midi_mappings. Each entry gives the surface name, the deviceName it binds to, enabled (actively driving the hardware) and connected (device present). Surfaces are addressed by their 0-based index. A registered surface only appears here once its device has been seen; surfaces LX knows how to drive but hasn't instantiated are not listed.",
+  "readOnly" : true,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : { },
+    "additionalProperties" : false
+  }
+}, {
+  "name" : "list_midi_templates",
+  "description" : "List the MIDI templates instantiated in this project. Templates expose named hardware controls as ordinary parameters at paths such as /lx/midi/template/1/knob-A1, which can be inspected with list_parameters and used with wire_modulator or wire_trigger. Each entry includes its canonical path, registered class, expected device name, selected source/output, and connection state. The 0-based index and 1-based path may shift when templates are removed or reordered, so re-list before reusing them.",
   "readOnly" : true,
   "inputSchema" : {
     "type" : "object",

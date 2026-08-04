@@ -214,7 +214,8 @@ class ToolsIntegrationTest {
             "add_channel", "remove_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
             "get_tempo",
-            "list_midi_devices", "list_midi_mappings", "list_midi_surfaces",
+            "list_midi_devices", "list_midi_mappings", "list_midi_surfaces", "list_midi_templates",
+            "add_midi_template",
             "add_midi_mapping", "remove_midi_mapping", "set_midi_input", "set_midi_surface_enabled",
             "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
             "remove_color",
@@ -232,6 +233,7 @@ class ToolsIntegrationTest {
         "remove_color",
         "add_snapshot", "recall_snapshot", "update_snapshot", "remove_snapshot",
         "add_midi_mapping", "remove_midi_mapping", "set_midi_input", "set_midi_surface_enabled",
+        "add_midi_template",
         "apply_operations");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
@@ -2006,6 +2008,41 @@ class ToolsIntegrationTest {
     assertNotNull(payload.get("surfaces"), "surfaces list always present");
     assertEquals(lx.engine.midi.surfaces.size(),
         ((List<Map<String, Object>>) payload.get("surfaces")).size());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void addAndListMidiTemplateOverMcpReturnsCanonicalWireShape() {
+    int before = lx.engine.midi.templates.size();
+
+    Map<String, Object> added = structured(call("add_midi_template", Map.of("class", "MPD218")));
+    assertEquals(before, ((Number) added.get("index")).intValue());
+    assertEquals("/lx/midi/template/" + (before + 1), added.get("path"));
+    assertEquals("Akai MPD218", added.get("name"));
+    assertEquals("Akai MPD218", added.get("label"));
+    assertEquals("MPD218", added.get("deviceName"));
+    assertEquals("heronarts.lx.midi.template.AkaiMPD218", added.get("class"));
+    assertInstanceOf(Boolean.class, added.get("connected"));
+
+    Map<String, Object> listed = structured(call("list_midi_templates", Map.of()));
+    List<Map<String, Object>> templates =
+        (List<Map<String, Object>>) listed.get("templates");
+    assertEquals(before + 1, templates.size());
+    assertEquals(added, templates.get(before));
+  }
+
+  @Test
+  void addMidiTemplateUnknownClassIsInvalidArgumentWithoutMutation() {
+    int before = lx.engine.midi.templates.size();
+
+    McpSchema.CallToolResult result =
+        call("add_midi_template", Map.of("class", "Definitely Not A Controller"));
+
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text =
+        assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT + ":"), text.text());
+    assertEquals(before, lx.engine.midi.templates.size());
   }
 
   @Test

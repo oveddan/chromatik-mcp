@@ -16,21 +16,23 @@ import heronarts.lx.midi.MidiControlChange;
 import heronarts.lx.midi.MidiNote;
 import heronarts.lx.midi.MidiNoteOn;
 import heronarts.lx.midi.surface.LXMidiSurface;
+import heronarts.lx.midi.template.LXMidiTemplate;
 import heronarts.lx.parameter.LXNormalizedParameter;
 import heronarts.lx.parameter.LXParameter;
 
 /**
  * Read-only view of the MIDI engine ({@code lx.engine.midi}): the physical input/output
  * ports LX has discovered, the parameter mappings driven by incoming MIDI, and the
- * instantiated control surfaces. This is the "how is this rig controlled externally"
- * surface that OSC discovery ({@code get_project_info}) can't answer.
+ * instantiated control surfaces and per-project MIDI templates. This is the "how is this
+ * rig controlled externally" surface that OSC discovery ({@code get_project_info}) can't
+ * answer.
  *
  * <p>MIDI ports, mappings, and surfaces are not {@code LXComponent}s with canonical paths
  * (an {@link LXMidiInput} is an {@code LXMidiDevice}, an {@link LXMidiMapping} is a plain
  * serializable), so each is addressed by its 0-based {@code index} into the engine's live
- * list. Indices shift when a device connects/disconnects or a mapping is removed — re-list
- * before reusing one. Call every method on the engine thread; the returned records are
- * immutable and safe to read anywhere.
+ * list. Templates are the exception: they are path-addressable components, though their
+ * list position and path index still shift when reordered or removed. Call every method on
+ * the engine thread; the returned records are immutable and safe to read anywhere.
  */
 public final class Midi {
 
@@ -76,6 +78,15 @@ public final class Midi {
   public record SurfaceInfo(int index, String name, String deviceName, String className,
       boolean enabled, boolean connected, String inputName, String outputName) {}
 
+  /**
+   * An instantiated MIDI template. Unlike a control surface, a template is a project
+   * component with a canonical path whose named parameters can be used as modulation
+   * sources. {@code inputName}/{@code outputName} are null when no device is selected.
+   */
+  public record TemplateInfo(int index, String path, int id, String name, String label,
+      String deviceName, String className, boolean connected, String inputName,
+      String outputName) {}
+
   /** Snapshot the discovered input and output ports. Call on the engine thread. */
   public static DevicesInfo devices(LX lx) {
     LXMidiEngine engine = lx.engine.midi;
@@ -113,6 +124,16 @@ public final class Midi {
     int index = 0;
     for (LXMidiSurface surface : lx.engine.midi.surfaces) {
       result.add(surfaceInfo(index++, surface));
+    }
+    return result;
+  }
+
+  /** Snapshot the MIDI templates instantiated in this project. Call on the engine thread. */
+  public static List<TemplateInfo> templates(LX lx) {
+    List<TemplateInfo> result = new ArrayList<>();
+    int index = 0;
+    for (LXMidiTemplate template : lx.engine.midi.templates) {
+      result.add(templateInfo(index++, template));
     }
     return result;
   }
@@ -234,6 +255,49 @@ public final class Midi {
     return surfaceInfo(index, surface);
   }
 
+  /**
+   * Resolve a MIDI template registered with LX by full/simple class name, template display
+   * name, or the device name declared by its {@link LXMidiTemplate.DeviceName} annotation.
+   */
+  public static Class<? extends LXMidiTemplate> resolveTemplateClass(LX lx, String query) {
+    List<Class<? extends LXMidiTemplate>> registered =
+        lx.engine.midi.getRegisteredTemplateClasses();
+    for (Class<? extends LXMidiTemplate> clazz : registered) {
+      if (clazz.getName().equals(query)) {
+        return clazz;
+      }
+    }
+    List<Class<? extends LXMidiTemplate>> candidates = new ArrayList<>();
+    for (Class<? extends LXMidiTemplate> clazz : registered) {
+      LXMidiTemplate.DeviceName device = clazz.getAnnotation(LXMidiTemplate.DeviceName.class);
+      if (clazz.getSimpleName().equals(query)
+          || LXMidiTemplate.getTemplateName(clazz).equals(query)
+          || (device != null && device.value().equals(query))) {
+        candidates.add(clazz);
+      }
+    }
+    if (candidates.size() == 1) {
+      return candidates.get(0);
+    }
+    if (candidates.size() > 1) {
+      throw Resolve.invalidArgument("Ambiguous MIDI template type '" + query + "': "
+          + candidates.stream().map(Class::getName).sorted().toList());
+    }
+    throw Resolve.invalidArgument("Unknown MIDI template type: " + query
+        + " (use a registered class, template name, or MIDI device name)");
+  }
+
+  /** Add an undoable MIDI template and return its project-visible identity. */
+  public static TemplateInfo addTemplate(LX lx, Class<? extends LXMidiTemplate> templateClass) {
+    List<LXMidiTemplate> templates = lx.engine.midi.templates;
+    int before = templates.size();
+    Commands.perform(lx, new LXCommand.Midi.AddTemplate(templateClass));
+    if (templates.size() != before + 1) {
+      throw new IllegalStateException("AddTemplate did not add a MIDI template");
+    }
+    return templateInfo(before, templates.get(before));
+  }
+
   // ── Private helpers ──────────────────────────────────────────────────────────
 
   private static InputInfo inputInfo(int index, LXMidiInput input) {
@@ -284,5 +348,26 @@ public final class Midi {
         surface.connected.isOn(),
         surface.getInput().getName(),
         (surface.getOutput() != null) ? surface.getOutput().getName() : null);
+  }
+
+  private static TemplateInfo templateInfo(int index, LXMidiTemplate template) {
+    LXMidiTemplate.DeviceName device =
+        template.getClass().getAnnotation(LXMidiTemplate.DeviceName.class);
+    LXMidiInput input = template.sourceDevice.getInput();
+    LXMidiOutput output = (template.destinationDevice != null)
+        ? template.destinationDevice.getOutput() : null;
+    return new TemplateInfo(
+        index,
+        template.getCanonicalPath(),
+        template.getId(),
+        template.getTemplateName(),
+        template.getLabel(),
+        (device != null) ? device.value() : null,
+        template.getClass().getName(),
+        template.connected.isOn(),
+        (input != null) ? input.getName() : template.sourceDevice.name.getString(),
+        (output != null) ? output.getName()
+            : (template.destinationDevice != null)
+                ? template.destinationDevice.name.getString() : null);
   }
 }

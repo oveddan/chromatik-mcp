@@ -752,6 +752,24 @@ List the instantiated MIDI control surfaces (e.g. an APC40, a MidiFighterTwister
 
 No parameters.
 
+### `list_midi_templates`
+
+_read-only_
+
+List the MIDI templates instantiated in this project. Templates expose named hardware controls as ordinary parameters at paths such as /lx/midi/template/1/knob-A1, which can be inspected with list_parameters and used with wire_modulator or wire_trigger. Each entry includes its canonical path, registered class, expected device name, selected source/output, and connection state. The 0-based index and 1-based path may shift when templates are removed or reordered, so re-list before reusing them.
+
+No parameters.
+
+### `add_midi_template`
+
+_mutating_
+
+Add a registered MIDI template to the project. Pass its full or simple class name, template name, or expected MIDI device name as 'class' — for example heronarts.lx.midi.template.AkaiMPD218, AkaiMPD218, Akai MPD218, or MPD218. LX automatically selects a matching connected input/output when available. Returns the new template in list_midi_templates' shape; inspect its path with list_parameters to discover controls for wire_modulator/wire_trigger. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `class` | string | yes | — | Registered template class, template name, or MIDI device name (e.g. AkaiMPD218, Akai MPD218, or MPD218) |
+
 ### `add_midi_mapping`
 
 _mutating_

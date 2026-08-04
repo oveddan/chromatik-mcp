@@ -150,6 +150,8 @@ public final class Tools {
             new ListMidiDevices(),
             new ListMidiMappings(),
             new ListMidiSurfaces(),
+            new ListMidiTemplates(),
+            new AddMidiTemplate(),
             new AddMidiMapping(),
             new RemoveMidiMapping(),
             new SetMidiInput(),
