@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/StrobeEffect.java
 sourceSha256: 71bbb2df85e026ff0406e2a6524f4701ad079a277b2447f4cdaf3fe11d9afa9a
-classBytesSha256: cc63debe9b4f5a7d65ff26cf2a24efdc2f6ac2ec7e823272ec5fe1c2c39628b0
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 8a0f9bac6336c1ab53ebe650c16ee3c30f02791e781b6bfa1177dd57d40d037f
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: strobe, motion, utility
 ---

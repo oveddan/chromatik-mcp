@@ -604,12 +604,14 @@ class CatalogTest {
       Catalog.Resolution result = Catalog.resolveCandidates(
           fqcn, GradientPattern.class.getClassLoader(), plantedLoader, GradientPattern.class);
 
-      assertEquals(2, result.candidates().size());
+      // LX 1.2.2 contributes its own stock catalog copy alongside this plugin's copy
+      // and the planted candidate.
+      assertEquals(3, result.candidates().size());
       assertNotEquals("1999-01-01T00:00:00Z", result.winner().frontmatter().get("generatedAt"),
           "the deliberately old, wrong-bytes planted fixture must lose the ranking");
 
-      Catalog.Candidate real = result.candidates().stream()
-          .filter(c -> "class-jar".equals(c.source())).findFirst().orElseThrow();
+      Catalog.Candidate real = result.candidates().get(0);
+      assertEquals("class-jar", real.source());
       Catalog.Candidate planted = result.candidates().stream()
           .filter(c -> "plugin-jar".equals(c.source())).findFirst().orElseThrow();
 
@@ -685,13 +687,22 @@ class CatalogTest {
   }
 
   @Test
-  void singleCandidateResolutionHasNoGrafts() {
-    Catalog.Resolution result = Catalog.resolve(lx, GradientPattern.class);
-    assertEquals(1, result.candidates().size());
-    assertTrue(result.merged().grafts().isEmpty(),
-        "a single visible copy has nothing to merge from");
-    assertEquals(result.winner(), result.merged().entry(),
-        "merging a single candidate is a no-op — merged entry equals the raw winner");
+  void singleCandidateResolutionHasNoGrafts() throws IOException {
+    // Real stock classes have two candidates in LX 1.2.2; use a hermetic synthetic
+    // entry to preserve coverage of the single-copy merge case.
+    String fqcn = "test.catalog.SingleCopyFixture";
+    Path dir = newCatalogDir(fqcn,
+        fixture(fqcn, "a".repeat(64), "2026-01-01T00:00:00Z", "Only copy."));
+    try (URLClassLoader loader = new URLClassLoader(new URL[] {dir.toUri().toURL()}, null)) {
+      Catalog.Resolution result = Catalog.resolveCandidates(fqcn, loader, loader);
+      assertEquals(1, result.candidates().size());
+      assertTrue(result.merged().grafts().isEmpty(),
+          "a single visible copy has nothing to merge from");
+      assertEquals(result.winner(), result.merged().entry(),
+          "merging a single candidate is a no-op — merged entry equals the raw winner");
+    } finally {
+      deleteRecursively(dir);
+    }
   }
 
   @Test

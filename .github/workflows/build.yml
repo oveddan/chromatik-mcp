@@ -15,15 +15,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: LX version bump helper test
+        run: ../scripts/test-bump-lx-version.sh
+
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
-          java-version: "21"
+          java-version: "25"
           distribution: temurin
           cache: maven
 
+      - name: Published Heron Arts bytecode baseline
+        run: ../scripts/verify-heronarts-bytecode.sh
+
       # Compile + the full JUnit suite, headless: embed test (EmbeddedMcpServerTest)
-      # and every domain/handler test. com.heronarts:lx:1.2.1 resolves from Maven Central.
+      # and every domain/handler test. com.heronarts:{lx,glx,glxstudio}:1.2.2 resolve
+      # from Maven Central on a clean runner.
       - name: mvn package
         run: mvn -B package
 

@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/Interval.java
 sourceSha256: 0e339b702c964a10ae3edd881db207640b8bd8b0bfb55c74e7af746c1c8cd556
-classBytesSha256: 3109d0576ad378d5d169d7bb19e19f7e98e97b528fe91ff19eb1ad2936947392
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 2c26b1fca857261b0e37a69a36146e2c95277cceefaeacad39032b74b78af87a
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, envelope, utility, randomization
 ---

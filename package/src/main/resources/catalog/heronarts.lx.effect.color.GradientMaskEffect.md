@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/color/GradientMaskEffect.java
 sourceSha256: c514642397b4b3962c9ccd919c675916f8463564c216486dbe849f4ad1f010db
-classBytesSha256: 1c1e740ede053d42bae5e7f4e8beac543416c0c20ba144121a92fc9e0ac7e8a0
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: d70348f7bd1eea3e584b74510c2f07a7f3998a826889572a028108e459cfac93
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: color, masking, spatial, geometric, palette, blending
 ---

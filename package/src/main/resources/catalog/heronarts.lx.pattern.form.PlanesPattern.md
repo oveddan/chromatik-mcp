@@ -4,10 +4,10 @@ kind: pattern
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/pattern/form/PlanesPattern.java
 sourceSha256: db135379cbdfd619838bcabf992f01b7ed73e7017bac3d4c8eaf99e554ba6079
-classBytesSha256: 6ae2ae9e2b4c3096f2d3ba660eca9d328db177589587c38ba28b6942c71daec2
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 7ce207e64336a530ccffaef70093333375a1cc6ed5dd18a7246fbfccf6d49242
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: geometric, masking, motion, generative
 ---

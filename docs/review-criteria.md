@@ -34,6 +34,10 @@ length — read the source doc for the full rationale.
   release are distinct calls — both are usually needed). *Why:* `CLAUDE.md` code style
   ("register/unregister listeners symmetrically"); orphaned listeners leak on
   disable/re-enable.
+- **Synchronous-state verification.** Since LX 1.2.2 defers fixture model regeneration,
+  mutation read-backs must verify synchronous parameter/component state or explicitly call
+  `Fixtures.flushStructure(lx)` before returning derived model state. *Why:* reading a
+  derived model in the same engine task can silently report the old or null state.
 - **Tool surface conventions.** Per [`docs/tool-conventions.md`](tool-conventions.md):
   `verb_noun` naming, canonical-path addressing via `chromatikmcp.domain.Resolve`, the
   `Result<T>` wire shape (structuredContent + text mirror, stable error codes), and the

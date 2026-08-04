@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/Randomizer.java
 sourceSha256: 6a85e404b2e5a4372c9661343ff4c6fe238193ab3d95d5feee438555188aa21d
-classBytesSha256: 4d6d5164be3b97b88d471c157522fcb0105039442f86625c09939b98689dc558
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: e2932efa0f68259e7d586afb6b14db57e34aa000c09d323250de587538122052
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: motion, trigger, midi, utility, smoothing, lfo
 ---

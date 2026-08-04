@@ -38,8 +38,14 @@ the plugin, and greps the log for discovery (`Package:Chromatik-MCP`) and init
 `~/LXStudio`. The harness lives in `src/test/java/chromatikmcp/HeadlessLoadCheck.java`
 and is not included in the shipping jar.
 
-Requires `mvn`, a JDK 21+, and `com.heronarts:lx:1.2.1` resolvable from your
-local Maven repo.
+Requires `mvn` and a JDK 25+. The pinned `com.heronarts:{lx,glx,glxstudio}:1.2.2`
+artifacts resolve from Maven Central; GLX and GLXStudio 1.2.2 are published as Java 25
+class files even though the core LX jar remains Java 21 bytecode.
+
+For a future LX release, run `scripts/bump-lx-version.sh --dry-run <version>` from the
+repository root, then run it without `--dry-run`. Use `--check <version>` for a
+non-mutating drift check. The helper does not change JDK/workflow pins or derived catalog
+hashes; refresh those separately when the release requires it.
 
 ## Install into Chromatik
 

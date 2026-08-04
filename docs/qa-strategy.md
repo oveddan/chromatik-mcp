@@ -42,6 +42,12 @@ lx.engine.run();                       // advance exactly one frame, on this thr
 
 `new LX(model)` performs no graphics initialization (`LX.java:435-521`). Because the engine thread is never started, the test owns timing: call `run()` once per frame you need. This is the seed every tool test builds on (shared as the `chromatikmcp.HeadlessLxTest` fixture).
 
+**Deferred structure regeneration (LX 1.2.2) never happens on its own here.** Fixture
+adds/removals and metrics/tag/output writes set regeneration flags serviced by
+`LXStructure.beforeEngineRun()`. A headless test that reads the derived model after such a
+mutation must call `Fixtures.flushStructure(lx)` (or run the whole engine frame), or assert
+only synchronous parameter/component state.
+
 > If a future change makes LX require a display/GL context, every domain test fails at construction. That is an **architecture-level escalation** (re-plan before continuing), not something a tool test should work around.
 
 ## Per-tool test shape (the template PR-2+ fills in)

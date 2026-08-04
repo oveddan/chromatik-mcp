@@ -4,10 +4,10 @@ kind: pattern
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/dmx/DmxPattern.java
 sourceSha256: 5b67adf3850571b74a62ff443e77c4a46aad42db0075a919a26421c2fba70f2c
-classBytesSha256: 77360259245109d3be190e10a629e364bc30a451617a7b54f5442ded03fabd21
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: b65be2abeb4737061023f1541e47afbcc883f05b7628fe7f622fa9095de6f0a9
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: dmx, utility, color
 ---

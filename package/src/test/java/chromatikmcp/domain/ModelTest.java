@@ -1,16 +1,21 @@
 package chromatikmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
 import chromatikmcp.HeadlessLxTest;
+import chromatikmcp.tools.DescribeModel;
+import chromatikmcp.tools.Result;
 
 import heronarts.lx.LX;
 import heronarts.lx.command.LXCommand;
@@ -126,6 +131,7 @@ class ModelTest extends HeadlessLxTest {
     GridFixture fixture = (GridFixture) lx.structure.fixtures.get(before);
     fixture.numRows.setValue(4);
     fixture.numColumns.setValue(3);
+    Fixtures.flushStructure(lx);
 
     // GridFixture.toSubmodels() registers row submodels first, then column submodels, as
     // children of the fixture's own model node.
@@ -143,6 +149,25 @@ class ModelTest extends HeadlessLxTest {
     assertEquals(Boolean.FALSE, columnInfo.contiguous());
     assertTrue(columnInfo.lastIndex() - columnInfo.firstIndex() + 1 > columnInfo.size(),
         "column indices are strided, so the bounding range is wider than the point count");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void describeModelReadFlushesGeometryChangedOutsideFixtureDomain() {
+    LX lx = track(new LX());
+    LXCommand.Structure.AddFixture command = new LXCommand.Structure.AddFixture(GridFixture.class);
+    lx.command.perform(command);
+    GridFixture fixture = (GridFixture) lx.structure.fixtures.get(0);
+    Fixtures.flushStructure(lx);
+
+    fixture.numRows.setValue(4); // UI/direct write, outside the fixture-domain mutators
+    assertNull(fixture.getModel(), "LX 1.2.2 leaves the model tree pending");
+
+    Result.Ok<Map<String, Object>> ok = assertInstanceOf(Result.Ok.class,
+        new DescribeModel().handle(lx, Map.of()));
+    assertNotNull(fixture.getModel());
+    assertEquals(fixture.totalSize(), ((Number) ok.value().get("size")).intValue());
+    assertEquals(fixture.totalSize(), ((Number) ok.value().get("totalPoints")).intValue());
   }
 
   @Test

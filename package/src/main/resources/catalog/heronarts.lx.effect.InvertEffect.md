@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/InvertEffect.java
 sourceSha256: 6510739084044dfccd1c9c03e6243bed9784840ce90e4cef7b2f74cea46f21fd
-classBytesSha256: 2295b7320f3f2268ef6c7c21b06f55423c9b84658d51527c16f1c64b1a269c16
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: e6657c8c79610d497a826ab51295227e8985a8bf88494b3b161f2d86b2e985af
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: color, utility, invert
 ---

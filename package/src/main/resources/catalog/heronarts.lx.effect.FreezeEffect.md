@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/FreezeEffect.java
 sourceSha256: 4d0e04ab74cd59ceebda19d761e6d5fd80ba35b5fce9397f2ded461845be54bc
-classBytesSha256: 158dc22db9a8711dd0cd7c06580ec4d5a5c5ad1c1614f838cb4a13e6c3954954
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: d983d36287b691095455d8020cf2512fc4ac8d0a57f08b8def4cfe5cbc0be3c6
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, motion, strobe, trigger, envelope
 ---

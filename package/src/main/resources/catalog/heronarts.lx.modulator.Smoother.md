@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/Smoother.java
 sourceSha256: 474ebfbf68836549849df4d59ee9976ab052ae1cc4961f965b95ed6160095efe
-classBytesSha256: d0705c7fc339b9d43db5c557016d5fe24ce6d91d9eac3220f6005d54e4893a24
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: e08a9f039cd5d83e0d07b44dff89084a142d16e049d87f7e4d9b446b863e3c47
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, smoothing, filter, envelope
 ---

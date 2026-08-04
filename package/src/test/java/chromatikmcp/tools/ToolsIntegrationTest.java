@@ -2273,8 +2273,8 @@ class ToolsIntegrationTest {
     assertNotNull(catalog.get("generatedAt"));
     assertNotNull(catalog.get("lxVersion"));
     assertNotNull(catalog.get("stale"), "stale field always present");
-    // Test classpath uses the same ~/.m2 jar as generation: stale should be false.
-    // If bytes differ (fresh rebuild), assert that the stale value is a boolean.
+    // Recorded hashes can lag immediately after an LX bump, but readable bytes always
+    // produce a boolean stale value.
     Object stale = catalog.get("stale");
     assertTrue(stale instanceof Boolean, "stale is a boolean when bytecode is readable");
     // Single-classpath test JVM resolves stock classes at tier 2; deployed runtime
@@ -2293,28 +2293,25 @@ class ToolsIntegrationTest {
   @Test
   @SuppressWarnings("unchecked")
   void getComponentDocAlwaysEmitsCandidatesEvenForASingleVisibleCopy() {
-    // The common case: exactly one copy of GradientPattern's entry is visible. candidates
-    // must still be a one-element array, not omitted — its absence would otherwise be
-    // ambiguous between "exactly one copy visible" and "this server predates the feature."
-    // (The multi-candidate ranking behavior itself — an overlay/classpath entry losing to
-    // a more-accurate one — is covered at the domain layer in CatalogTest, which can
-    // fabricate a competing copy via a throwaway URLClassLoader; doing that here would mean
-    // planting a file on the shared test classpath, which is what a prior version of this
-    // test did and which risked poisoning CatalogFormatTest on a non-clean rebuild.)
+    // This exact count is an LX-version upgrade contract: LX 1.2.2 ships its own stock catalog,
+    // so the common case is two visible copies (this plugin's resource and the LX jar's entry).
+    // Revisit it with the other catalog expectations on the next LX bump.
     Map<String, Object> payload = structured(
         call("get_component_doc", Map.of("class", GradientPattern.class.getName())));
     Map<String, Object> catalog = (Map<String, Object>) payload.get("catalog");
     assertNotNull(catalog);
 
     List<Map<String, Object>> candidates = (List<Map<String, Object>>) catalog.get("candidates");
-    assertNotNull(candidates, "candidates is always present, even with a single visible copy");
-    assertEquals(1, candidates.size());
-    Map<String, Object> only = candidates.get(0);
-    assertEquals(catalog.get("source"), only.get("source"));
-    assertNotNull(only.get("url"));
-    Object bytesMatch = only.get("bytesMatch");
-    assertTrue(bytesMatch instanceof Boolean || "unknown".equals(bytesMatch),
-        "bytesMatch is three-valued like `stale`: true, false, or \"unknown\"");
+    assertNotNull(candidates, "candidates is always present");
+    assertEquals(2, candidates.size());
+    Map<String, Object> winner = candidates.get(0);
+    assertEquals(catalog.get("source"), winner.get("source"));
+    for (Map<String, Object> candidate : candidates) {
+      assertNotNull(candidate.get("url"));
+      Object bytesMatch = candidate.get("bytesMatch");
+      assertTrue(bytesMatch instanceof Boolean || "unknown".equals(bytesMatch),
+          "bytesMatch is three-valued like `stale`: true, false, or \"unknown\"");
+    }
   }
 
   @Test

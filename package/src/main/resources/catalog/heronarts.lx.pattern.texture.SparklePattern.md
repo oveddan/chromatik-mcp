@@ -4,10 +4,10 @@ kind: pattern
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/pattern/texture/SparklePattern.java
 sourceSha256: bc638a5ec2c448fbf1d9419bbf77048a05a4bae4ebf4d82ff76f570ac64a1122
-classBytesSha256: 0619f63042b23de19862c6bac51f722a1d1efa1c69451c103a18995f1f613373
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 30a24ec87327552adaf66c86894a6648bd1aac1edf2dbcb8c45a12b47fbee598
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: texture, generative, strobe
 ---

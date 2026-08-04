@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/MultiTrig.java
 sourceSha256: 8059eed6af086fa80873a3180e55eceec806bf169274186db80c89e4f2b214f1
-classBytesSha256: 3f070660d073f6bae44542e37ae4d8b7a6db64419cceea5edd2fb1562b110d05
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 55929a19aef85ed872d6566f66695ef915a8399e16c7ac2113ff85fe89318c41
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, utility, routing
 ---

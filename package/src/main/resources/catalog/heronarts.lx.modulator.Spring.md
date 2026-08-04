@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/Spring.java
 sourceSha256: e96d63ff4bdf69388e37807d65263fa7828563f758722a17e79d09b8b30ed92f
-classBytesSha256: 3129c2b6d29b47851260d0e862d17dc65428a2c9a1cd03f4ea6fee38f8e8582e
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: d98fc6a1e94f965d476c63c7090000fb8e6d090d18edb47fc5c63899a9aee39f
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: motion, physics, envelope, utility, smoothing
 ---

@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/audio/BandGate.java
 sourceSha256: e9b90548a1569a5e536cda7b58926d3689e789df32c0912fe5836ea1d415faff
-classBytesSha256: 21d95f04b6ad26a0cfba6a81982888a016d78736513aba08eaff2a413cfe68e5
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 1c13c58937df03078bf7c31e1c2e8de44daba31c60a5c521b6b5d8d2a443afb3
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: audio-reactive, trigger, envelope, beat-detect, tempo
 ---

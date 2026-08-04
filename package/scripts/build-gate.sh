@@ -29,6 +29,8 @@ if [[ ! -f "$POM" ]]; then
   exit 2
 fi
 
+"$REPO_ROOT/scripts/test-bump-lx-version.sh"
+
 LOCK_DIR="/tmp/chromatik-mcp-build-gate.lock"
 LOCK_HELD=0
 release_lock() { [[ "$LOCK_HELD" -eq 1 ]] && rm -rf "$LOCK_DIR"; }
@@ -48,6 +50,8 @@ while ! mkdir "$LOCK_DIR" 2>/dev/null; do
 done
 echo "$$" >"$LOCK_DIR/pid"
 LOCK_HELD=1
+
+"$REPO_ROOT/scripts/verify-heronarts-bytecode.sh"
 
 LOG="$(mktemp "${TMPDIR%/}/build-gate.$$.XXXXXX")"
 

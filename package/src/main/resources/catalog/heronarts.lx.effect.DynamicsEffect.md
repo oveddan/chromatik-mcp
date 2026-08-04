@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/DynamicsEffect.java
 sourceSha256: b1a1d5bab76897446146a465f3b916da36c6fe73bf0f8ffd919f49537846fe1d
-classBytesSha256: 9b9ffeaf5a2140b4a4a31899bcc5d758f33fd9503ce5be6ddb9af932349175a2
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: dbead56f1c6815cdde3556d6ae84efcb5506b88ad05dd8187241dcc367b75bb7
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: color, utility, brightness, contrast, gain, envelope
 ---

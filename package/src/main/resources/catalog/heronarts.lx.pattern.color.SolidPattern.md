@@ -4,10 +4,10 @@ kind: pattern
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/pattern/color/SolidPattern.java
 sourceSha256: 3618d9d360af191a84c537f21622ad8645b824adb6380d280146ead332acfa2c
-classBytesSha256: 867902f1fcbc249c099e71bb7c5a266459fbd12be113b7cdb573e36008b99210
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: eb857ab705e704f5c399413a8c3d9bd17186f53d3cc4a27d33f27dd1e26e81e0
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: color, utility
 ---

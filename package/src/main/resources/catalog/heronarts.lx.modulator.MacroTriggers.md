@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/MacroTriggers.java
 sourceSha256: 9d8fcb4819e02c2aa124a205cc260145a0e78f982e99cc86bc2f057b2fb92de6
-classBytesSha256: 10ae8ea3109db8141948f87e48d53caeea7257e4b66acb86ebd3c98b567861a6
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 8b0546b37550059c6a21edebc3bcfe074b6b7e8ba1add4b447f46e66a55dda3b
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, macro, trigger, midi
 ---

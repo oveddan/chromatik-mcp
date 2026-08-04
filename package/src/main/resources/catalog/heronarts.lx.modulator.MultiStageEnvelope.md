@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/MultiStageEnvelope.java
 sourceSha256: 2370e8509805aa60e5b68664a84c5229df5b2e7722ddc0fb947f35b69ddf8390
-classBytesSha256: 8521fb5f13b7e7b2a4ba5150a34815151d091120a5f07127a320a8de6c0e3525
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: d5c85f97f131a25102fb6bbf715bee4d45522d798c3077ae1e9fdb9b46196b6a
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: envelope, motion, trigger, utility, editable-curve
 ---

@@ -57,7 +57,7 @@ public final class GetChannel implements LxTool {
     if (bus instanceof LXMasterBus master) {
       return Result.ok(ListChannels.masterFull(Channels.describeMaster(master)));
     }
-    // LXBus has exactly two direct subtypes in LX 1.2.1 (LXAbstractChannel, LXMasterBus)
+    // LXBus has exactly two direct subtypes in LX 1.2.2 (LXAbstractChannel, LXMasterBus)
     // — verified against the pinned LX source. A third would land here as an explicit
     // failure rather than silently falling through with the wrong payload shape.
     return Result.error(Result.INVALID_ARGUMENT,

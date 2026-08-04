@@ -8,11 +8,11 @@
     <packaging>jar</packaging>
 
     <properties>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
 
-        <lx.version>1.2.1</lx.version>
+        <lx.version>1.2.2</lx.version>
         <mcp.version>2.0.0-RC1</mcp.version>
         <tomcat.version>11.0.2</tomcat.version>
         <jakarta.servlet.version>6.1.0</jakarta.servlet.version>

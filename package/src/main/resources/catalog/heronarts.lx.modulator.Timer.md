@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/Timer.java
 sourceSha256: 9778ff3551aa7cec8b91ebfead325c958b55f02ce9f9976387ab57c6803a39e8
-classBytesSha256: 71ebb4c149a05b3af576a21264542742a4bc6bf9eb5e470f67b4b192cfcf31d2
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 1fb374955c26b4e4c7600bf705bda88709058b5edbefab6f1b0eac2f39e1ba33
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, schedule, time, utility
 ---

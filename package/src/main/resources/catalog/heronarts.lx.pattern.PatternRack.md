@@ -3,11 +3,11 @@ class: heronarts.lx.pattern.PatternRack
 kind: pattern
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/pattern/PatternRack.java
-sourceSha256: 7528b63971035d14e97e89242fb82373d085a212f105ae03483b1023eb47d849
-classBytesSha256: 03dce456745b0d6fefec29a9b2367d58d9fa739c25f705fe3f1da4b5f693a5e0
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+sourceSha256: f7c195036b39c943029f9241112f7484362d4ef72ecd07f6f636636283323d2a
+classBytesSha256: e46d377128487b4bfa5679c6242a6d3fa144e436a73f1acbd5ef25ad50d8c302
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, generative, container
 ---

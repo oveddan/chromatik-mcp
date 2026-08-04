@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/LinearMaskEffect.java
 sourceSha256: 8edbeb4a88537613058c0b6535c144a8667bce052d87e4d031b4cec5caab3ab5
-classBytesSha256: 8c0f08247d552e0a1540c18f89b2b36a02d4934c5b7cf8879e7db21f8af3ca3e
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: f3360fcec86ac61df915dc83e69c5b45c6b0202944abc51954fbfb6c9448bed4
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: masking, geometric, utility, gradient
 ---

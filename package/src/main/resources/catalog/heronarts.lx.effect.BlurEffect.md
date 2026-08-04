@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/BlurEffect.java
 sourceSha256: 36e0c1c8808c99725aef339cebea0fed7e70028c97f30ec5c6b9d5387a53c3f4
-classBytesSha256: c137f8a3a9f1584c0d6fd795768d128d45140a3c9c1d880f8bedd3502069873b
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 9ae3dc27d016804a5cd5e4c3438b413d5f15ff8606901c568a80e0998d99d28e
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: motion, texture, utility, smoothing
 ---

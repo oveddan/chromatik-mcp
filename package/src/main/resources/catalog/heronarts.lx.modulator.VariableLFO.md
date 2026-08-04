@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/VariableLFO.java
 sourceSha256: b25e73a66e379de4cbac972ae4b21172f3748fd51611854dac287bd29eb8f2a5
-classBytesSha256: 1585e8ddbfddd5c6b99caaa83ef1c801270cb897b45dbceabdb3cfecd1521461
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 276eef27b79250c2c7110f5c705b7201f7e2d311d728bdcfbad2882a3592ea5b
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: lfo, motion, waveshaping, envelope, utility
 ---

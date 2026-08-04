@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/color/ColorizeEffect.java
 sourceSha256: a490feafccd4c48572b0145177dd8f7a9b18a42cdccb9c3b87b29e7f2e6e604c
-classBytesSha256: f7573ddbc62cbd4910b16e986864963d95b9aa230d180008d21ed01929b98d57
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 9de4d4ff1c9ba05f8b3004f36edf96f6f331b31ac255e00306d64018bde5ff0c
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: color, masking, palette, utility
 ---

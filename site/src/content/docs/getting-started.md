@@ -9,8 +9,8 @@ point your MCP client at the port it publishes. No separate server process.
 
 ## Requirements
 
-- [Chromatik](https://chromatik.co/download/) with LX **1.2.1** (the pinned framework version in `lx.package`)
-- To build from source (optional): Java **21** and Maven
+- [Chromatik](https://chromatik.co/download/) with LX **1.2.2** (the pinned framework version in `lx.package`)
+- To build from source (optional): Java **25** and Maven (required by the published GLX/GLXStudio 1.2.2 jars)
 
 ## 1. Install the jar
 
@@ -106,7 +106,7 @@ plugin logs a loud warning on startup whenever a non-loopback host is configured
   "host": "127.0.0.1",
   "url": "http://127.0.0.1:51234/mcp",
   "projectPath": "/Users/you/Chromatik/Projects/MyShow.lxp",
-  "lxVersion": "1.2.1",
+  "lxVersion": "1.2.2",
   "serverVersion": "0.1.0",
   "buildTime": "2026-07-20T18:04:33Z",
   "connected": false,

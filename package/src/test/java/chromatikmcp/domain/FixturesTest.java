@@ -50,6 +50,7 @@ class FixturesTest extends HeadlessLxTest {
     fixture.numRows.setValue(2);
     fixture.numColumns.setValue(3);
     fixture.x.setValue(1.5);
+    Fixtures.flushStructure(lx);
 
     Fixtures.FixturesSnapshot snapshot = Fixtures.describe(lx);
     assertEquals(1, snapshot.fixtures().size());
@@ -72,6 +73,36 @@ class FixturesTest extends HeadlessLxTest {
     assertEquals(2 + 3, info.submodelCount());
     assertNotNull(info.output(), "GridFixture is an LXProtocolFixture");
     assertEquals("NONE", info.output().protocol(), "no protocol configured by default");
+  }
+
+  @Test
+  void listReadFlushesGeometryChangedThroughGenericSetParameter() {
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+    Fixtures.flushStructure(lx);
+
+    Parameters.set(lx, Resolve.canonicalPath(fixture.numRows), 4);
+    assertNull(fixture.getModel(), "LX 1.2.2 leaves the derived model pending");
+
+    Fixtures.FixtureInfo info = Fixtures.describe(lx).fixtures().get(0);
+    assertTrue(info.modelAvailable());
+    assertEquals(fixture.totalSize(), info.size());
+    assertNotNull(info.firstIndex());
+  }
+
+  @Test
+  void singleReadFlushesGeometryChangedOutsideFixtureDomain() {
+    LX lx = track(new LX());
+    GridFixture fixture = addGridFixture(lx);
+    Fixtures.flushStructure(lx);
+
+    fixture.numColumns.setValue(5); // UI/direct write, outside the fixture-domain mutators
+    assertNull(fixture.getModel(), "LX 1.2.2 leaves the derived model pending");
+
+    Fixtures.FixtureInfo info = Fixtures.describeFixture(lx, fixture);
+    assertTrue(info.modelAvailable());
+    assertEquals(fixture.totalSize(), info.size());
+    assertNotNull(info.firstIndex());
   }
 
   @Test
@@ -135,6 +166,31 @@ class FixturesTest extends HeadlessLxTest {
   }
 
   @Test
+  void outputMapReadFlushesOutputChangedThroughGenericSetParameter() {
+    LX lx = track(new LX());
+    GridFixture first = addGridFixture(lx);
+    GridFixture second = addGridFixture(lx);
+    for (GridFixture fixture : List.of(first, second)) {
+      fixture.numRows.setValue(1);
+      fixture.numColumns.setValue(1);
+      fixture.protocol.setValue(LXFixture.Protocol.ARTNET);
+      fixture.enabled.setValue(true);
+    }
+    first.dmxChannel.setValue(1);
+    second.dmxChannel.setValue(10);
+    Fixtures.flushStructure(lx);
+    assertEquals("", Fixtures.outputMap(lx, null).outputError());
+
+    Parameters.set(lx, Resolve.canonicalPath(second.dmxChannel), 1);
+    assertNull(lx.structure.outputError.getString(),
+        "collision report remains pending until structure output regeneration");
+
+    Fixtures.OutputMapSnapshot snapshot = Fixtures.outputMap(lx, null);
+    assertTrue(snapshot.outputError().contains("collisions"), snapshot.outputError());
+    assertEquals(1, snapshot.fixtures().get(1).channel());
+  }
+
+  @Test
   void outputMapReportsNoUniverseMathForProtocolNone() {
     LX lx = track(new LX());
     GridFixture fixture = addGridFixture(lx);
@@ -179,6 +235,7 @@ class FixturesTest extends HeadlessLxTest {
     GridFixture fixture = addGridFixture(lx);
     lx.command.perform(new LXCommand.Parameter.SetValue(fixture.deactivate, 1));
     lx.command.perform(new LXCommand.Parameter.SetValue(fixture.numRows, 5));
+    Fixtures.flushStructure(lx);
 
     Fixtures.FixtureInfo info = Fixtures.describeFixture(fixture);
     assertFalse(info.modelAvailable(), "deactivated fixture has no built model");
@@ -383,6 +440,7 @@ class FixturesTest extends HeadlessLxTest {
     assertEquals(List.of("cube", "front"), fixture.getModel().tags);
 
     lx.command.undo();
+    Fixtures.flushStructure(lx);
     assertFalse(fixture.getModel().tags.contains("cube"), "undo restores the previous tags");
   }
 

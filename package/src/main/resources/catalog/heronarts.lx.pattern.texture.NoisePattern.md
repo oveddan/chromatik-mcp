@@ -4,10 +4,10 @@ kind: pattern
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/pattern/texture/NoisePattern.java
 sourceSha256: ab0d08bd99b94c16600525dc9f0ab108f505d3ad1e3cd23cf04bf89288bcde95
-classBytesSha256: ec9f16d0e40b80d36b258aa248a7da6d0ccb13eab0b3e49efbdaba38ba910044
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 6a8185af807fa2544702aa29814712976986573dda4efed8a675caae33ec94f8
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: texture, generative, motion, geometric
 ---

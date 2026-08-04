@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/Damper.java
 sourceSha256: c90ee20b9146ea97b883af4f4e526a645d52bb80e93c8bc36a8a786acbd74f6d
-classBytesSha256: 6edf94c1931c8dc2dfe955908abdc18dbaec19793406e11159b3208fdfcc094b
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: f8c057bf721fbd9458f159bc72af605d4556bcdedb02f8631e8a9712f88c0146
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: envelope, smoothing, trigger, utility, midi
 ---

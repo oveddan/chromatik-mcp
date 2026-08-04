@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/MacroKnobs.java
 sourceSha256: 28e8fb70712ee61ce16d4e4be6e04a393f6fa2d260c7dde755adef4140f267a6
-classBytesSha256: 8da501511f93162774f5e9d1e9b9d06cf5418e6807de1d165142bd282b2eaad0
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 1bc19539150442d9c4d7d3d8cad2f60aa45478776671993402a477b7d7e37dda
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, macro
 ---

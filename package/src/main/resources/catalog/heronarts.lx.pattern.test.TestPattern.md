@@ -4,10 +4,10 @@ kind: pattern
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/pattern/test/TestPattern.java
 sourceSha256: 334de968a8182c42b479c0422d3b8d3d0e8db460587c5efe256542fe8c2a7c00
-classBytesSha256: 23c1895aeaca5b89ffe34719f279ba471b4a6e55eaf03a072ecfc74e012b340b
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: fb0b7989fc96ce647008a879c5e520fe5f548a8fa2f9fc2f3e402526a788ca03
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, test
 ---

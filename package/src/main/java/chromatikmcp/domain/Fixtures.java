@@ -60,12 +60,12 @@ public final class Fixtures {
    * but several submodels — so both are reported rather than conflated.
    */
   /**
-   * {@code modelAvailable} is {@code false} only when {@code fixture.getModel()} is
-   * currently {@code null} — a deactivated fixture (see {@code LXFixture.deactivate}) has no
-   * built model until it is reactivated and the structure regenerates ({@code
-   * LXStructure.regenerateModel} skips {@code toModel()} for deactivated fixtures). When
-   * {@code false}, {@code tags} falls back to {@code fixture.tagList} (the {@code .lxf}-declared
-   * subset, never null) and {@code submodelCount} reports 0.
+   * {@code modelAvailable} is {@code false} when {@code fixture.getModel()} is currently
+   * {@code null}. A deactivated fixture has no built model until it is reactivated and the
+   * structure regenerates; since LX 1.2.2 an active fixture can also be temporarily null while
+   * deferred regeneration is pending. Mutating primitives in this domain flush that window
+   * before returning derived model state. When {@code false}, {@code tags} falls back to
+   * {@code fixture.tagList} and {@code submodelCount} reports 0.
    */
   public record FixtureInfo(String path, int id, int index, String label, String type,
       int size, Integer firstIndex, Integer lastIndex, boolean enabled, boolean deactivate,
@@ -83,8 +83,22 @@ public final class Fixtures {
 
   private Fixtures() {}
 
+  /**
+   * Pump LX 1.2.2's deferred structure regeneration before a mutating primitive reads back
+   * derived model state. {@code beforeEngineRun()} is the only public flush point available in
+   * LX 1.2.2; revalidate that lifecycle-hook assumption before upgrading LX. Call on the engine
+   * thread.
+   */
+  public static void flushStructure(LX lx) {
+    lx.structure.beforeEngineRun();
+  }
+
   /** Call on the engine thread; the returned records are safe to read anywhere. */
   public static FixturesSnapshot describe(LX lx) {
+    // A generic set_parameter or UI edit may have invalidated fixture-derived models
+    // earlier in this same engine frame. Flush before any list read so active fixtures are
+    // never misreported as modelAvailable=false while regeneration is merely pending.
+    flushStructure(lx);
     List<FixtureInfo> fixtures = new ArrayList<>();
     for (LXFixture fixture : lx.structure.fixtures) {
       fixtures.add(describeFixture(fixture));
@@ -138,6 +152,15 @@ public final class Fixtures {
             fixture.scale.getValue()),
         (fixture instanceof LXProtocolFixture protocolFixture) ? describeOutput(protocolFixture) : null,
         (fixture instanceof JsonFixture jsonFixture) ? describeJson(jsonFixture) : null);
+  }
+
+  /**
+   * Read entry point for a single fixture. Flushes pending structure work caused by generic
+   * parameter writes or UI edits before reporting derived model state.
+   */
+  public static FixtureInfo describeFixture(LX lx, LXFixture fixture) {
+    flushStructure(lx);
+    return describeFixture(fixture);
   }
 
   /**
@@ -224,6 +247,9 @@ public final class Fixtures {
    * OutputMapEntry} and the caveats in {@link #OUTPUT_MAP_NOTE}. Call on the engine thread.
    */
   public static OutputMapSnapshot outputMap(LX lx, LXFixture root) {
+    // A generic parameter or UI edit may have pending geometry/output regeneration. Flush
+    // before reading index ranges, derived channel counts, or LX's collision report.
+    flushStructure(lx);
     List<LXFixture> roots = (root != null) ? List.of(root) : lx.structure.fixtures;
     List<OutputMapEntry> fixtures = new ArrayList<>();
     for (LXFixture fixture : roots) {
@@ -483,6 +509,9 @@ public final class Fixtures {
       ++undoEntries;
     }
 
+    // Metrics writes invalidate the fixture model until the next structure engine pass.
+    flushStructure(lx);
+
     Map<String, JsonParameterInfo> jsonValues = (jsonFixture == null)
         ? Map.of()
         : jsonParameters(jsonFixture).stream()
@@ -561,6 +590,7 @@ public final class Fixtures {
       }
     }
     Commands.perform(lx, new LXCommand.Parameter.SetString(fixture.tags, String.join(" ", tags)));
+    flushStructure(lx);
     LXModel model = fixture.getModel();
     return (model != null) ? List.copyOf(model.tags) : fixture.tagList;
   }
@@ -744,6 +774,7 @@ public final class Fixtures {
       lx.command.undo();
       throw e;
     }
+    flushStructure(lx);
     return describeFixture(fixture);
   }
 
@@ -793,6 +824,7 @@ public final class Fixtures {
     if (fixtures.size() != before - 1 || fixtures.contains(fixture)) {
       throw new IllegalStateException("RemoveFixture did not remove the fixture");
     }
+    flushStructure(lx);
   }
 
   /**
@@ -842,6 +874,7 @@ public final class Fixtures {
     if (fixtures.size() != before + 1) {
       throw new IllegalStateException("AddFixture did not duplicate the fixture");
     }
+    flushStructure(lx);
     return describeFixture(fixtures.get(effectiveIndex));
   }
 

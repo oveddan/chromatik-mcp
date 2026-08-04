@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/audio/SoundObject.java
 sourceSha256: 1e127e2233c243c3d8755b1470108833d1ada31967668ebeb0f26a3c8be3b87b
-classBytesSha256: 81ce03ff00ce808b1bf4eaf885148874b22e78d37b88f863c6ab489ebe234c8f
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: d90c6a52faf5bab5e41ead8e0eba4db517c68958b923d658889d966e0424959a
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: audio-reactive, spatial, geometric, envelope, smoothing, utility
 ---

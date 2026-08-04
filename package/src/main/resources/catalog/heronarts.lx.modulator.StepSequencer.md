@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/StepSequencer.java
 sourceSha256: 384d44095ee147c2fd5eca08b6233658984f582ececcf0bcc45faa1ef208fdd3
-classBytesSha256: 1e1abb2118172847abfff3939d3ee668cbd01c9201c806ba540de655e067c723
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 7438dce910cb5bdaa47df42e4d2d979120a7c992cd59f6cc1266f9623dda4f81
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, sequencer, rhythm, utility
 ---

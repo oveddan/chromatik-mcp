@@ -8,6 +8,7 @@ import java.util.Map;
 import heronarts.lx.LX;
 import heronarts.lx.model.LXModel;
 
+import chromatikmcp.domain.Fixtures;
 import chromatikmcp.domain.Model;
 
 public final class DescribeModel implements LxTool {
@@ -73,6 +74,10 @@ public final class DescribeModel implements LxTool {
     }
     depth = Math.min(depth, MAX_DEPTH);
 
+    // Generic set_parameter and UI edits can leave LX 1.2.2's model tree pending until
+    // beforeEngineRun. This tool is a structure-derived read boundary, so make its tree,
+    // ranges, bounds, and tag vocabulary internally current before taking the root.
+    Fixtures.flushStructure(lx);
     LXModel root = lx.getModel();
     Object pathArg = args.get("path");
     LXModel target = root;

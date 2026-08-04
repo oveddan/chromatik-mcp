@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/Scaler.java
 sourceSha256: 8014d2e649c2ad253d20a17afc5ce7dd125df53a3c4c626df3ba98ad1745ccf0
-classBytesSha256: 563ae393a7b1c71e9173da08306a01ca8db02255f42f727a7382db2a0f764003
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: d0fa028f9a66a1bab0e07dc7a80b2e85fb23c97b7bfda53d80faa18da0c5bac2
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, shaping, gain, smoothing, signal
 ---

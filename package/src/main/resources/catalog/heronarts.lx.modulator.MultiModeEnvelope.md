@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/MultiModeEnvelope.java
 sourceSha256: 481db845aa1c3abc86d21dddbfb3f1075c3567ee72ac992aa015eaa01672b4d7
-classBytesSha256: 0c5ecbfce63c57f903cd5e17a6a54413828a4411d6c03d3eb72feccfce4bb188
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 44c2b0735ec71546131979b6b6f6e831edb28f38826fed4eb5bf17b841da2db8
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: envelope, trigger, midi, adsr, motion, utility
 ---

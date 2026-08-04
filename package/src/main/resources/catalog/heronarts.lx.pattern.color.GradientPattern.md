@@ -4,10 +4,10 @@ kind: pattern
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/pattern/color/GradientPattern.java
 sourceSha256: fa36c9071e5ca752df1e86757c3c478984b5af0782062e8c6659506fd5e4c919
-classBytesSha256: ef225bc8e0ed51f529887ac59927e1ac07dd46ca0160d492fb00057eb2dab1e6
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 8600ae2e03c67da55dddb3d458b192f7c736d98851eee5ae951c2b7579557744
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 curated: parameterInteractions, usageTips
 curatedAt: 2026-07-25T00:00:00Z

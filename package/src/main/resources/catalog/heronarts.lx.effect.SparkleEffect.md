@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/SparkleEffect.java
 sourceSha256: f55a5652b85172950b2d767e28ddc0084a4129be78c5832ded126f1f086282ad
-classBytesSha256: 261300a94172f29489ce522bde1dc86129636291eb9d255f7449ede182fbabf4
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 54295696c5d2ee917ec3e6da9e38eea55b808413b373238b815f0082cd3b71fa
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: texture, sparkle, motion, masking, utility
 ---

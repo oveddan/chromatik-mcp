@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/Quantizer.java
 sourceSha256: 1e3317550199b9ad5128868f560b22e630c3e0993c46d07c564708b667cb83c6
-classBytesSha256: 1ce57152dd15556306783c147cd2bc729504eb181049712c63e0a6c687e67e38
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: f1407ac3bf065578a845d1ad318cc921f92b224afeb2c6c9cbddb47e319e1bd7
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, tempo, utility
 ---

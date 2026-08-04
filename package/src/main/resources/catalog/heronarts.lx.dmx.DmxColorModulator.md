@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/dmx/DmxColorModulator.java
 sourceSha256: f46178f97cac851f164908b8a291a14641530dee80c3f25c1796c0feaaa52c95
-classBytesSha256: 344af2d52d5944b473492cb4920c75a049e900de61af50b18493dcd2aede61fc
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 4a525c7f68eeaef6e04a7ed47bab5bb75937f04e742b587e611a35a7f8633409
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: dmx, color, utility
 ---

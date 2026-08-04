@@ -157,8 +157,8 @@ sourceRepo: LX                     # logical name; sources.json maps it to the G
 sourcePath: src/main/java/heronarts/lx/pattern/color/GradientPattern.java
 sourceSha256: <64 hex>             # source file at generation time — the generator's incremental key
 classBytesSha256: <64 hex>         # .class bytes at generation time — the runtime staleness key (optional)
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
 generatedAt: 2026-07-09T00:00:00Z
 generator: chromatik-mcp-catalog/2 (<model>)
 curated: parameterInteractions, usageTips   # sections hand-written and preserved across runs (optional)

@@ -191,6 +191,7 @@ class SubfixtureTreeTest extends HeadlessLxTest {
         (heronarts.lx.structure.GridFixture) lx.structure.fixtures.get(0);
     grid.numRows.setValue(2);
     grid.numColumns.setValue(3);
+    Fixtures.flushStructure(lx);
 
     Fixtures.FixtureInfo info = Fixtures.describeFixture(grid);
     assertEquals(0, info.childCount(), "GridFixture has no subfixtures");

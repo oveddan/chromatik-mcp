@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/color/TransparifyEffect.java
 sourceSha256: 862be53c0c7e0b20aa8f3e1e2f2bab5bbaf36e831baec71794be4d6bd3a39c4f
-classBytesSha256: 441c9ef757030c245a9b60cc8f8e044dcd58316752f816593fc8709681854d6d
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 2bf4b5aaf3c5f7e279a1934c9d968133bd34b1b0e0d3f8b7c0b505bb4ef116b5
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: masking, color, compositing, utility
 ---

@@ -86,7 +86,7 @@ public final class GetFixture implements LxTool {
     }
     LXFixture fixture = Resolve.component(lx, path, LXFixture.class);
 
-    Map<String, Object> payload = ListFixtures.toMap(Fixtures.describeFixture(fixture));
+    Map<String, Object> payload = ListFixtures.toMap(Fixtures.describeFixture(lx, fixture));
 
     List<Map<String, Object>> parameters = new ArrayList<>();
     for (Parameters.ParameterInfo parameter : Parameters.listFor(fixture).parameters()) {

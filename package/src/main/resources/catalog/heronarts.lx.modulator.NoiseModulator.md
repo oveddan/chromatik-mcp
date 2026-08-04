@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/NoiseModulator.java
 sourceSha256: 033107289451cae4a31700870acdfac2232359e43f969954203c05fb3a0ba7dd
-classBytesSha256: b2b0079889321b3c53ffc788cce191fd003f1263f5686764579f5b1d038c25a8
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: a3fd279dc1b433e3277a4cc4620223fdb1c24479968548849c2a59a8f4ad65e0
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: texture, motion, lfo, utility, noise
 ---

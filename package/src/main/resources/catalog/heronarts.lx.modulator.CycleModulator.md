@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/CycleModulator.java
 sourceSha256: a0acb1aa743da287a1660c9d3e102c48439a874d1a8b7762ce2f87ec460b67e5
-classBytesSha256: aeb6cf19f6e22cc16ae0040853f838eedd1e2a65dadbfc50dfd1ee7735b81a29
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 43dc5f48eb8430fece1d55647e04509559efed904768324030ca04231a51bbee
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: motion, lfo, phase, utility
 ---

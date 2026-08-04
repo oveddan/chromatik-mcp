@@ -4,10 +4,10 @@ kind: pattern
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/pattern/audio/SoundObjectPattern.java
 sourceSha256: a3bebd665bf96c43ad46be8b04bdef852267205e2627ecc6d5c25b58ed3b0292
-classBytesSha256: 4ea4e4589a86a9fdaf1a0bc041bf8a0a7a851ebb7424805c09ec5c2a1222b1c6
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: c877844592eb66e50fda8f41a0b702123682e0e1642756ff9b86b3b1e7e78dc6
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: audio-reactive, geometric, motion, generative
 ---

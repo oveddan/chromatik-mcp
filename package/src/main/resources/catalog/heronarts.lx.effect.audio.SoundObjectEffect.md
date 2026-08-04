@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/audio/SoundObjectEffect.java
 sourceSha256: c20b3fd26909eb9e302719a94bbab19ddcb2c07e1562bab15d3508f9e2ea28c4
-classBytesSha256: 907d7c214a9e5d43973ce895bc674bd78a55db7d2af7ccf4aac90c0e72bb74f1
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 63f34f1c1fe34ecb5e0d6c0338da458e6e35e96621241122ee614c86b0c8f606
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: audio-reactive, masking, spatial, utility
 ---

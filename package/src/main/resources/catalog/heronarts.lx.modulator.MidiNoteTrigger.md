@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/MidiNoteTrigger.java
 sourceSha256: ee1dff362492e3b52b9610e3f462b6b0c4296cabcd223ec42090f9dda36fda4c
-classBytesSha256: b00b16185a855ac88ed30f436b0bd703149fb5e616d8c0e846e844f1210470ca
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 59a1b7eeb88ed4117be11dae20045db97a8151eb45d2103e4171cb09c36ebe1a
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, midi, audio-reactive, utility
 ---

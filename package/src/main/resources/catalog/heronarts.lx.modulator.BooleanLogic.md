@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/BooleanLogic.java
 sourceSha256: bd9b8ecaa8e1b3645587601fd66e2849ab7235ea5b177a5a6c955e7fa37f5b81
-classBytesSha256: edfa062fe78cf512d20822e4a6a43682ff3f52b54b4cc90c13e47710bf56f62f
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: f38bdb127a4ce3de8f214899ec14a24652fb8d2ec6591541d4f40dc54a13c877
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: trigger, utility, logic
 ---

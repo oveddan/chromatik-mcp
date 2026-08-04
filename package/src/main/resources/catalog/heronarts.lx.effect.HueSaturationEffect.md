@@ -4,10 +4,10 @@ kind: effect
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/effect/HueSaturationEffect.java
 sourceSha256: 1564847e34c33a1ebe99e2d7061a75dbb3c65caa23e7ac1acd40b28d47eebd3f
-classBytesSha256: bc704abc82e2c3d8eb0ba7ab2aead00ed4c45e7f5a583d33099b15357c3d5afa
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 9578b525d654c29a1336b56c96b9b15c3600d5056dba5303326dfe7c83792277
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: color, hue, saturation, brightness, utility
 ---

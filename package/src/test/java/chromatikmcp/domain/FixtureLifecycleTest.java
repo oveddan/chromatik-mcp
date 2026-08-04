@@ -274,6 +274,20 @@ class FixtureLifecycleTest extends HeadlessLxTest {
   }
 
   @Test
+  void duplicateFixtureReturnsARegeneratedDescriptionNotAStaleOne() {
+    LX lx = track(new LX());
+    Fixtures.addFixtureByClass(lx, GridFixture.class, null, "First", null);
+    LXFixture source = lx.structure.fixtures.get(0);
+
+    Fixtures.FixtureInfo info = Fixtures.duplicateFixture(lx, source, null);
+
+    assertTrue(info.modelAvailable(), "returned snapshot reflects the regenerated model");
+    assertEquals(source.totalSize(), info.size());
+    assertEquals(source.totalSize(), info.firstIndex(), "clone points follow the source");
+    assertTrue(info.tags().contains("grid"), "effective tags, not the fallback tag list");
+  }
+
+  @Test
   void duplicateFixtureAtAnExplicitIndexInsertsThere() {
     LX lx = track(new LX());
     Fixtures.addFixtureByClass(lx, GridFixture.class, null, "First", null);

@@ -4,10 +4,10 @@ kind: modulator
 sourceRepo: LX
 sourcePath: src/main/java/heronarts/lx/modulator/MacroSwitches.java
 sourceSha256: 32299eba1ca37f50b80af93142778729cb9b577c6c04afb649be3d629bec6743
-classBytesSha256: e15eb97788a1e984b4678d281c2550ef7f2aa651a6513f01747d4035b89da2ff
-classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.1/lx-1.2.1.jar
-lxVersion: 1.2.1
-generatedAt: 2026-07-17T00:00:00Z
+classBytesSha256: 917386ad8bf22c34837d5d6a9452fd9d47cbc9be628217e47302929f49176411
+classBytesOrigin: ~/.m2/repository/com/heronarts/lx/1.2.2/lx-1.2.2.jar
+lxVersion: 1.2.2
+generatedAt: 2026-08-03T00:00:00Z
 generator: chromatik-mcp-catalog/2 (claude-sonnet-5)
 tags: utility, macro, trigger, midi
 ---
