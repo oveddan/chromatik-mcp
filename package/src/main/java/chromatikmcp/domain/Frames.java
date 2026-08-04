@@ -2,10 +2,8 @@ package chromatikmcp.domain;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXEngine;
@@ -125,6 +123,18 @@ public final class Frames {
       float zRange,
       String bus) {}
 
+  /** One hue-bin aggregate in a {@link FrameSummary}. */
+  public record DominantColor(String hex, double fraction) {}
+
+  /** Stable, wire-agnostic result of reducing a captured frame. */
+  public record FrameSummary(
+      int points,
+      double nonBlackFraction,
+      double litFraction,
+      double meanBrightness,
+      List<DominantColor> dominantColors,
+      List<List<String>> grid) {}
+
   public static FrameSnapshot capture(LX lx, Bus bus) {
     LXEngine.Frame frame = new LXEngine.Frame(lx);
     lx.engine.copyFrameThreadSafe(frame);
@@ -168,7 +178,8 @@ public final class Frames {
    * equals nonBlackFraction (max > 0 is the nonBlack condition); at 255 litFraction is
    * always 0.0, since no channel can exceed the maximum.
    */
-  public static Map<String, Object> summarize(FrameSnapshot s, View view, int gridSize, int litThreshold) {
+  public static FrameSummary summarize(
+      FrameSnapshot s, View view, int gridSize, int litThreshold) {
     int size = s.size();
     int nonBlack = 0;
     int lit = 0;
@@ -215,7 +226,7 @@ public final class Frames {
       binB[bin] += b;
     }
 
-    List<Map<String, Object>> dominant = new ArrayList<>();
+    List<DominantColor> dominant = new ArrayList<>();
     for (int n = 0; n < 3; ++n) {
       int best = -1;
       for (int bin = 0; bin < HUE_BINS; ++bin) {
@@ -226,9 +237,10 @@ public final class Frames {
       if (best < 0) {
         break;
       }
-      dominant.add(Map.of(
-          "hex", hex(binR[best] / binCount[best], binG[best] / binCount[best], binB[best] / binCount[best]),
-          "fraction", round4((double) binCount[best] / nonBlack)));
+      dominant.add(new DominantColor(
+          hex(binR[best] / binCount[best], binG[best] / binCount[best],
+              binB[best] / binCount[best]),
+          round4((double) binCount[best] / nonBlack)));
       binCount[best] = 0;
     }
 
@@ -243,14 +255,13 @@ public final class Frames {
       grid.add(cols);
     }
 
-    Map<String, Object> summary = new LinkedHashMap<>();
-    summary.put("points", size);
-    summary.put("nonBlackFraction", round4((size == 0) ? 0 : (double) nonBlack / size));
-    summary.put("litFraction", round4((size == 0) ? 0 : (double) lit / size));
-    summary.put("meanBrightness", round4((size == 0) ? 0 : brightnessSum / size));
-    summary.put("dominantColors", dominant);
-    summary.put("grid", grid);
-    return summary;
+    return new FrameSummary(
+        size,
+        round4((size == 0) ? 0 : (double) nonBlack / size),
+        round4((size == 0) ? 0 : (double) lit / size),
+        round4((size == 0) ? 0 : brightnessSum / size),
+        dominant,
+        grid);
   }
 
   private static int clamp(int v, int gridSize) {

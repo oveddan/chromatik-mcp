@@ -102,7 +102,7 @@ public final class GetFrame implements LxTool {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("bus", snap.bus());
     payload.put("view", view.name().toLowerCase(Locale.ROOT));
-    payload.putAll(Frames.summarize(snap, view, grid, litThreshold));
+    payload.putAll(summaryToMap(Frames.summarize(snap, view, grid, litThreshold)));
 
     if (!includeImage) {
       return Result.ok(payload);
@@ -112,6 +112,21 @@ public final class GetFrame implements LxTool {
     // The PNG is encoded by the seam on the HTTP worker thread, after this handler has
     // left the engine thread; the supplier closes only over the detached snapshot.
     return Result.okImage(payload, () -> FrameRaster.png(snap, view, width));
+  }
+
+  static Map<String, Object> summaryToMap(Frames.FrameSummary summary) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("points", summary.points());
+    payload.put("nonBlackFraction", summary.nonBlackFraction());
+    payload.put("litFraction", summary.litFraction());
+    payload.put("meanBrightness", summary.meanBrightness());
+    payload.put("dominantColors", summary.dominantColors().stream()
+        .map(color -> Map.<String, Object>of(
+            "hex", color.hex(),
+            "fraction", color.fraction()))
+        .toList());
+    payload.put("grid", summary.grid());
+    return payload;
   }
 
   private static String stringArg(Map<String, Object> args, String key, String fallback) {

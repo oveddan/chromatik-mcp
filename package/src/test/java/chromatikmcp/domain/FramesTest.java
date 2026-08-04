@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -84,21 +83,20 @@ class FramesTest extends HeadlessLxTest {
     lx.engine.run();
 
     Frames.FrameSnapshot snap = Frames.capture(lx, Frames.Bus.MAIN);
-    Map<String, Object> summary = Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
+    Frames.FrameSummary summary =
+        Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
 
-    assertEquals(64, summary.get("points"));
-    assertEquals(1.0, summary.get("nonBlackFraction"));
-    assertEquals(1.0, summary.get("litFraction"));
-    assertEquals(1.0, summary.get("meanBrightness"));
+    assertEquals(64, summary.points());
+    assertEquals(1.0, summary.nonBlackFraction());
+    assertEquals(1.0, summary.litFraction());
+    assertEquals(1.0, summary.meanBrightness());
 
-    @SuppressWarnings("unchecked")
-    List<Map<String, Object>> dominant = (List<Map<String, Object>>) summary.get("dominantColors");
+    List<Frames.DominantColor> dominant = summary.dominantColors();
     assertEquals(1, dominant.size(), "one hue: red");
-    assertEquals("#ff0000", dominant.get(0).get("hex"));
-    assertEquals(1.0, dominant.get(0).get("fraction"));
+    assertEquals("#ff0000", dominant.get(0).hex());
+    assertEquals(1.0, dominant.get(0).fraction());
 
-    @SuppressWarnings("unchecked")
-    List<List<String>> grid = (List<List<String>>) summary.get("grid");
+    List<List<String>> grid = summary.grid();
     assertEquals(3, grid.size());
     for (List<String> row : grid) {
       assertEquals(3, row.size());
@@ -121,10 +119,12 @@ class FramesTest extends HeadlessLxTest {
     float[] zn = {0.5f, 0.5f, 0.5f, 0.5f};
     Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, size, 1f, 1f, 1f, "main");
 
-    Map<String, Object> summary = Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
+    Frames.FrameSummary summary =
+        Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
 
-    assertEquals(1.0, summary.get("nonBlackFraction"), "unchanged: any nonzero channel counts as non-black");
-    assertEquals(0.0, summary.get("litFraction"), "near-black residual sits below the lit threshold");
+    assertEquals(1.0, summary.nonBlackFraction(),
+        "unchanged: any nonzero channel counts as non-black");
+    assertEquals(0.0, summary.litFraction(), "near-black residual sits below the lit threshold");
   }
 
   @Test
@@ -139,11 +139,14 @@ class FramesTest extends HeadlessLxTest {
     float[] zn = {0.5f, 0.5f, 0.5f, 0.5f};
     Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, size, 1f, 1f, 1f, "main");
 
-    Map<String, Object> defaultSummary = Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
-    assertEquals(0.0, defaultSummary.get("litFraction"), "default threshold: near-black stays unlit");
+    Frames.FrameSummary defaultSummary =
+        Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
+    assertEquals(0.0, defaultSummary.litFraction(), "default threshold: near-black stays unlit");
 
-    Map<String, Object> lowThresholdSummary = Frames.summarize(snap, Frames.View.FRONT, 3, 8);
-    assertEquals(1.0, lowThresholdSummary.get("litFraction"), "threshold below max channel: counts as lit");
+    Frames.FrameSummary lowThresholdSummary =
+        Frames.summarize(snap, Frames.View.FRONT, 3, 8);
+    assertEquals(1.0, lowThresholdSummary.litFraction(),
+        "threshold below max channel: counts as lit");
   }
 
   @Test
@@ -159,11 +162,13 @@ class FramesTest extends HeadlessLxTest {
     float[] zn = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f};
     Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, size, 1f, 1f, 1f, "main");
 
-    Map<String, Object> summary = Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
+    Frames.FrameSummary summary =
+        Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
 
-    assertEquals(0.6, summary.get("nonBlackFraction"), "3 of 5 points have a nonzero channel");
-    assertEquals(0.2, summary.get("litFraction"), "1 of 5 points (the bright one) clears the lit threshold");
-    assertEquals(0.2251, summary.get("meanBrightness"), "mean of max/255 across all 5 points");
+    assertEquals(0.6, summary.nonBlackFraction(), "3 of 5 points have a nonzero channel");
+    assertEquals(0.2, summary.litFraction(),
+        "1 of 5 points (the bright one) clears the lit threshold");
+    assertEquals(0.2251, summary.meanBrightness(), "mean of max/255 across all 5 points");
   }
 
   @Test
@@ -175,10 +180,10 @@ class FramesTest extends HeadlessLxTest {
 
     // The grid is planar (xn/yn); viewed from the TOP an 8x8 grid collapses to one zn row.
     Frames.FrameSnapshot snap = Frames.capture(lx, Frames.Bus.MAIN);
-    Map<String, Object> summary = Frames.summarize(snap, Frames.View.TOP, 3, Frames.LIT_THRESHOLD);
+    Frames.FrameSummary summary =
+        Frames.summarize(snap, Frames.View.TOP, 3, Frames.LIT_THRESHOLD);
 
-    @SuppressWarnings("unchecked")
-    List<List<String>> grid = (List<List<String>>) summary.get("grid");
+    List<List<String>> grid = summary.grid();
     assertNull(grid.get(0).get(0), "no points at near depth");
     assertEquals("#ff0000", grid.get(1).get(0), "planar model normalizes zn to 0.5 (mid row)");
     assertNull(grid.get(2).get(0), "no points at far depth");
