@@ -44,9 +44,6 @@ public final class RemoveModulator implements LxTool {
     // Resolution failures are typed ResolveExceptions; the seam maps them to wire codes.
     LXModulator modulator = Resolve.component(lx, path, LXModulator.class);
     Modulators.removeModulator(lx, modulator);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("removed", path);
-    payload.put("kind", "modulator");
-    return Result.ok(payload);
+    return Result.ok(RemovalPayload.of(path, "modulator"));
   }
 }

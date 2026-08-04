@@ -47,10 +47,6 @@ public final class RemoveColor implements LxTool {
         ? lx.engine.palette.swatch
         : Resolve.component(lx, swatchArg, LXSwatch.class);
     String removed = Palettes.removeColor(lx, swatch);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("removed", removed);
-    payload.put("swatch", swatch.getCanonicalPath());
-    payload.put("kind", "color");
-    return Result.ok(payload);
+    return Result.ok(RemovalPayload.color(removed, swatch.getCanonicalPath()));
   }
 }

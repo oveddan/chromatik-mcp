@@ -44,9 +44,6 @@ public final class RemoveFixture implements LxTool {
     String path = Args.requireString(args, "path");
     LXFixture fixture = Resolve.component(lx, path, LXFixture.class);
     Fixtures.removeFixture(lx, fixture);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("removed", path);
-    payload.put("kind", "fixture");
-    return Result.ok(payload);
+    return Result.ok(RemovalPayload.of(path, "fixture"));
   }
 }
