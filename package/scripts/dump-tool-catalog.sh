@@ -22,7 +22,8 @@ mvn -q -o -f "$PACKAGE_DIR/pom.xml" dependency:build-classpath \
 DEP_CP="$(cat "$CP_FILE")"
 
 echo "==> dumping tool catalog to $OUT"
-java -cp "$PACKAGE_DIR/target/test-classes:$PACKAGE_DIR/target/classes:$DEP_CP" \
+JAVA_BIN="$("$SCRIPT_DIR/resolve-java.sh")"
+"$JAVA_BIN" -cp "$PACKAGE_DIR/target/test-classes:$PACKAGE_DIR/target/classes:$DEP_CP" \
   chromatikmcp.ToolCatalogDump "$OUT"
 
 echo "OK: wrote $OUT"
