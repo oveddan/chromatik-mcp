@@ -41,6 +41,10 @@ public final class Modulators {
   /** The moved modulator plus every affected component whose canonical path changed. */
   public record ModulatorMoveResult(LXModulator modulator, List<PathChange> oscChanges) {}
 
+  /** Expected wiring identity carried by a pagination cursor. */
+  public record EngineVersion(
+      int modulationCount, int triggerCount, String wiringFingerprint) {}
+
   /** Read-only snapshot of one engine's live modulators and wirings. */
   public record EngineInfo(String path, List<ModulatorInfo> modulators,
       List<ModulationInfo> modulations, List<TriggerInfo> triggers,
@@ -58,10 +62,27 @@ public final class Modulators {
    */
   public static EngineInfo listEnginePage(
       LX lx, LXModulationEngine engine, int offset, int limit) {
+    return listEnginePage(lx, engine, offset, limit, null);
+  }
+
+  /**
+   * Snapshot a page after verifying {@code expectedVersion}, when present. Version
+   * validation deliberately precedes offset validation so a graph that shrank between
+   * pages reports a stale cursor rather than a misleading out-of-range cursor.
+   */
+  public static EngineInfo listEnginePage(LX lx, LXModulationEngine engine,
+      int offset, int limit, EngineVersion expectedVersion) {
     int modulationCount = engine.modulations.size();
     int triggerCount = engine.triggers.size();
     int wiringCount = Math.addExact(modulationCount, triggerCount);
     String wiringFingerprint = wiringFingerprint(engine);
+    if (expectedVersion != null
+        && (expectedVersion.modulationCount() != modulationCount
+            || expectedVersion.triggerCount() != triggerCount
+            || !expectedVersion.wiringFingerprint().equals(wiringFingerprint))) {
+      throw Resolve.invalidArgument(
+          "modulation graph changed while paging; restart without a cursor");
+    }
     if (offset < 0 || offset > wiringCount) {
       throw Resolve.invalidArgument(
           "cursor must be between 0 and the total wiring count (" + wiringCount + ")");

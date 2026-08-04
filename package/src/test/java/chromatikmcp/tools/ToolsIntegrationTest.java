@@ -518,8 +518,9 @@ class ToolsIntegrationTest {
 
       Map<String, Object> freshFirst =
           structured(call("list_modulations", Map.of("limit", 1)));
+      String freshCursor = (String) freshFirst.get("nextCursor");
       Map<String, Object> second = structured(call("list_modulations", Map.of(
-          "limit", 1, "cursor", freshFirst.get("nextCursor"))));
+          "limit", 1, "cursor", freshCursor)));
       assertEquals(0, second.get("returnedModulationCount"));
       assertEquals(1, second.get("returnedTriggerCount"));
       assertFalse(second.containsKey("nextCursor"));
@@ -534,11 +535,49 @@ class ToolsIntegrationTest {
 
       McpSchema.CallToolResult pastEnd =
           call("list_modulations", Map.of(
-              "cursor", "3:1:1:" + "0".repeat(64)));
+              "cursor", freshCursor.replaceFirst("^1:", "3:")));
       assertEquals(Boolean.TRUE, pastEnd.isError());
       assertTrue(pastEnd.content().get(0).toString().contains("invalid_argument"));
+      assertTrue(pastEnd.content().get(0).toString().contains("cursor must be between"));
     } finally {
       structured(call("remove_modulation", Map.of("path", currentTrigger.get("path"))));
+      structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+    }
+  }
+
+  @Test
+  void listModulationsReportsGraphChangedWhenShrinkMovesCursorPastEnd() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
+    Map<String, Object> wired = structured(call("wire_modulator", Map.of(
+        "sourcePath", knobs.get("path") + "/macro1",
+        "targetPath", channel.fader.getCanonicalPath())));
+    Map<String, Object> triggerBank = structured(
+        call("add_modulator", Map.of("class", MacroTriggers.class.getName())));
+    Map<String, Object> firstTrigger = structured(call("wire_trigger", Map.of(
+        "sourcePath", triggerBank.get("path") + "/macro1",
+        "targetPath", channel.enabled.getCanonicalPath())));
+    Map<String, Object> secondTrigger = structured(call("wire_trigger", Map.of(
+        "sourcePath", triggerBank.get("path") + "/macro2",
+        "targetPath", channel.enabled.getCanonicalPath())));
+
+    try {
+      Map<String, Object> firstPage =
+          structured(call("list_modulations", Map.of("limit", 2)));
+      String cursorPastShrunkEnd = (String) firstPage.get("nextCursor");
+      assertTrue(cursorPastShrunkEnd.startsWith("2:1:2:"));
+
+      // Remove from the tail first so both positional paths remain valid. The old offset
+      // is now 2 while the live graph has only one wiring.
+      structured(call("remove_modulation", Map.of("path", secondTrigger.get("path"))));
+      structured(call("remove_modulation", Map.of("path", firstTrigger.get("path"))));
+
+      McpSchema.CallToolResult stale = call("list_modulations", Map.of(
+          "limit", 2, "cursor", cursorPastShrunkEnd));
+      assertEquals(Boolean.TRUE, stale.isError());
+      assertTrue(stale.content().get(0).toString().contains(
+          "invalid_argument: modulation graph changed while paging; restart without a cursor"));
+    } finally {
       structured(call("remove_modulation", Map.of("path", wired.get("path"))));
     }
   }

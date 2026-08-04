@@ -76,15 +76,11 @@ public final class ListModulations implements LxTool {
           "limit must be between 1 and " + MAX_LIMIT);
     }
 
-    Modulators.EngineInfo info =
-        Modulators.listEnginePage(lx, Modulators.resolveEngine(lx, scope), cursor.offset(), limit);
-    if (cursor.modulationCount() != null
-        && (cursor.modulationCount() != info.totalModulationCount()
-            || cursor.triggerCount() != info.totalTriggerCount()
-            || !cursor.wiringFingerprint().equals(info.wiringFingerprint()))) {
-      return Result.error(Result.INVALID_ARGUMENT,
-          "modulation graph changed while paging; restart without a cursor");
-    }
+    Modulators.EngineVersion expectedVersion = (cursor.modulationCount() == null) ? null
+        : new Modulators.EngineVersion(
+            cursor.modulationCount(), cursor.triggerCount(), cursor.wiringFingerprint());
+    Modulators.EngineInfo info = Modulators.listEnginePage(
+        lx, Modulators.resolveEngine(lx, scope), cursor.offset(), limit, expectedVersion);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("enginePath", info.path());
 
