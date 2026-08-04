@@ -202,8 +202,18 @@ class EngineExecutorTest extends HeadlessLxTest {
     }, "test-tool-caller");
     caller.start();
 
-    Thread.sleep(10);
-    Thread drainer = new Thread(lx.engine::run, "test-engine-drainer");
+    Thread drainer = new Thread(() -> {
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+      while (started.getCount() > 0 && System.nanoTime() < deadline) {
+        lx.engine.run();
+        try {
+          Thread.sleep(1);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          return;
+        }
+      }
+    }, "test-engine-drainer");
     drainer.start();
 
     try {
