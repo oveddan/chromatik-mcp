@@ -2042,6 +2042,9 @@ class ToolsIntegrationTest {
     McpSchema.TextContent text =
         assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT + ":"), text.text());
+    assertTrue(text.text().contains(
+        "Akai MPD218 (class=heronarts.lx.midi.template.AkaiMPD218, device=MPD218)"),
+        "error should advertise a recoverable registered identifier: " + text.text());
     assertEquals(before, lx.engine.midi.templates.size());
   }
 

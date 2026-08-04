@@ -284,7 +284,10 @@ public final class Midi {
           + candidates.stream().map(Class::getName).sorted().toList());
     }
     throw Resolve.invalidArgument("Unknown MIDI template type: " + query
-        + " (use a registered class, template name, or MIDI device name)");
+        + ". Registered templates: " + registered.stream()
+            .sorted((a, b) -> a.getName().compareTo(b.getName()))
+            .map(Midi::templateIdentifiers)
+            .toList());
   }
 
   /** Add an undoable MIDI template and return its project-visible identity. */
@@ -369,5 +372,13 @@ public final class Midi {
         (output != null) ? output.getName()
             : (template.destinationDevice != null)
                 ? template.destinationDevice.name.getString() : null);
+  }
+
+  private static String templateIdentifiers(Class<? extends LXMidiTemplate> templateClass) {
+    LXMidiTemplate.DeviceName device =
+        templateClass.getAnnotation(LXMidiTemplate.DeviceName.class);
+    return LXMidiTemplate.getTemplateName(templateClass)
+        + " (class=" + templateClass.getName()
+        + ((device != null) ? ", device=" + device.value() : "") + ")";
   }
 }

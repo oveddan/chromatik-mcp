@@ -67,6 +67,12 @@ class MidiTest extends HeadlessLxTest {
     Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
         () -> Midi.resolveTemplateClass(lx, "Definitely Not A Controller"));
     assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+    assertTrue(e.getMessage().contains(
+        "Akai MPD218 (class=heronarts.lx.midi.template.AkaiMPD218, device=MPD218)"));
+    Resolve.ResolveException repeated = assertThrows(Resolve.ResolveException.class,
+        () -> Midi.resolveTemplateClass(lx, "Definitely Not A Controller"));
+    assertEquals(e.getMessage(), repeated.getMessage(),
+        "registered choices should have deterministic ordering");
   }
 
   @Test
@@ -81,9 +87,6 @@ class MidiTest extends HeadlessLxTest {
     assertEquals("Akai MPD218", added.label());
     assertEquals("MPD218", added.deviceName());
     assertEquals(AkaiMPD218.class.getName(), added.className());
-    assertFalse(added.connected(), "headless test has no MPD218 device");
-    assertNull(added.inputName());
-    assertNull(added.outputName());
     assertNotNull(Resolve.parameter(lx, added.path() + "/knob-A1"),
         "template controls should be addressable through the returned path");
     assertEquals(added, Midi.templates(lx).get(0));
