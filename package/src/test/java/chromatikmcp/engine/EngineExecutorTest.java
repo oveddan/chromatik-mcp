@@ -2,16 +2,19 @@ package chromatikmcp.engine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -154,10 +157,69 @@ class EngineExecutorTest extends HeadlessLxTest {
   void callThrowsWhenTimeoutElapsesBeforeTheEngineDrains() {
     LX lx = newHeadlessLx();
     EngineExecutor executor = new EngineExecutor(lx);
+    AtomicBoolean ran = new AtomicBoolean(false);
 
     IllegalStateException thrown = assertThrows(IllegalStateException.class,
-        () -> executor.call(() -> "never", 20, TimeUnit.MILLISECONDS));
+        () -> executor.call(() -> {
+          ran.set(true);
+          return "never";
+        }, 20, TimeUnit.MILLISECONDS));
     assertTrue(thrown.getMessage().contains("timed out"),
         "TimeoutException branch surfaces as an unchecked timeout failure: " + thrown.getMessage());
+    assertTrue(thrown.getMessage().contains("queued task was cancelled"),
+        "the error distinguishes a safely cancelled queued task: " + thrown.getMessage());
+
+    lx.engine.run();
+    assertFalse(ran.get(), "timed-out work must not mutate state after a queued cancellation");
+  }
+
+  @Test
+  @Timeout(10)
+  void callReportsWhenTimedOutWorkAlreadyStartedAndCannotBeCancelled() throws Exception {
+    LX lx = newHeadlessLx();
+    EngineExecutor executor = new EngineExecutor(lx);
+    CountDownLatch started = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    AtomicBoolean completed = new AtomicBoolean(false);
+    AtomicReference<IllegalStateException> failure = new AtomicReference<>();
+
+    Thread caller = new Thread(() -> {
+      try {
+        executor.call(() -> {
+          started.countDown();
+          try {
+            release.await();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+          }
+          completed.set(true);
+          return null;
+        }, 200, TimeUnit.MILLISECONDS);
+      } catch (IllegalStateException e) {
+        failure.set(e);
+      }
+    }, "test-tool-caller");
+    caller.start();
+
+    Thread.sleep(10);
+    Thread drainer = new Thread(lx.engine::run, "test-engine-drainer");
+    drainer.start();
+
+    try {
+      assertTrue(started.await(1, TimeUnit.SECONDS), "engine should claim the queued task");
+      caller.join(2_000);
+      assertFalse(caller.isAlive(), "caller should return after its timeout");
+      assertNotNull(failure.get(), "caller should receive a timeout failure");
+      assertTrue(failure.get().getMessage().contains("already started and may still complete"),
+          "timeout must disclose that in-flight work cannot be cancelled: " + failure.get());
+      assertFalse(completed.get(), "work remains in flight while its supplier is blocked");
+    } finally {
+      release.countDown();
+      caller.join(2_000);
+      drainer.join(2_000);
+    }
+
+    assertTrue(completed.get(), "already-started work completes once the engine task unblocks");
   }
 }

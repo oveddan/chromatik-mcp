@@ -56,12 +56,12 @@ instance, comes back off. Don't infer the show is in the state you left it; ask.
 Unsaved work is lost along with it — mutation tools change only the running engine's
 in-memory state, so call `save_project` before a restart is likely, not just at session end.
 
-## Timeouts are not cancellations
+## Timeouts may leave started work in flight
 
-A tool call that times out (`internal: Engine task timed out…`) has not been cancelled —
-the task stays queued on the engine thread and the mutation still applies once the engine
-drains it. Re-read state to find out what actually happened; never blind-retry a
-timed-out mutation, or you risk applying it twice.
+A tool call that times out cancels its task if it is still queued. If the engine thread
+already started it, the task cannot be interrupted safely and may still complete; the
+timeout message states which outcome occurred. Re-read state after an already-started
+timeout; never blind-retry it, or you risk applying the mutation twice.
 
 Dispatch on the `Result` error CODE, not the message text: expected failures return
 `isError: true` with a stable `"code: message"` body, where `code` is `not_found`,
@@ -146,8 +146,8 @@ atomic:
   still report `ok: true`.
 - All operations share one engine frame, so an I/O-heavy operation (e.g.
   `reload_fixtures`, which re-reads every `.lxf` from disk) stalls the whole batch onto
-  that frame and can trip the 30s executor timeout — which, per the timeout rule above,
-  does not cancel the batch; it still applies once the engine drains it.
+  that frame and can trip the 30s executor timeout. A queued batch is cancelled; one
+  already started may still complete, per the timeout rule above.
 
 See the plugin's bundled `references/addressing.md` for canonical-vs-OSC path details and
 `references/error-codes.md` for the full `Result` wire shape.

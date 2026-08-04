@@ -5,6 +5,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import heronarts.lx.LX;
@@ -31,8 +32,9 @@ public final class EngineExecutor {
 
   /**
    * Default bound for {@link #call(Supplier)} — and the only timeout in play: the MCP
-   * SDK's servlet disables Tomcat's async timeout ({@code setTimeout(0)}). A timed-out
-   * task is NOT cancelled; it remains queued and still runs when the engine drains it.
+   * SDK's servlet disables Tomcat's async timeout ({@code setTimeout(0)}). On timeout,
+   * queued work is cancelled; work already claimed by the engine thread cannot be safely
+   * interrupted and may still complete.
    */
   public static final long DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -48,15 +50,9 @@ public final class EngineExecutor {
    * Does not block.
    */
   public <T> Future<T> submit(Supplier<T> work) {
-    CompletableFuture<T> future = new CompletableFuture<>();
-    this.lx.engine.addTask(() -> {
-      try {
-        future.complete(work.get());
-      } catch (Throwable t) {
-        future.completeExceptionally(t);
-      }
-    });
-    return future;
+    EngineTask<T> task = new EngineTask<>(work);
+    this.lx.engine.addTask(task);
+    return task;
   }
 
   /** {@link #call(Supplier, long, TimeUnit)} with the {@link #DEFAULT_TIMEOUT_MS} bound. */
@@ -73,8 +69,9 @@ public final class EngineExecutor {
    * exception so it can be mapped to {@code Result.error} at the tool seam.
    */
   public <T> T call(Supplier<T> work, long timeout, TimeUnit unit) {
+    Future<T> task = submit(work);
     try {
-      return submit(work).get(timeout, unit);
+      return task.get(timeout, unit);
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
       if (cause instanceof RuntimeException re) {
@@ -85,8 +82,14 @@ public final class EngineExecutor {
       }
       throw new IllegalStateException("Engine task failed", cause);
     } catch (TimeoutException e) {
-      throw new IllegalStateException("Engine task timed out after " + timeout + " " + unit, e);
+      boolean cancelled = task.cancel(false);
+      String outcome = cancelled
+          ? "; queued task was cancelled"
+          : "; task already started and may still complete";
+      throw new IllegalStateException(
+          "Engine task timed out after " + timeout + " " + unit + outcome, e);
     } catch (InterruptedException e) {
+      task.cancel(false);
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Interrupted while awaiting engine task", e);
     }
@@ -98,5 +101,39 @@ public final class EngineExecutor {
       work.run();
       return null;
     });
+  }
+
+  private static final class EngineTask<T> extends CompletableFuture<T> implements Runnable {
+
+    private enum State { QUEUED, RUNNING, DONE, CANCELLED }
+
+    private final Supplier<T> work;
+    private final AtomicReference<State> state = new AtomicReference<>(State.QUEUED);
+
+    private EngineTask(Supplier<T> work) {
+      this.work = work;
+    }
+
+    @Override
+    public void run() {
+      if (!this.state.compareAndSet(State.QUEUED, State.RUNNING)) {
+        return;
+      }
+      try {
+        complete(this.work.get());
+      } catch (Throwable t) {
+        completeExceptionally(t);
+      } finally {
+        this.state.set(State.DONE);
+      }
+    }
+
+    @Override
+    public boolean cancel(boolean mayInterruptIfRunning) {
+      if (!this.state.compareAndSet(State.QUEUED, State.CANCELLED)) {
+        return false;
+      }
+      return super.cancel(false);
+    }
   }
 }

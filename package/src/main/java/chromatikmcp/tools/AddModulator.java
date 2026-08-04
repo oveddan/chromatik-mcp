@@ -28,7 +28,10 @@ public final class AddModulator implements LxTool {
         + "Pass the class name as 'class'. By default it lands in the global modulation "
         + "engine (the Chromatik side panel); pass 'scope' to add it inside a "
         + "pattern/effect's own chain. The response lists every parameter with its "
-        + "canonical path and OSC address. Undoable in Chromatik with Cmd-Z.";
+        + "canonical path and OSC address. On projects with a large modulation graph, "
+        + "Chromatik's synchronous UI refresh may make this operation slow. If it times "
+        + "out after already starting, it may still complete; inspect state before retrying. "
+        + "Undoable in Chromatik with Cmd-Z.";
   }
 
   @Override

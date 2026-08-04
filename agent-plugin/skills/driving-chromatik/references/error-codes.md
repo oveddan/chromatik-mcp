@@ -24,13 +24,13 @@ which can change:
 Unexpected exceptions inside a handler map to `internal` at the server seam; they never
 cross the MCP boundary as a raw stack trace.
 
-## Timeouts are not cancellations
+## Timeouts may leave started work in flight
 
-A tool call that times out reports `internal: Engine task timed out…`. This does **not**
-mean the mutation was rolled back or skipped: the task stays queued on the LX engine
-thread and still applies once the engine drains it. Practical consequence: re-read state
-after a timeout to see what actually happened, and never blind-retry a timed-out
-mutation — retrying a mutation that already landed applies it twice.
+A tool call that times out reports `internal: Engine task timed out…`. If the task was
+still queued, the executor cancels it and the message says so. If the engine thread had
+already started it, the task cannot be interrupted safely and may still complete; the
+message reports that outcome instead. Re-read state after an already-started timeout and
+never blind-retry it — retrying a mutation that already landed applies it twice.
 
 ## Mutations and undo
 
@@ -71,5 +71,5 @@ batching:
 - All operations in a batch run inside a single engine frame. An I/O-heavy operation
   (e.g. `reload_fixtures`, which re-reads every `.lxf` fixture file from disk) stalls the
   whole batch's cost onto that one frame, and a large or slow batch can trip the engine
-  task's timeout — which, per the timeout rule above, does not cancel the batch; it still
-  applies once the engine drains it.
+  task's timeout. A queued batch is cancelled; one already started may still complete,
+  per the timeout rule above.

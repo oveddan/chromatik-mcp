@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.jupiter.api.Test;
 
 import chromatikmcp.HeadlessLxTest;
@@ -16,6 +18,7 @@ import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.modulation.LXCompoundModulation;
+import heronarts.lx.modulation.LXModulationEngine;
 import heronarts.lx.modulation.LXTriggerModulation;
 import heronarts.lx.modulator.LXModulator;
 import heronarts.lx.modulator.MacroKnobs;
@@ -53,6 +56,28 @@ class ModulatorsTest extends HeadlessLxTest {
         "the returned modulator is the appended one");
     assertTrue(added.isRunning(),
         "running: AddModulator calls autostart() and MacroKnobs doesn't disable autoStart");
+  }
+
+  @Test
+  void addModulatorNotifiesEngineListenersSynchronously() {
+    LX lx = newHeadlessLx();
+    AtomicReference<Thread> listenerThread = new AtomicReference<>();
+    LXModulationEngine.Listener listener = new LXModulationEngine.Listener.Default() {
+      @Override
+      public void modulatorAdded(LXModulationEngine engine, LXModulator modulator) {
+        listenerThread.set(Thread.currentThread());
+      }
+    };
+    lx.engine.modulation.addListener(listener);
+
+    try {
+      Thread callingThread = Thread.currentThread();
+      Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+      assertSame(callingThread, listenerThread.get(),
+          "listener work runs inline, so a costly UI rebuild extends the engine task");
+    } finally {
+      lx.engine.modulation.removeListener(listener);
+    }
   }
 
   // Annotated so it clears the scope check, abstract so instantiation fails inside perform().

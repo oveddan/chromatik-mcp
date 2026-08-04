@@ -66,8 +66,9 @@ public final class ApplyOperations implements LxTool {
         + "single frame — save_project (full project serialization plus a disk write, plus a "
         + ".lxm write-through when syncModelFile is on) is now the worst case, ahead of "
         + "reload_fixtures (which re-reads every .lxf from disk); a large or slow batch can "
-        + "hit the 30s executor timeout, after which the batch is NOT cancelled and still "
-        + "applies once the engine drains it.";
+        + "hit the 30s executor timeout. A batch still queued at that point is cancelled; "
+        + "one already started on the engine thread cannot be interrupted safely and may "
+        + "still complete.";
   }
 
   @Override

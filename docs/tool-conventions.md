@@ -159,9 +159,10 @@ Decided once (#108) so it isn't re-litigated per tool:
   its first mutation (instantiation, validation). For commands that can fail *after*
   mutating, the exact detector is `lx.command.getUndoCommand()` — the performed command
   on success, empty stack after a failed `perform()`. Decide per primitive in PR-5.
-- A tool call that times out (`internal: Engine task timed out…`) has **not** been
-  cancelled: the task stays in the engine queue and the mutation still applies when the
-  engine drains it. Agents should re-read state after a timeout, never blind-retry.
+- A tool call that times out cancels its task if it is still queued. If the engine thread
+  already started the task, it cannot be interrupted safely and may still complete; the
+  timeout message distinguishes these outcomes. Agents should re-read state after an
+  already-started timeout, never blind-retry.
 - Every mutation's domain test is do → undo → assert restored (qa-strategy); the undo
   assertion doubles as proof the primitive used a real `LXCommand`.
 
