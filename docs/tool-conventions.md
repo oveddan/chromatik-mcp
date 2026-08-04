@@ -77,6 +77,30 @@ Decided once (#108) so it isn't re-litigated per tool:
   for a multi-operation call), not an oversight — the rest of the tool surface follows the
   rule above.
 
+### Domain results and serialization
+
+- Stable state crosses the domain/tool boundary as a typed record or domain object:
+  `LX objects -> typed domain result -> shared serializer -> Map<String, Object>`. Domain
+  code owns engine behavior and typed state; tool code owns MCP field names and final map
+  construction.
+- Each stable wire shape has one serializer reused by every sibling read and mutation tool
+  that emits it. Prefer a helper under `tools/` for new top-level payloads. A serializer may
+  instead live on its record when that record is nested or broadly reused —
+  `Parameters.ParameterInfo.toMap()` is the existing example and prevents the field drift
+  previously seen between `get_parameter`, `list_parameters`, and `set_parameter`.
+- When payload identity across sibling tools is part of the contract, tests compare the
+  shared serializer output or the complete sibling payloads. Generated tool-reference
+  checks cover schemas and descriptions, not response payload keys, so they do not detect
+  this class of drift.
+- Raw `Map<String, Object>` remains correct for incoming MCP arguments, JSON Schema objects,
+  and final `structuredContent`. Simple handler arguments may continue to use `Args`; decode
+  a complex grammar reused by several tools into a typed value before calling the domain
+  layer.
+- Domain-layer maps are limited to genuinely dynamic/open-ended structures. Current
+  justified cases are arbitrary fixture parameter name/value sets, catalog frontmatter,
+  and the OSC parameter servlet's flat non-MCP payload (kept compact for engine-thread
+  snapshot cost). New exceptions explain locally why a fixed record is unsuitable.
+
 ## Drill-down
 
 - Single-item detail on a collection is a sibling `get_*` tool (e.g. `get_fixture` next to

@@ -44,11 +44,19 @@ Why this matters here specifically: some mutations will route through `LXCommand
 tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutation with undo)
 (MCP-shaped)     (intent, narrow)   ──> direct lx.engine.* edit  (mutation without undo)
                                     ──> read lx.engine.*         (read-only)
+
+LX objects ──> typed domain result ──> shared tool serializer ──> Map<String, Object>
 ```
 
 - **Tool handlers** (`package/src/main/java/chromatikmcp/tools/*.java`): parse args, call a domain primitive, format the result. No `LXCommand` construction. No direct engine mutation.
-- **Domain primitives** (`package/src/main/java/chromatikmcp/domain/*.java`): the only place that knows how the mutation is actually applied. Each is one focused function.
+- **Domain primitives** (`package/src/main/java/chromatikmcp/domain/*.java`): the only place that knows how the mutation is actually applied. Each is one focused function. Stable result shapes are typed records or domain objects, not raw wire maps.
+- **Wire serializers**: one shared serializer owns the string keys and map construction for each stable MCP payload shape. Prefer a helper under `tools/` for a new top-level shape; a serializer may live on its typed record when the shape is nested or reused by several tools (for example `ParameterInfo.toMap()`). Sibling tools emitting the same shape use the same serializer.
 - **MCP plumbing** (`package/src/main/java/chromatikmcp/mcp/*.java`): server lifecycle, HTTP transport, status-file writing. Tool handlers and domain primitives never reach into MCP plumbing.
+
+Raw maps remain appropriate at the MCP boundary (arguments, JSON Schema, and final
+`structuredContent`) and for genuinely dynamic/open-ended domain data. A new domain-layer
+map must document why a typed result is unsuitable. See `docs/tool-conventions.md` for the
+current exceptions and wire-compatibility rules.
 
 ### When primitives multiply
 
@@ -56,7 +64,7 @@ If three tools each need to "find the channel by id, then walk to a parameter, t
 
 ### What this does **not** mean
 
-Scoped to *mutation primitives*: no speculative abstraction layers until two real implementations exist, and no wrapping of formatting helpers or one-shot string assembly. No DI container — plain static methods plus the `LX` reference passed at server-start time are enough.
+Scoped to *mutation primitives*: no speculative abstraction layers until two real implementations exist. The typed-result rule does not require wrapping one-shot string assembly or introducing a serialization framework. No DI container — plain static methods plus the `LX` reference passed at server-start time are enough.
 
 ## Code style
 

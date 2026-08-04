@@ -15,6 +15,13 @@ length — read the source doc for the full rationale.
   directly — that belongs in a `domain/` primitive. *Why:* the composability prime
   directive (`CLAUDE.md`) — one primitive per intent means one place to change if the
   implementation strategy (undo-backed vs. direct edit) ever swaps.
+- **Typed domain result / wire-map boundary.** A stable domain result is a typed record or
+  object; one shared serializer owns its MCP field names and converts it to a map at the
+  boundary. Sibling tools emitting the same shape must reuse that serializer and test
+  payload identity where it is contractual. Domain-layer raw maps are reserved for
+  genuinely dynamic/open-ended data and must document that exception. *Why:* compile-time
+  field/type checking in the domain and one source of truth for the wire contract prevent
+  the cross-tool drift demonstrated by `ParameterInfo` in calibration example 3.
 - **`perform()` failure verification.** `lx.command.perform()` swallows command failures
   (pushes a UI error, returns normally) — every mutating primitive must verify the
   mutation applied by reading engine state back, and throw if it didn't.
