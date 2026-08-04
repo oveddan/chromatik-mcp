@@ -1,6 +1,9 @@
 package chromatikmcp.domain;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,10 +43,33 @@ public final class Modulators {
 
   /** Read-only snapshot of one engine's live modulators and wirings. */
   public record EngineInfo(String path, List<ModulatorInfo> modulators,
-      List<ModulationInfo> modulations, List<TriggerInfo> triggers) {}
+      List<ModulationInfo> modulations, List<TriggerInfo> triggers,
+      int totalModulationCount, int totalTriggerCount, String wiringFingerprint,
+      Integer nextOffset) {}
 
   /** Snapshot {@code engine}'s modulators and wirings; call on the engine thread. */
   public static EngineInfo listEngine(LX lx, LXModulationEngine engine) {
+    return listEnginePage(lx, engine, 0, Integer.MAX_VALUE);
+  }
+
+  /**
+   * Snapshot at most {@code limit} wirings from one engine, ordered as continuous
+   * modulations followed by triggers. Modulators are cheap and always returned in full.
+   */
+  public static EngineInfo listEnginePage(
+      LX lx, LXModulationEngine engine, int offset, int limit) {
+    int modulationCount = engine.modulations.size();
+    int triggerCount = engine.triggers.size();
+    int wiringCount = Math.addExact(modulationCount, triggerCount);
+    String wiringFingerprint = wiringFingerprint(engine);
+    if (offset < 0 || offset > wiringCount) {
+      throw Resolve.invalidArgument(
+          "cursor must be between 0 and the total wiring count (" + wiringCount + ")");
+    }
+    if (limit < 1) {
+      throw Resolve.invalidArgument("limit must be at least 1");
+    }
+
     List<ModulatorInfo> modulators = new ArrayList<>();
     for (LXModulator modulator : engine.modulators) {
       modulators.add(new ModulatorInfo(
@@ -55,7 +81,11 @@ public final class Modulators {
           modulator.getOscAddress()));
     }
     List<ModulationInfo> modulations = new ArrayList<>();
-    for (LXCompoundModulation modulation : engine.modulations) {
+    int end = (int) Math.min((long) wiringCount, (long) offset + limit);
+    int modulationStart = Math.min(offset, modulationCount);
+    int modulationEnd = Math.min(end, modulationCount);
+    for (int i = modulationStart; i < modulationEnd; i++) {
+      LXCompoundModulation modulation = engine.modulations.get(i);
       modulations.add(new ModulationInfo(
           Resolve.canonicalPathOrNull(modulation),
           modulation.getId(),
@@ -66,14 +96,42 @@ public final class Modulators {
           Resolve.canonicalPathOrNull(modulation.range)));
     }
     List<TriggerInfo> triggers = new ArrayList<>();
-    for (LXTriggerModulation trigger : engine.triggers) {
+    int triggerStart = Math.max(0, offset - modulationCount);
+    int triggerEnd = Math.max(0, end - modulationCount);
+    for (int i = triggerStart; i < triggerEnd; i++) {
+      LXTriggerModulation trigger = engine.triggers.get(i);
       triggers.add(new TriggerInfo(
           Resolve.canonicalPathOrNull(trigger),
           trigger.getId(),
           Resolve.canonicalPathOrNull(trigger.source),
           Resolve.canonicalPathOrNull(trigger.target)));
     }
-    return new EngineInfo(Resolve.canonicalPathOrNull(engine), modulators, modulations, triggers);
+    return new EngineInfo(Resolve.canonicalPathOrNull(engine), modulators, modulations, triggers,
+        modulationCount, triggerCount, wiringFingerprint, (end < wiringCount) ? end : null);
+  }
+
+  /** Identity/order fingerprint for cursor invalidation; deliberately resolves no paths. */
+  private static String wiringFingerprint(LXModulationEngine engine) {
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      for (LXCompoundModulation modulation : engine.modulations) {
+        updateFingerprint(digest, (byte) 'M', modulation.getId());
+      }
+      for (LXTriggerModulation trigger : engine.triggers) {
+        updateFingerprint(digest, (byte) 'T', trigger.getId());
+      }
+      return HexFormat.of().formatHex(digest.digest());
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 unavailable", e);
+    }
+  }
+
+  private static void updateFingerprint(MessageDigest digest, byte kind, int id) {
+    digest.update(kind);
+    digest.update((byte) (id >>> 24));
+    digest.update((byte) (id >>> 16));
+    digest.update((byte) (id >>> 8));
+    digest.update((byte) id);
   }
 
   /**

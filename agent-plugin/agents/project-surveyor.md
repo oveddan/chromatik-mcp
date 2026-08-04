@@ -52,8 +52,9 @@ If `get_status` succeeds, you have live tool access. Proceed with your assigned 
   pattern path. The same summary-first, escalate-on-signal discipline applies to
   `list_modulations` for `global-modulation`: start at `detail: summary` for the wiring
   graph, escalate to `detail: full` only for the modulations you need `range`/`polarity`
-  from for the per-instance table. Report exactly how deep you recursed and whether you
-  hit a level where you stopped short of the bottom.
+  from for the per-instance table. In either mode, follow `nextCursor` until omitted
+  before treating a modulation scope as complete. Report exactly how deep you recursed
+  and whether you hit a level where you stopped short of the bottom.
 - **Structured tables, not narrative prose.** Prose can't be aggregated across six
   parallel passes or across two survey runs of the same project months apart. Every
   finding you return must be a table row or a short structured list with an explicit

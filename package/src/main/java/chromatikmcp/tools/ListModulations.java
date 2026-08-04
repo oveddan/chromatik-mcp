@@ -8,8 +8,15 @@ import java.util.Map;
 import heronarts.lx.LX;
 
 import chromatikmcp.domain.Modulators;
+import chromatikmcp.domain.Resolve;
 
 public final class ListModulations implements LxTool {
+
+  static final int DEFAULT_LIMIT = 100;
+  static final int MAX_LIMIT = 250;
+
+  private record Cursor(
+      int offset, Integer modulationCount, Integer triggerCount, String wiringFingerprint) {}
 
   @Override
   public String name() {
@@ -24,7 +31,9 @@ public final class ListModulations implements LxTool {
         + "project; a real project can carry dozens of modulators and hundreds of wirings, and "
         + "the full shape blows past client response limits. Pass 'detail: full' for today's "
         + "complete shape (modulator OSC addresses/running state, and per-modulation "
-        + "range/polarity/rangePath to adjust depth via set_parameter). Defaults to the global "
+        + "range/polarity/rangePath to adjust depth via set_parameter). Wirings are paged in "
+        + "continuous-then-trigger order (100 by default, 250 maximum); pass nextCursor back as "
+        + "cursor until it is omitted. Modulators repeat on every page. Defaults to the global "
         + "engine; pass scope (a device path) for a pattern/effect's own chain. Knob paths "
         + "derive from a modulator's path (e.g. <path>/macro1).";
   }
@@ -39,6 +48,11 @@ public final class ListModulations implements LxTool {
         "'summary' (default) for the wiring graph only, or 'full' for today's complete "
             + "payload (OSC addresses, running state, range/polarity/rangePath)",
         List.of("summary", "full")));
+    properties.put("cursor", Schemas.string(
+        "Opaque cursor from the preceding page's nextCursor; omit for the first page"));
+    properties.put("limit", Schemas.integer(
+        "Maximum combined number of continuous modulations and triggers to return",
+        1, MAX_LIMIT));
     return Schemas.object(properties, List.of());
   }
 
@@ -55,9 +69,22 @@ public final class ListModulations implements LxTool {
       return Result.error(Result.INVALID_ARGUMENT, "detail must be 'summary' or 'full'");
     }
     boolean full = "full".equals(detail);
+    Cursor cursor = parseCursor(Args.optionalString(args, "cursor"));
+    int limit = Args.optionalInt(args, "limit", DEFAULT_LIMIT);
+    if (limit < 1 || limit > MAX_LIMIT) {
+      return Result.error(Result.INVALID_ARGUMENT,
+          "limit must be between 1 and " + MAX_LIMIT);
+    }
 
     Modulators.EngineInfo info =
-        Modulators.listEngine(lx, Modulators.resolveEngine(lx, scope));
+        Modulators.listEnginePage(lx, Modulators.resolveEngine(lx, scope), cursor.offset(), limit);
+    if (cursor.modulationCount() != null
+        && (cursor.modulationCount() != info.totalModulationCount()
+            || cursor.triggerCount() != info.totalTriggerCount()
+            || !cursor.wiringFingerprint().equals(info.wiringFingerprint()))) {
+      return Result.error(Result.INVALID_ARGUMENT,
+          "modulation graph changed while paging; restart without a cursor");
+    }
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("enginePath", info.path());
 
@@ -78,8 +105,40 @@ public final class ListModulations implements LxTool {
       triggers.add(full ? triggerFull(t) : triggerSummary(t));
     }
     payload.put("triggers", triggers);
+    payload.put("returnedModulationCount", modulations.size());
+    payload.put("returnedTriggerCount", triggers.size());
+    payload.put("totalModulationCount", info.totalModulationCount());
+    payload.put("totalTriggerCount", info.totalTriggerCount());
+    if (info.nextOffset() != null) {
+      payload.put("nextCursor", info.nextOffset() + ":"
+          + info.totalModulationCount() + ":" + info.totalTriggerCount() + ":"
+          + info.wiringFingerprint());
+    }
 
     return Result.ok(payload);
+  }
+
+  private static Cursor parseCursor(String cursor) {
+    if (cursor == null) {
+      return new Cursor(0, null, null, null);
+    }
+    String[] parts = cursor.split(":", -1);
+    if (parts.length != 4 || !parts[3].matches("[0-9a-f]{64}")) {
+      throw Resolve.invalidArgument(
+          "cursor must be an unchanged value returned by nextCursor");
+    }
+    try {
+      int offset = Integer.parseInt(parts[0]);
+      int modulationCount = Integer.parseInt(parts[1]);
+      int triggerCount = Integer.parseInt(parts[2]);
+      if (offset < 0 || modulationCount < 0 || triggerCount < 0) {
+        throw new NumberFormatException();
+      }
+      return new Cursor(offset, modulationCount, triggerCount, parts[3]);
+    } catch (NumberFormatException e) {
+      throw Resolve.invalidArgument(
+          "cursor must be an unchanged value returned by nextCursor");
+    }
   }
 
   private static Map<String, Object> modulatorFull(Modulators.ModulatorInfo m) {

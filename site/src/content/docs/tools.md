@@ -96,12 +96,14 @@ No parameters.
 
 _read-only_
 
-List one modulation engine's live modulators and wirings. Defaults to 'detail: summary' — the wiring graph only (modulators: path/label/class; modulations and triggers: path/sourcePath/targetPath) — the right choice for surveying a project; a real project can carry dozens of modulators and hundreds of wirings, and the full shape blows past client response limits. Pass 'detail: full' for today's complete shape (modulator OSC addresses/running state, and per-modulation range/polarity/rangePath to adjust depth via set_parameter). Defaults to the global engine; pass scope (a device path) for a pattern/effect's own chain. Knob paths derive from a modulator's path (e.g. <path>/macro1).
+List one modulation engine's live modulators and wirings. Defaults to 'detail: summary' — the wiring graph only (modulators: path/label/class; modulations and triggers: path/sourcePath/targetPath) — the right choice for surveying a project; a real project can carry dozens of modulators and hundreds of wirings, and the full shape blows past client response limits. Pass 'detail: full' for today's complete shape (modulator OSC addresses/running state, and per-modulation range/polarity/rangePath to adjust depth via set_parameter). Wirings are paged in continuous-then-trigger order (100 by default, 250 maximum); pass nextCursor back as cursor until it is omitted. Modulators repeat on every page. Defaults to the global engine; pass scope (a device path) for a pattern/effect's own chain. Knob paths derive from a modulator's path (e.g. <path>/macro1).
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
 | `scope` | string | no | — | Optional canonical path of a device (its own engine) or a modulation engine; omit for the global engine |
 | `detail` | string | no | one of: `summary`, `full` | 'summary' (default) for the wiring graph only, or 'full' for today's complete payload (OSC addresses, running state, range/polarity/rangePath) |
+| `cursor` | string | no | — | Opaque cursor from the preceding page's nextCursor; omit for the first page |
+| `limit` | integer | no | 1–250 | Maximum combined number of continuous modulations and triggers to return |
 
 ### `get_parameter`
 

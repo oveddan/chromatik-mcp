@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
@@ -461,6 +463,52 @@ class ModulatorsTest extends HeadlessLxTest {
     assertEquals(1, info.triggers().size());
     assertEquals(triggers.macro1.getCanonicalPath(), info.triggers().get(0).sourcePath());
     assertEquals(channel.enabled.getCanonicalPath(), info.triggers().get(0).targetPath());
+  }
+
+  @Test
+  void listEnginePagesARealisticLargeGraphWithoutDuplicates() throws Exception {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    MacroKnobs knobs =
+        (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    MacroTriggers triggers =
+        (MacroTriggers) Modulators.addModulator(lx, lx.engine.modulation, MacroTriggers.class);
+
+    // Foss26's reported shape: 218 continuous + 41 trigger wirings. Direct construction
+    // keeps this read-side regression independent of command/listener performance.
+    for (int i = 0; i < 218; i++) {
+      lx.engine.modulation.addModulation(
+          new LXCompoundModulation(lx.engine.modulation, knobs.macro1, channel.fader));
+    }
+    for (int i = 0; i < 41; i++) {
+      lx.engine.modulation.addTrigger(
+          new LXTriggerModulation(lx.engine.modulation, triggers.macro1, channel.enabled));
+    }
+
+    Set<String> paths = new HashSet<>();
+    int offset = 0;
+    int pageCount = 0;
+    do {
+      Modulators.EngineInfo page =
+          Modulators.listEnginePage(lx, lx.engine.modulation, offset, 100);
+      assertEquals(218, page.totalModulationCount());
+      assertEquals(41, page.totalTriggerCount());
+      assertTrue(page.modulations().size() + page.triggers().size() <= 100);
+      page.modulations().forEach(modulation -> assertTrue(paths.add(modulation.path())));
+      page.triggers().forEach(trigger -> assertTrue(paths.add(trigger.path())));
+      pageCount++;
+      if (page.nextOffset() == null) {
+        break;
+      }
+      offset = page.nextOffset();
+    } while (true);
+
+    assertEquals(3, pageCount);
+    assertEquals(259, paths.size());
+    assertEquals("/lx/modulation/modulation/1",
+        Modulators.listEnginePage(lx, lx.engine.modulation, 0, 1).modulations().get(0).path());
+    assertEquals("/lx/modulation/trigger/1",
+        Modulators.listEnginePage(lx, lx.engine.modulation, 218, 1).triggers().get(0).path());
   }
 
   @Test

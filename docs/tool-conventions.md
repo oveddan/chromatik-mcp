@@ -99,6 +99,14 @@ Decided once (#108) so it isn't re-litigated per tool:
 
 ## List tool detail levels
 
+- `list_modulations` additionally pages its combined wiring stream in stable
+  continuous-modulation-then-trigger order: 100 entries by default, 250 maximum. Its
+  `nextCursor` is a positional cursor passed back as `cursor`; total and returned counts
+  make page coverage explicit, and the modulator list repeats on each page. The opaque
+  cursor records both collection sizes plus an identity/order fingerprint of wiring IDs,
+  so a graph change between pages fails explicitly instead of silently skipping or
+  duplicating entries; clients then restart from page one.
+
 - Where a `list_*` tool's payload is expensive enough to warrant it, it accepts an
   optional `detail` argument with values `summary` (default) or `full` — today that's
   `list_channels` and `list_modulations`; other `list_*` tools (`list_fixtures`,

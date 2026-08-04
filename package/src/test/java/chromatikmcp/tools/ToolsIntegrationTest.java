@@ -454,7 +454,6 @@ class ToolsIntegrationTest {
     Map<String, Object> wiredTrigger = structured(call("wire_trigger", Map.of(
         "sourcePath", triggerBank.get("path") + "/macro1",
         "targetPath", channel.enabled.getCanonicalPath())));
-
     Map<String, Object> payload = structured(call("list_modulations", Map.of("detail", "full")));
     List<Map<String, Object>> modulators = (List<Map<String, Object>>) payload.get("modulators");
     assertTrue(modulators.stream().anyMatch(m -> knobs.get("path").equals(m.get("path"))),
@@ -472,6 +471,76 @@ class ToolsIntegrationTest {
 
     structured(call("remove_modulation", Map.of("path", wiredTrigger.get("path"))));
     structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listModulationsPaginatesAcrossContinuousAndTriggerWirings() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
+    Map<String, Object> wired = structured(call("wire_modulator", Map.of(
+        "sourcePath", knobs.get("path") + "/macro1",
+        "targetPath", channel.fader.getCanonicalPath())));
+    Map<String, Object> triggerBank = structured(
+        call("add_modulator", Map.of("class", MacroTriggers.class.getName())));
+    Map<String, Object> wiredTrigger = structured(call("wire_trigger", Map.of(
+        "sourcePath", triggerBank.get("path") + "/macro1",
+        "targetPath", channel.enabled.getCanonicalPath())));
+    Map<String, Object> currentTrigger = wiredTrigger;
+
+    try {
+      Map<String, Object> first = structured(call("list_modulations", Map.of("limit", 1)));
+      assertEquals(1, first.get("returnedModulationCount"));
+      assertEquals(0, first.get("returnedTriggerCount"));
+      assertEquals(1, first.get("totalModulationCount"));
+      assertEquals(1, first.get("totalTriggerCount"));
+      String firstCursor = (String) first.get("nextCursor");
+      assertTrue(firstCursor.matches("1:1:1:[0-9a-f]{64}"));
+
+      Map<String, Object> addedBetweenPages = structured(call("wire_trigger", Map.of(
+          "sourcePath", triggerBank.get("path") + "/macro2",
+          "targetPath", channel.enabled.getCanonicalPath())));
+      McpSchema.CallToolResult stale = call("list_modulations", Map.of(
+          "limit", 1, "cursor", firstCursor));
+      assertEquals(Boolean.TRUE, stale.isError());
+      assertTrue(stale.content().get(0).toString().contains("graph changed"));
+      structured(call("remove_modulation", Map.of("path", addedBetweenPages.get("path"))));
+
+      structured(call("remove_modulation", Map.of("path", wiredTrigger.get("path"))));
+      Map<String, Object> replacement = structured(call("wire_trigger", Map.of(
+          "sourcePath", triggerBank.get("path") + "/macro2",
+          "targetPath", channel.enabled.getCanonicalPath())));
+      currentTrigger = replacement;
+      McpSchema.CallToolResult sameCountStale = call("list_modulations", Map.of(
+          "limit", 1, "cursor", firstCursor));
+      assertEquals(Boolean.TRUE, sameCountStale.isError());
+      assertTrue(sameCountStale.content().get(0).toString().contains("graph changed"));
+
+      Map<String, Object> freshFirst =
+          structured(call("list_modulations", Map.of("limit", 1)));
+      Map<String, Object> second = structured(call("list_modulations", Map.of(
+          "limit", 1, "cursor", freshFirst.get("nextCursor"))));
+      assertEquals(0, second.get("returnedModulationCount"));
+      assertEquals(1, second.get("returnedTriggerCount"));
+      assertFalse(second.containsKey("nextCursor"));
+      List<Map<String, Object>> triggerEntries =
+          (List<Map<String, Object>>) second.get("triggers");
+      assertEquals(replacement.get("path"), triggerEntries.get(0).get("path"));
+
+      McpSchema.CallToolResult malformed =
+          call("list_modulations", Map.of("cursor", "not-a-cursor"));
+      assertEquals(Boolean.TRUE, malformed.isError());
+      assertTrue(malformed.content().get(0).toString().contains("invalid_argument"));
+
+      McpSchema.CallToolResult pastEnd =
+          call("list_modulations", Map.of(
+              "cursor", "3:1:1:" + "0".repeat(64)));
+      assertEquals(Boolean.TRUE, pastEnd.isError());
+      assertTrue(pastEnd.content().get(0).toString().contains("invalid_argument"));
+    } finally {
+      structured(call("remove_modulation", Map.of("path", currentTrigger.get("path"))));
+      structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+    }
   }
 
   @Test

@@ -44,8 +44,9 @@ it. A finding with no cited field is not a finding.
 ### L1 — a zero-depth modulation is inert
 
 `wire_modulator` wiring starts at zero range and does nothing until depth is set (the
-`driving-chromatik` skill's own contract). Call `list_modulations` with `detail: full` for
-each scope you reach; a `modulations[]` entry with `range` equal to `0` is a DEFECT.
+`driving-chromatik` skill's own contract). Page `list_modulations` with `detail: full` for
+each scope you reach, following `nextCursor` until omitted; a `modulations[]` entry with
+`range` equal to `0` is a DEFECT.
 Downgrade to a QUESTION when that entry's own `rangePath` itself appears as a
 `targetPath` of another `modulations[]`/`triggers[]` entry (any scope) or of a
 `list_midi_mappings` mapping — depth may be under live control from either source, and a
@@ -97,7 +98,7 @@ read `clockSource.formatted` (`clockSource.value` is the enum's ordinal integer)
 
 ### L5 — two modulators sharing an OSC address collide
 
-Within a single `list_modulations` call (`detail: full`, one scope at a time — the global
+Within a single `list_modulations` scope (`detail: full`, following all pages — the global
 engine and each device-local scope you reach), two `modulators[]` entries with an
 identical `oscAddress` collide: only one is addressable. **Modulators only** — channels,
 patterns, and effects address by index, so two channels sharing a label is fine and is not
@@ -198,7 +199,8 @@ Start every `list_channels` and `list_modulations` call at `detail: summary` —
 own descriptions warn that `full` blows past client response limits on a real project, and
 you're running on the engine thread. Escalate to `full` only where the summary's rollup
 markers (`containerPatternCount`, `anyLocalModulation` on `list_channels`; the wiring graph
-itself on `list_modulations`) say there's something to chase.
+itself on `list_modulations`) say there's something to chase. For `list_modulations`, keep
+passing `nextCursor` back as `cursor` until it is omitted before judging graph completeness.
 
 `list_channels` never returns nested `PatternRack` children at any detail level. To
 recurse into a container pattern, call `list_parameters` on its own path for its

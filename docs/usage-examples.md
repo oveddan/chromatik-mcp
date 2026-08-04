@@ -85,7 +85,11 @@ set_parameter {path: <bank>/macro1, value: 0.75}            → turn the knob
   moves the address. Ports are in `get_project_info`. See
   [osc-addressing.md](osc-addressing.md).
 - `list_modulations {scope?}` discovers existing banks and wirings when you didn't
-  create them; `remove_modulation {path}` unwires. `wire_trigger` + `fire_trigger`
+  create them. It returns at most 100 wirings by default, ordered as continuous
+  modulations then triggers; while `nextCursor` is present, pass it back as `cursor`.
+  Modulators repeat on every page, and changing the graph shifts positional cursors, so
+  finish paging before wiring or removing anything. `remove_modulation {path}` unwires.
+  `wire_trigger` + `fire_trigger`
   cover boolean pulse wiring and momentary triggers (`set_parameter` rejects those).
 
 ## 5. See what you made
