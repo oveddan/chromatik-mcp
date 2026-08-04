@@ -77,7 +77,7 @@ Decided once (#108) so it isn't re-litigated per tool:
   for a multi-operation call), not an oversight — the rest of the tool surface follows the
   rule above.
 
-### Domain results and serialization
+## Domain results and serialization
 
 - Stable state crosses the domain/tool boundary as a typed record or domain object:
   `LX objects -> typed domain result -> shared serializer -> Map<String, Object>`. Domain
