@@ -21,6 +21,8 @@ class GetFrameTest {
         List.of(new Frames.DominantColor("#abcdef", 1.0)),
         List.of(List.of("#010203")));
 
+    Map<String, Object> payload = GetFrame.summaryToMap(summary);
+
     assertEquals(Map.of(
         "points", 2,
         "nonBlackFraction", 0.5,
@@ -28,6 +30,9 @@ class GetFrameTest {
         "meanBrightness", 0.75,
         "dominantColors", List.of(Map.of("hex", "#abcdef", "fraction", 1.0)),
         "grid", List.of(List.of("#010203"))),
-        GetFrame.summaryToMap(summary));
+        payload);
+    assertEquals(List.of(
+        "points", "nonBlackFraction", "litFraction", "meanBrightness", "dominantColors", "grid"),
+        List.copyOf(payload.keySet()), "preserve the established JSON field order");
   }
 }
