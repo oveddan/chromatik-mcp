@@ -2,8 +2,8 @@ package chromatikmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
@@ -36,8 +36,8 @@ class OscParamsTest extends HeadlessLxTest {
     assertEquals("CompoundParameter", fader.type());
     assertEquals(0.0, fader.min(), 1e-9);
     assertEquals(1.0, fader.max(), 1e-9);
-    assertTrue(fader.componentPath() != null);
-    assertTrue(fader.componentLabel() != null);
+    assertNotNull(fader.componentPath());
+    assertNotNull(fader.componentLabel());
     assertEquals(channel.getClass().getSimpleName(), fader.componentType());
   }
 
@@ -81,7 +81,7 @@ class OscParamsTest extends HeadlessLxTest {
     lx.engine.mixer.addChannel();
 
     for (OscParams.OscParamInfo entry : OscParams.list(lx)) {
-      assertTrue(entry.oscAddress() != null,
+      assertNotNull(entry.oscAddress(),
           "entries with a null oscAddress must be filtered out: " + entry);
     }
   }
