@@ -39,6 +39,10 @@ Decided once (#108) so it isn't re-litigated per tool:
   component entry as supplementary output; tools do **not** accept ids as input in v1.
 - Child arrays are 1-indexed in paths (LX's OSC convention); numeric `index` fields in
   payloads are 0-based Java indices. The path is the address — `index` is informational.
+- An `index` that selects an existing item or a destination within an existing list must
+  be in that list's documented range; out-of-range values return `invalid_argument`
+  instead of silently clamping. Insert-position arguments may clamp only when the tool
+  explicitly documents that behavior (currently `add_fixture` and `duplicate_fixture`).
 
 ## Wire shape (`Result<T>` over MCP)
 

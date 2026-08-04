@@ -19,8 +19,9 @@ public final class MoveFixture implements LxTool {
 
   @Override
   public String description() {
-    return "Reposition a fixture within lx.structure.fixtures (0-based 'index', clamped "
-        + "into [0, fixtureCount - 1]). Undoable with Cmd-Z. Every fixture's path is "
+    return "Reposition a fixture within lx.structure.fixtures using a 0-based 'index'. "
+        + "Returns invalid_argument if the index is out of range. Undoable with Cmd-Z. "
+        + "Every fixture's path is "
         + "POSITIONAL (/lx/structure/fixture/N, 1-indexed) and shifts for this fixture and "
         + "any it moved past — re-list (list_fixtures) rather than reuse a held path. "
         + "Rejected when the structure is in static-model mode.";
@@ -33,8 +34,8 @@ public final class MoveFixture implements LxTool {
         "Canonical path of the fixture to move, e.g. /lx/structure/fixture/2"));
     Map<String, Object> indexSchema = new LinkedHashMap<>();
     indexSchema.put("type", "integer");
-    indexSchema.put("description", "0-based target position in lx.structure.fixtures, clamped "
-        + "into [0, fixtureCount - 1]");
+    indexSchema.put("description", "0-based target position in lx.structure.fixtures; "
+        + "must be in [0, fixtureCount - 1]");
     properties.put("index", indexSchema);
     return Schemas.object(properties, List.of("path", "index"));
   }

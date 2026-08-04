@@ -669,12 +669,12 @@ Remove a fixture by its canonical path (as returned by list_fixtures/add_fixture
 
 _mutating_
 
-Reposition a fixture within lx.structure.fixtures (0-based 'index', clamped into [0, fixtureCount - 1]). Undoable with Cmd-Z. Every fixture's path is POSITIONAL (/lx/structure/fixture/N, 1-indexed) and shifts for this fixture and any it moved past — re-list (list_fixtures) rather than reuse a held path. Rejected when the structure is in static-model mode.
+Reposition a fixture within lx.structure.fixtures using a 0-based 'index'. Returns invalid_argument if the index is out of range. Undoable with Cmd-Z. Every fixture's path is POSITIONAL (/lx/structure/fixture/N, 1-indexed) and shifts for this fixture and any it moved past — re-list (list_fixtures) rather than reuse a held path. Rejected when the structure is in static-model mode.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the fixture to move, e.g. /lx/structure/fixture/2 |
-| `index` | integer | yes | — | 0-based target position in lx.structure.fixtures, clamped into [0, fixtureCount - 1] |
+| `index` | integer | yes | — | 0-based target position in lx.structure.fixtures; must be in [0, fixtureCount - 1] |
 
 ### `duplicate_fixture`
 

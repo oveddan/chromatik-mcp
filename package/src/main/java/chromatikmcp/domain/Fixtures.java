@@ -829,20 +829,24 @@ public final class Fixtures {
 
   /**
    * Reposition a fixture within {@code lx.structure.fixtures}, routed through {@code
-   * LXCommand.Structure.MoveFixture} for undo. {@code index} is clamped into the valid
-   * [0, count-1] range — {@code LXStructure.moveFixture} has no such guard and would throw
+   * LXCommand.Structure.MoveFixture} for undo. Rejects an out-of-range {@code index}
+   * before constructing the command because {@code LXStructure.moveFixture} would throw
    * an unchecked {@code IndexOutOfBoundsException} that {@code perform()} would swallow.
    * Call on the engine thread.
    *
    * @throws Resolve.ResolveException {@code TYPE_MISMATCH} for a static-model structure
+   *     or an out-of-range index
    */
   public static FixtureInfo moveFixture(LX lx, LXFixture fixture, int index) {
     requireDynamicStructure(lx);
     int count = lx.structure.fixtures.size();
-    int target = Math.max(0, Math.min(index, count - 1));
-    Commands.perform(lx, new LXCommand.Structure.MoveFixture(fixture, target));
-    if (fixture.getIndex() != target) {
-      throw new IllegalStateException("MoveFixture did not move the fixture to " + target);
+    if (index < 0 || index >= count) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Fixture index " + index + " out of range [0," + (count - 1) + "]");
+    }
+    Commands.perform(lx, new LXCommand.Structure.MoveFixture(fixture, index));
+    if (fixture.getIndex() != index) {
+      throw new IllegalStateException("MoveFixture did not move the fixture to " + index);
     }
     return describeFixture(fixture);
   }

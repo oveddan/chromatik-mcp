@@ -231,14 +231,22 @@ class FixtureLifecycleTest extends HeadlessLxTest {
   }
 
   @Test
-  void moveFixtureClampsAnOutOfRangeIndex() {
+  void moveFixtureRejectsAnOutOfRangeIndexWithoutMutating() {
     LX lx = track(new LX());
     Fixtures.addFixtureByClass(lx, GridFixture.class, null, "First", null);
     Fixtures.addFixtureByClass(lx, GridFixture.class, null, "Second", null);
     LXFixture first = lx.structure.fixtures.get(0);
 
-    Fixtures.FixtureInfo info = Fixtures.moveFixture(lx, first, 99);
-    assertEquals(1, info.index(), "clamped into [0, count - 1]");
+    Resolve.ResolveException high = assertThrows(Resolve.ResolveException.class,
+        () -> Fixtures.moveFixture(lx, first, 99));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, high.failure);
+    assertTrue(high.getMessage().contains("out of range [0,1]"));
+    assertEquals(0, first.getIndex(), "rejected move leaves fixture order unchanged");
+
+    Resolve.ResolveException low = assertThrows(Resolve.ResolveException.class,
+        () -> Fixtures.moveFixture(lx, first, -1));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, low.failure);
+    assertEquals(0, first.getIndex(), "negative rejected move also leaves order unchanged");
   }
 
   @Test
