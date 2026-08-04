@@ -62,7 +62,7 @@ Structural paths are 1-based and reindex on remove/insert — re-list rather tha
 | tool | what it does |
 |---|---|
 | `add_modulator {class, scope?}` | add e.g. a `MacroKnobs` bank or a `VariableLFO` — to the global side panel, or inside a pattern/effect's own chain via `scope`. Response lists every parameter with its path and OSC address |
-| `remove_modulator {path}` | delete a modulator; wirings it sources are removed with it (one undoable step) |
+| `remove_modulator {path}` / `move_modulator {path, index}` | delete or reorder a modulator in its global/device-local engine; moving uses a 0-based destination index and shifts canonical paths |
 | `wire_modulator {sourcePath, targetPath, scope?, range?}` | undoable continuous mapping, e.g. `macro1 → fader` or `LFO → twist`. Pass `range` (-1..1) to give the wiring depth immediately — **a wiring without range is inert**. Engine inferred from the source; adjust later via the returned `rangePath`/`polarityPath` |
 | `wire_trigger {sourcePath, targetPath, scope?}` | boolean pulse wiring (e.g. a `MacroTriggers` macro → a toggle) |
 | `remove_modulation {path}` | unwire either kind by the path the wire call returned |

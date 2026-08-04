@@ -1,7 +1,9 @@
 package chromatikmcp.domain;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
@@ -32,6 +34,9 @@ public final class Modulators {
       double range, String polarity, String rangePath) {}
 
   public record TriggerInfo(String path, int id, String sourcePath, String targetPath) {}
+
+  /** The moved modulator plus every affected component whose canonical path changed. */
+  public record ModulatorMoveResult(LXModulator modulator, List<PathChange> oscChanges) {}
 
   /** Read-only snapshot of one engine's live modulators and wirings. */
   public record EngineInfo(String path, List<ModulatorInfo> modulators,
@@ -153,6 +158,59 @@ public final class Modulators {
       throw new IllegalStateException("AddModulator did not add a " + kind.getName());
     }
     return modulators.get(before);
+  }
+
+  /**
+   * Move a modulator to a new 0-based index within its global or device-local engine.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the modulator is not owned by a
+   *     modulation engine or the index is out of range
+   */
+  public static ModulatorMoveResult moveModulator(LX lx, String path, int toIndex) {
+    LXModulator modulator = Resolve.component(lx, path, LXModulator.class);
+    if (!(modulator.getParent() instanceof LXModulationEngine engine)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Not a movable modulator: " + path + " (parent is not a modulation engine)");
+    }
+    int size = engine.modulators.size();
+    if (toIndex < 0 || toIndex >= size) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Modulator index " + toIndex + " out of range [0," + (size - 1) + "] on "
+              + engine.getCanonicalPath());
+    }
+    LinkedHashMap<Integer, String> before = new LinkedHashMap<>();
+    for (LXModulator sibling : engine.modulators) {
+      snapshotPaths(sibling, before);
+    }
+    Commands.perform(lx, new LXCommand.Modulation.MoveModulator(engine, modulator, toIndex));
+    if (modulator.getIndex() != toIndex || engine.modulators.get(toIndex) != modulator) {
+      throw new IllegalStateException("MoveModulator did not move " + path + " to index " + toIndex);
+    }
+    List<PathChange> changes = new ArrayList<>();
+    for (Map.Entry<Integer, String> entry : before.entrySet()) {
+      LXComponent component = lx.getComponent(entry.getKey());
+      if (component != null && !component.getCanonicalPath().equals(entry.getValue())) {
+        changes.add(new PathChange(
+            entry.getKey(), entry.getValue(), component.getCanonicalPath()));
+      }
+    }
+    return new ModulatorMoveResult(modulator, changes);
+  }
+
+  private static void snapshotPaths(LXComponent component, Map<Integer, String> snapshot) {
+    if (snapshot.putIfAbsent(component.getId(), component.getCanonicalPath()) != null) {
+      return;
+    }
+    for (LXComponent child : component.children.values()) {
+      snapshotPaths(child, snapshot);
+    }
+    for (List<? extends LXComponent> children : component.childArrays.values()) {
+      for (LXComponent child : children) {
+        if (child != null) {
+          snapshotPaths(child, snapshot);
+        }
+      }
+    }
   }
 
   /**

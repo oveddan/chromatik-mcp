@@ -109,6 +109,7 @@ public final class Tools {
             new WireTrigger(),
             new RemoveModulation(),
             new RemoveModulator(),
+            new MoveModulator(),
             new ListModulations(),
             new FireTrigger(),
             new GetComponentDoc(),

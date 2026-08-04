@@ -353,6 +353,17 @@ Remove a modulator added by add_modulator, by the canonical path returned when i
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the modulator, as returned by add_modulator |
 
+### `move_modulator`
+
+_mutating_
+
+Move a modulator to a new 0-based index within its global or device-local modulation engine. Index 0 is the first (top) entry. Moving shifts the 1-based canonical paths of the moved modulator and any sibling it crosses; re-list modulations rather than reusing cached paths. The response's oscChanges array reports exactly which component canonical paths changed (componentId, before, after). Label-based OSC addresses do not change. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; re-list after any move if undo is possible.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the modulator to move, e.g. /lx/modulation/modulator/1 |
+| `index` | integer | yes | -2147483648–2147483647 | 0-based destination index within the modulation engine |
+
 ### `wire_modulator`
 
 _mutating_

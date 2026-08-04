@@ -299,14 +299,6 @@ public final class Channels {
     return new ActivationResult(pattern, pattern.getEngine().getActivePattern() == pattern);
   }
 
-  /**
-   * A single component's canonical-path change caused by a move — either the moved
-   * component itself or a sibling whose 1-based index (and therefore path) shifted.
-   * Keyed by component id, never by list position, since position is exactly what
-   * a move changes.
-   */
-  public record PathChange(int componentId, String before, String after) {}
-
   /** The moved pattern plus every sibling whose canonical path changed as a result. */
   public record PatternMoveResult(LXPattern pattern, List<PathChange> oscChanges) {}
 

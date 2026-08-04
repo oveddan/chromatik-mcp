@@ -47,6 +47,7 @@ const CATEGORIES = {
   modulation: [
     'add_modulator',
     'remove_modulator',
+    'move_modulator',
     'wire_modulator',
     'wire_trigger',
     'remove_modulation',

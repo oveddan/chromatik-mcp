@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
@@ -131,6 +132,73 @@ class ModulatorsTest extends HeadlessLxTest {
 
     lx.command.undo();
     assertEquals(before, pattern.modulation.modulators.size());
+  }
+
+  // ---- moves: global and device-local engines ----
+
+  @Test
+  void moveGlobalModulatorChangesPathsAndUndoRestoresOrder() {
+    LX lx = newHeadlessLx();
+    LXModulator first = Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    LXModulator second = Modulators.addModulator(lx, lx.engine.modulation, MacroTriggers.class);
+    LXModulator third = Modulators.addModulator(lx, lx.engine.modulation, VariableLFO.class);
+    String firstBefore = first.getCanonicalPath();
+    String secondBefore = second.getCanonicalPath();
+    String thirdBefore = third.getCanonicalPath();
+
+    Modulators.ModulatorMoveResult result =
+        Modulators.moveModulator(lx, first.getCanonicalPath(), 2);
+
+    assertSame(first, result.modulator());
+    assertEquals(List.of(second, third, first), lx.engine.modulation.modulators);
+    assertEquals(2, first.getIndex());
+    assertEquals(3, result.oscChanges().size());
+    assertTrue(result.oscChanges().stream().anyMatch(change ->
+        change.componentId() == first.getId()
+            && change.before().equals(firstBefore)
+            && change.after().equals(first.getCanonicalPath())));
+    assertTrue(result.oscChanges().stream().anyMatch(change ->
+        change.componentId() == second.getId()
+            && change.before().equals(secondBefore)
+            && change.after().equals(second.getCanonicalPath())));
+    assertTrue(result.oscChanges().stream().anyMatch(change ->
+        change.componentId() == third.getId()
+            && change.before().equals(thirdBefore)
+            && change.after().equals(third.getCanonicalPath())));
+
+    lx.command.undo();
+
+    assertEquals(List.of(first, second, third), lx.engine.modulation.modulators,
+        "undo restores the original list order");
+    assertEquals(firstBefore, first.getCanonicalPath());
+  }
+
+  @Test
+  void moveDeviceModulatorUsesItsLocalEngine() {
+    LX lx = newHeadlessLx();
+    LXPattern pattern = newDevice(lx);
+    LXModulator first = Modulators.addModulator(lx, pattern.modulation, MacroKnobs.class);
+    LXModulator second = Modulators.addModulator(lx, pattern.modulation, MacroTriggers.class);
+
+    Modulators.moveModulator(lx, second.getCanonicalPath(), 0);
+
+    assertEquals(List.of(second, first), pattern.modulation.modulators);
+    assertTrue(second.getCanonicalPath().startsWith(pattern.getCanonicalPath()));
+
+    lx.command.undo();
+    assertEquals(List.of(first, second), pattern.modulation.modulators);
+  }
+
+  @Test
+  void moveModulatorRejectsOutOfRangeWithoutMutation() {
+    LX lx = newHeadlessLx();
+    LXModulator first = Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    LXModulator second = Modulators.addModulator(lx, lx.engine.modulation, MacroTriggers.class);
+
+    assertEquals(Resolve.Failure.TYPE_MISMATCH,
+        assertThrows(Resolve.ResolveException.class,
+            () -> Modulators.moveModulator(lx, first.getCanonicalPath(), 2)).failure);
+    assertEquals(List.of(first, second), lx.engine.modulation.modulators);
   }
 
   // Device-only: stock LX has none (every registered modulator is at least @Global),

@@ -205,7 +205,7 @@ class ToolsIntegrationTest {
         Set.of("get_project_info", "save_project", "save_model", "get_status", "list_channels", "get_channel", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
             "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
-            "remove_modulation", "remove_modulator", "list_modulations", "fire_trigger",
+            "remove_modulation", "remove_modulator", "move_modulator", "list_modulations", "fire_trigger",
             "get_component_doc", "get_fixture_format",
             "get_frame", "get_palette", "describe_model", "get_views", "add_view", "remove_view",
             "list_fixtures", "get_fixture", "get_output_map", "list_available_fixtures", "add_fixture",
@@ -223,7 +223,7 @@ class ToolsIntegrationTest {
             "apply_operations"),
         names);
     Set<String> mutators = Set.of("save_project", "save_model", "set_parameter", "add_modulator", "wire_modulator",
-        "wire_trigger", "remove_modulation", "remove_modulator", "fire_trigger",
+        "wire_trigger", "remove_modulation", "remove_modulator", "move_modulator", "fire_trigger",
         "add_view", "remove_view", "add_fixture", "remove_fixture", "move_fixture",
         "duplicate_fixture", "set_fixture_params", "set_fixture_tags", "reload_fixtures",
         "add_channel", "remove_channel", "add_pattern", "remove_pattern",
@@ -585,6 +585,52 @@ class ToolsIntegrationTest {
     assertEquals(path, removed.get("removed"));
     assertEquals("modulator", removed.get("kind"));
     assertEquals(before - 1, lx.engine.modulation.modulators.size());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void moveModulatorOverMcpReordersGlobalEngine() {
+    Map<String, Object> first = structured(
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
+    Map<String, Object> second = structured(
+        call("add_modulator", Map.of("class", MacroTriggers.class.getName())));
+    int firstId = ((Number) first.get("id")).intValue();
+    int secondId = ((Number) second.get("id")).intValue();
+    int firstIndex = lx.engine.modulation.modulators.size() - 2;
+
+    Map<String, Object> moved = structured(call("move_modulator", Map.of(
+        "path", first.get("path"), "index", firstIndex + 1)));
+
+    assertEquals(firstIndex + 1, ((Number) moved.get("index")).intValue());
+    assertEquals(firstId, lx.engine.modulation.modulators.get(firstIndex + 1).getId());
+    assertEquals(secondId, lx.engine.modulation.modulators.get(firstIndex).getId());
+    List<Map<String, Object>> changes =
+        (List<Map<String, Object>>) assertOscChanges(moved.get("oscChanges"));
+    assertEquals(2, changes.size(), "the moved modulator and crossed sibling both reindex");
+
+    structured(call("remove_modulator", Map.of(
+        "path", lx.engine.modulation.modulators.get(firstIndex + 1).getCanonicalPath())));
+    structured(call("remove_modulator", Map.of(
+        "path", lx.engine.modulation.modulators.get(firstIndex).getCanonicalPath())));
+  }
+
+  @Test
+  void moveModulatorOutOfRangeIsInvalidArgumentAndDoesNotMutate() {
+    Map<String, Object> added = structured(
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
+    int id = ((Number) added.get("id")).intValue();
+    int indexBefore = lx.engine.modulation.modulators.size() - 1;
+
+    McpSchema.CallToolResult result = call("move_modulator", Map.of(
+        "path", added.get("path"), "index", lx.engine.modulation.modulators.size()));
+
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text =
+        assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    assertEquals(id, lx.engine.modulation.modulators.get(indexBefore).getId(),
+        "the rejected move leaves the list unchanged");
+    structured(call("remove_modulator", Map.of("path", added.get("path"))));
   }
 
   @Test

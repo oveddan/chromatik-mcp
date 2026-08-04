@@ -654,6 +654,27 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "move_modulator",
+  "description" : "Move a modulator to a new 0-based index within its global or device-local modulation engine. Index 0 is the first (top) entry. Moving shifts the 1-based canonical paths of the moved modulator and any sibling it crosses; re-list modulations rather than reusing cached paths. The response's oscChanges array reports exactly which component canonical paths changed (componentId, before, after). Label-based OSC addresses do not change. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; re-list after any move if undo is possible.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "path" : {
+        "type" : "string",
+        "description" : "Canonical path of the modulator to move, e.g. /lx/modulation/modulator/1"
+      },
+      "index" : {
+        "type" : "integer",
+        "description" : "0-based destination index within the modulation engine",
+        "minimum" : -2147483648,
+        "maximum" : 2147483647
+      }
+    },
+    "required" : [ "path", "index" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "move_pattern",
   "description" : "Move a pattern to a new 0-based index within its channel. Moving shifts the 1-based paths of the moved pattern, any sibling it crosses, and everything those siblings own (their effects, any nested rack patterns and effects, and any device-local modulators/modulations/triggers) — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.",
   "readOnly" : false,

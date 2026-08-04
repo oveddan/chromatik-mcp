@@ -586,10 +586,10 @@ class ChannelMutationsTest extends HeadlessLxTest {
         "undo stack untouched on out-of-range move");
   }
 
-  /** Asserts a Channels.PathChange for componentId with the given before/after is present. */
-  private static void assertPathChange(List<Channels.PathChange> changes, int componentId,
+  /** Asserts a PathChange for componentId with the given before/after is present. */
+  private static void assertPathChange(List<PathChange> changes, int componentId,
       String before, String after) {
-    Channels.PathChange expected = new Channels.PathChange(componentId, before, after);
+    PathChange expected = new PathChange(componentId, before, after);
     assertTrue(changes.contains(expected),
         "expected " + expected + " in " + changes);
   }
