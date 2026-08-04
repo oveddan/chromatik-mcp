@@ -18,7 +18,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterAll;
@@ -51,6 +50,7 @@ import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTranspor
 import io.modelcontextprotocol.spec.McpSchema;
 
 import chromatikmcp.ServerStatus;
+import chromatikmcp.StreamableHttpTestHarness;
 import chromatikmcp.domain.Projects;
 import chromatikmcp.domain.Registry;
 import chromatikmcp.domain.Resolve;
@@ -81,11 +81,8 @@ class ToolsIntegrationTest {
   private static LX lx;
   private static LXChannel channel;
   private static heronarts.lx.structure.view.LXViewDefinition view;
-  private static EmbeddedMcpServer server;
-  private static ServerStatus status;
+  private static StreamableHttpTestHarness harness;
   private static McpSyncClient client;
-  private static final AtomicBoolean draining = new AtomicBoolean(true);
-  private static Thread drainer;
 
   /**
    * Registered but never cataloged: the fixture for undocumented-class assertions.
@@ -119,83 +116,31 @@ class ToolsIntegrationTest {
     view.label.setValue("Whole Grid");
     view.selector.setValue("grid");
 
-    drainer = new Thread(() -> {
-      while (draining.get()) {
-        lx.engine.run();
-        try {
-          Thread.sleep(2);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          return;
-        }
-      }
-    }, "test-engine-drainer");
-    drainer.start();
-
-    status = new ServerStatus();
+    ServerStatus status = new ServerStatus();
     ConnectionTracker connectionTracker = new ConnectionTracker();
     GetStatus getStatus = new GetStatus(
         status, () -> connectionTracker.snapshot(System.currentTimeMillis()));
-    server = EmbeddedMcpServer.start("Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1",
-        Tools.specifications(lx, new EngineExecutor(lx), getStatus), Tools.INSTRUCTIONS,
+    harness = StreamableHttpTestHarness.startMcp(
+        lx, Tools.specifications(lx, new EngineExecutor(lx), getStatus), Tools.INSTRUCTIONS,
         connectionTracker);
-    status.initialize("127.0.0.1", server.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
-    HttpClientStreamableHttpTransport transport =
-        HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
-            .endpoint(EmbeddedMcpServer.ENDPOINT)
-            .build();
-    client = McpClient.sync(transport).build();
-    client.initialize();
+    status.initialize(
+        "127.0.0.1", harness.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
+    client = harness.client();
   }
 
   @AfterAll
-  static void tearDown() throws InterruptedException {
-    if (client != null) {
-      client.closeGracefully();
-    }
-    if (server != null) {
-      server.stop();
-    }
-    draining.set(false);
-    if (drainer != null) {
-      drainer.join(2_000);
+  static void tearDown() {
+    if (harness != null) {
+      harness.close();
     }
   }
 
   private static McpSchema.CallToolResult call(String tool, Map<String, Object> args) {
-    try {
-      return client.callTool(new McpSchema.CallToolRequest(tool, args));
-    } catch (RuntimeException e) {
-      // The JDK HttpClient occasionally reuses a pooled keep-alive connection the server
-      // side already closed between tests, surfacing as a wrapped IOException ("HTTP/1.1
-      // header parser received no bytes") rather than a real product failure. One retry on
-      // a fresh connection is sound here even for mutating tools: the failure signature
-      // means zero response bytes were parsed (stale connection died before the request
-      // landed), and each test's own assertions verify resulting state against live
-      // lx.engine.* regardless of how many attempts the call took.
-      if (isHeaderParserNoBytes(e)) {
-        return client.callTool(new McpSchema.CallToolRequest(tool, args));
-      }
-      throw e;
-    }
+    return harness.call(tool, args);
   }
 
-  private static boolean isHeaderParserNoBytes(Throwable t) {
-    for (Throwable cause = t; cause != null; cause = cause.getCause()) {
-      if (cause instanceof java.io.IOException
-          && cause.getMessage() != null
-          && cause.getMessage().contains("header parser received no bytes")) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  @SuppressWarnings("unchecked")
   private static Map<String, Object> structured(McpSchema.CallToolResult result) {
-    assertNotEquals(Boolean.TRUE, result.isError(), "expected a success result");
-    assertInstanceOf(Map.class, result.structuredContent(), "success carries structuredContent");
-    return (Map<String, Object>) result.structuredContent();
+    return harness.structured(result);
   }
 
   @Test
@@ -1149,8 +1094,10 @@ class ToolsIntegrationTest {
     assertFalse(((String) payload.get("buildTime")).isBlank());
     assertNotNull(payload.get("lxVersion"));
     assertEquals("127.0.0.1", payload.get("host"));
-    assertEquals(server.port(), ((Number) payload.get("port")).intValue());
-    assertEquals("http://127.0.0.1:" + server.port() + EmbeddedMcpServer.ENDPOINT, payload.get("url"));
+    assertEquals(harness.port(), ((Number) payload.get("port")).intValue());
+    assertEquals(
+        "http://127.0.0.1:" + harness.port() + EmbeddedMcpServer.ENDPOINT,
+        payload.get("url"));
     assertNotNull(payload.get("startedAt"));
     assertNotNull(payload.get("uptimeSeconds"));
 
@@ -3142,7 +3089,7 @@ class ToolsIntegrationTest {
   void unicodeStringArgumentsRoundTripAndSetDiscreteOptionsByName() {
     String label = "Trigger → Café 東京 🌈";
     HttpClientStreamableHttpTransport transport =
-        HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
+        HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + harness.port())
             .endpoint(EmbeddedMcpServer.ENDPOINT)
             // Exercise clients that follow JSON's UTF-8 default but omit a redundant
             // charset parameter. The servlet container must not fall back to Latin-1.

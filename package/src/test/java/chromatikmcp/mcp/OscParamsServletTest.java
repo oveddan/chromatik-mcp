@@ -9,9 +9,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AutoClose;
@@ -22,6 +20,7 @@ import org.junit.jupiter.api.Timeout;
 import heronarts.lx.LX;
 import heronarts.lx.mixer.LXChannel;
 
+import chromatikmcp.StreamableHttpTestHarness;
 import chromatikmcp.domain.OscParams;
 import chromatikmcp.engine.EngineExecutor;
 
@@ -38,9 +37,7 @@ class OscParamsServletTest {
 
   @AutoClose("dispose")
   private static LX lx;
-  private static EmbeddedMcpServer server;
-  private static final AtomicBoolean draining = new AtomicBoolean(true);
-  private static Thread drainer;
+  private static StreamableHttpTestHarness harness;
 
   @BeforeAll
   static void setUp() {
@@ -48,37 +45,15 @@ class OscParamsServletTest {
     LXChannel channel = lx.engine.mixer.addChannel();
     channel.label.setValue("Test Channel");
 
-    drainer = new Thread(() -> {
-      while (draining.get()) {
-        lx.engine.run();
-        try {
-          Thread.sleep(2);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          return;
-        }
-      }
-    }, "test-engine-drainer");
-    drainer.start();
-
     EngineExecutor engineExecutor = new EngineExecutor(lx);
-    server = EmbeddedMcpServer.start(
-        "Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1", List.of(), null, new ConnectionTracker(),
-        Map.of("/osc-params", new OscParamsServlet(lx, engineExecutor)));
+    harness = StreamableHttpTestHarness.startHttp(
+        lx, Map.of("/osc-params", new OscParamsServlet(lx, engineExecutor)));
   }
 
   @AfterAll
   static void tearDown() {
-    draining.set(false);
-    if (drainer != null) {
-      try {
-        drainer.join();
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-      }
-    }
-    if (server != null) {
-      server.stop();
+    if (harness != null) {
+      harness.close();
     }
   }
 
@@ -86,7 +61,7 @@ class OscParamsServletTest {
   void getOscParamsReturnsJsonWithCountAndParams() throws IOException, InterruptedException {
     HttpClient http = HttpClient.newHttpClient();
     HttpResponse<String> response = http.send(
-        HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + server.port() + "/osc-params"))
+        HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + harness.port() + "/osc-params"))
             .GET()
             .build(),
         HttpResponse.BodyHandlers.ofString());
@@ -105,7 +80,7 @@ class OscParamsServletTest {
   void mcpEndpointIsUnaffectedByTheExtraMount() throws IOException, InterruptedException {
     HttpClient http = HttpClient.newHttpClient();
     HttpResponse<String> response = http.send(
-        HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + server.port() + "/mcp"))
+        HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + harness.port() + "/mcp"))
             .header("Accept", "application/json, text/event-stream")
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(

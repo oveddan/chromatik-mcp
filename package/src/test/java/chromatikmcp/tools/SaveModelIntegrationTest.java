@@ -10,7 +10,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AutoClose;
@@ -21,12 +20,11 @@ import org.junit.jupiter.api.io.TempDir;
 
 import heronarts.lx.LX;
 
-import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
-import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 
 import chromatikmcp.ServerStatus;
+import chromatikmcp.StreamableHttpTestHarness;
 import chromatikmcp.engine.EngineExecutor;
 import chromatikmcp.mcp.ConnectionTracker;
 import chromatikmcp.mcp.EmbeddedMcpServer;
@@ -49,10 +47,8 @@ class SaveModelIntegrationTest {
 
   @AutoClose("dispose")
   private static LX lx;
-  private static EmbeddedMcpServer server;
+  private static StreamableHttpTestHarness harness;
   private static McpSyncClient client;
-  private static final AtomicBoolean draining = new AtomicBoolean(true);
-  private static Thread drainer;
 
   @BeforeAll
   static void setUp() {
@@ -60,46 +56,22 @@ class SaveModelIntegrationTest {
     flags.mediaPath = mediaPath.toString();
     lx = new LX(flags);
 
-    drainer = new Thread(() -> {
-      while (draining.get()) {
-        lx.engine.run();
-        try {
-          Thread.sleep(2);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          return;
-        }
-      }
-    }, "save-model-test-engine-drainer");
-    drainer.start();
-
     ServerStatus status = new ServerStatus();
     ConnectionTracker connectionTracker = new ConnectionTracker();
     GetStatus getStatus = new GetStatus(
         status, () -> connectionTracker.snapshot(System.currentTimeMillis()));
-    server = EmbeddedMcpServer.start("Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1",
-        Tools.specifications(lx, new EngineExecutor(lx), getStatus), Tools.INSTRUCTIONS,
+    harness = StreamableHttpTestHarness.startMcp(
+        lx, Tools.specifications(lx, new EngineExecutor(lx), getStatus), Tools.INSTRUCTIONS,
         connectionTracker);
-    status.initialize("127.0.0.1", server.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
-    HttpClientStreamableHttpTransport transport =
-        HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
-            .endpoint(EmbeddedMcpServer.ENDPOINT)
-            .build();
-    client = McpClient.sync(transport).build();
-    client.initialize();
+    status.initialize(
+        "127.0.0.1", harness.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
+    client = harness.client();
   }
 
   @AfterAll
-  static void tearDown() throws InterruptedException {
-    if (client != null) {
-      client.closeGracefully();
-    }
-    if (server != null) {
-      server.stop();
-    }
-    draining.set(false);
-    if (drainer != null) {
-      drainer.join(2_000);
+  static void tearDown() {
+    if (harness != null) {
+      harness.close();
     }
   }
 

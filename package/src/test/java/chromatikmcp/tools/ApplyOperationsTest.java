@@ -2,14 +2,12 @@ package chromatikmcp.tools;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AutoClose;
@@ -24,12 +22,10 @@ import heronarts.lx.model.GridModel;
 import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.pattern.color.GradientPattern;
 
-import io.modelcontextprotocol.client.McpClient;
-import io.modelcontextprotocol.client.McpSyncClient;
-import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
 import io.modelcontextprotocol.spec.McpSchema;
 
 import chromatikmcp.ServerStatus;
+import chromatikmcp.StreamableHttpTestHarness;
 import chromatikmcp.engine.EngineExecutor;
 import chromatikmcp.mcp.ConnectionTracker;
 import chromatikmcp.mcp.EmbeddedMcpServer;
@@ -47,68 +43,38 @@ class ApplyOperationsTest {
   @AutoClose("dispose")
   private static LX lx;
   private static LXChannel channel;
-  private static EmbeddedMcpServer server;
-  private static McpSyncClient client;
-  private static final AtomicBoolean draining = new AtomicBoolean(true);
-  private static Thread drainer;
+  private static StreamableHttpTestHarness harness;
 
   @BeforeAll
   static void setUp() {
     lx = new LX(new GridModel(4, 4).reindexPoints());
     channel = lx.engine.mixer.addChannel();
 
-    drainer = new Thread(() -> {
-      while (draining.get()) {
-        lx.engine.run();
-        try {
-          Thread.sleep(2);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          return;
-        }
-      }
-    }, "apply-operations-test-engine-drainer");
-    drainer.start();
-
     ServerStatus status = new ServerStatus();
     ConnectionTracker connectionTracker = new ConnectionTracker();
     GetStatus getStatus = new GetStatus(
         status, () -> connectionTracker.snapshot(System.currentTimeMillis()));
-    server = EmbeddedMcpServer.start("Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1",
-        Tools.specifications(lx, new EngineExecutor(lx), getStatus), Tools.INSTRUCTIONS,
+    harness = StreamableHttpTestHarness.startMcp(
+        lx, Tools.specifications(lx, new EngineExecutor(lx), getStatus), Tools.INSTRUCTIONS,
         connectionTracker);
-    status.initialize("127.0.0.1", server.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
-    HttpClientStreamableHttpTransport transport =
-        HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
-            .endpoint(EmbeddedMcpServer.ENDPOINT)
-            .build();
-    client = McpClient.sync(transport).build();
-    client.initialize();
+    status.initialize(
+        "127.0.0.1", harness.port(), System.currentTimeMillis(),
+        EmbeddedMcpServer.ENDPOINT);
   }
 
   @AfterAll
-  static void tearDown() throws InterruptedException {
-    if (client != null) {
-      client.closeGracefully();
-    }
-    if (server != null) {
-      server.stop();
-    }
-    draining.set(false);
-    if (drainer != null) {
-      drainer.join(2_000);
+  static void tearDown() {
+    if (harness != null) {
+      harness.close();
     }
   }
 
   private static McpSchema.CallToolResult call(String tool, Map<String, Object> args) {
-    return client.callTool(new McpSchema.CallToolRequest(tool, args));
+    return harness.call(tool, args);
   }
 
-  @SuppressWarnings("unchecked")
   private static Map<String, Object> structured(McpSchema.CallToolResult result) {
-    assertNotEquals(Boolean.TRUE, result.isError(), "expected a success result");
-    assertInstanceOf(Map.class, result.structuredContent(), "success carries structuredContent");
-    return (Map<String, Object>) result.structuredContent();
+    return harness.structured(result);
   }
 
   private static String errorText(McpSchema.CallToolResult result) {
