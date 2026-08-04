@@ -45,7 +45,7 @@ tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutati
 (MCP-shaped)     (intent, narrow)   ──> direct lx.engine.* edit  (mutation without undo)
                                     ──> read lx.engine.*         (read-only)
 
-LX objects ──> typed domain result ──> shared tool serializer ──> Map<String, Object>
+LX objects ──> typed domain result ──> shared wire serializer ──> Map<String, Object>
 ```
 
 - **Tool handlers** (`package/src/main/java/chromatikmcp/tools/*.java`): parse args, call a domain primitive, format the result. No `LXCommand` construction. No direct engine mutation.
@@ -54,9 +54,10 @@ LX objects ──> typed domain result ──> shared tool serializer ──> Ma
 - **MCP plumbing** (`package/src/main/java/chromatikmcp/mcp/*.java`): server lifecycle, HTTP transport, status-file writing. Tool handlers and domain primitives never reach into MCP plumbing.
 
 Raw maps remain appropriate at the MCP boundary (arguments, JSON Schema, and final
-`structuredContent`) and for genuinely dynamic/open-ended domain data. A new domain-layer
-map must document why a typed result is unsuitable. See `docs/tool-conventions.md` for the
-current exceptions and wire-compatibility rules.
+`structuredContent`), inside an implementation, and for genuinely dynamic/open-ended
+domain state. A new map-shaped domain result must document why a typed result is
+unsuitable. See `docs/tool-conventions.md` for the current exceptions and
+wire-compatibility rules.
 
 ### When primitives multiply
 
@@ -64,7 +65,7 @@ If three tools each need to "find the channel by id, then walk to a parameter, t
 
 ### What this does **not** mean
 
-Scoped to *mutation primitives*: no speculative abstraction layers until two real implementations exist. The typed-result rule does not require wrapping one-shot string assembly or introducing a serialization framework. No DI container — plain static methods plus the `LX` reference passed at server-start time are enough.
+Scoped to *mutation primitives*: no speculative abstraction layers until two real implementations exist. The typed-result rule does not require wrapping genuinely one-shot formatting or string assembly, or introducing a serialization framework. No DI container — plain static methods plus the `LX` reference passed at server-start time are enough.
 
 ## Code style
 
