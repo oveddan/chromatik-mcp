@@ -2,6 +2,7 @@ package chromatikmcp.domain;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -133,7 +134,18 @@ public final class Frames {
       double litFraction,
       double meanBrightness,
       List<DominantColor> dominantColors,
-      List<List<String>> grid) {}
+      List<List<String>> grid) {
+
+    public FrameSummary {
+      dominantColors = List.copyOf(dominantColors);
+      List<List<String>> gridCopy = new ArrayList<>(grid.size());
+      for (List<String> row : grid) {
+        // Empty grid cells are null, so List.copyOf(row) is intentionally not usable.
+        gridCopy.add(Collections.unmodifiableList(new ArrayList<>(row)));
+      }
+      grid = List.copyOf(gridCopy);
+    }
+  }
 
   public static FrameSnapshot capture(LX lx, Bus bus) {
     LXEngine.Frame frame = new LXEngine.Frame(lx);
