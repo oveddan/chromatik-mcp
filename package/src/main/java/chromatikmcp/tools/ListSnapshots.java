@@ -42,13 +42,7 @@ public final class ListSnapshots implements LxTool {
     Snapshots.EngineInfo info = Snapshots.list(lx);
     List<Map<String, Object>> snapshots = new ArrayList<>();
     for (Snapshots.SnapshotInfo s : info.snapshots()) {
-      Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("path", s.path());
-      entry.put("id", s.id());
-      entry.put("label", s.label());
-      entry.put("transitionTimeSecs", s.transitionTimeSecs());
-      entry.put("hasCustomTransitionTime", s.hasCustomTransitionTime());
-      snapshots.add(entry);
+      snapshots.add(SnapshotPayload.toMap(s));
     }
     List<Map<String, Object>> settings = new ArrayList<>();
     for (var parameter : info.settings()) {
