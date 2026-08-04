@@ -108,9 +108,9 @@ Decided once (#108) so it isn't re-litigated per tool:
   typed result are ordinary implementation details, not boundary exceptions. New
   exceptions explain locally why a fixed record is unsuitable.
 - A fixed non-MCP JSON surface follows the same typed-result principle but places its
-  serializer at its own transport boundary. `OscParams` is existing migration inventory:
-  its typed entries should be serialized to the flat HTTP JSON shape by
-  `OscParamsServlet`, not by the domain walk.
+  serializer at its own transport boundary. `OscParams`/`OscParamsServlet` is the existing
+  example: the domain walk returns typed entries, and the servlet serializes their flat
+  HTTP JSON shape.
 
 ## Drill-down
 
