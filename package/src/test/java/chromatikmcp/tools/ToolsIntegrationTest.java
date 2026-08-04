@@ -14,6 +14,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -3053,6 +3054,30 @@ class ToolsIntegrationTest {
       structured(call("remove_view", Map.of("path", withEnums.get("path"))));
     }
     assertEquals(before, lx.structure.views.views.size());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void addViewPayloadMatchesTheGetViewsEntryExceptForItsWarning() {
+    Map<String, Object> added = structured(call("add_view",
+        Map.of("label", "Shared Shape", "selector", "grid")));
+    try {
+      Map<String, Object> addViewShape = new LinkedHashMap<>(added);
+      assertNotNull(addViewShape.remove("warning"),
+          "the mutation-only warning is expected for GridModel's unmatched root tag");
+
+      List<Map<String, Object>> views = (List<Map<String, Object>>)
+          structured(call("get_views", Map.of())).get("views");
+      Map<String, Object> listed = views.stream()
+          .filter(view -> added.get("path").equals(view.get("path")))
+          .findFirst()
+          .orElseThrow();
+
+      assertEquals(listed, addViewShape,
+          "add_view and get_views must share the complete named-view wire shape");
+    } finally {
+      structured(call("remove_view", Map.of("path", added.get("path"))));
+    }
   }
 
   @Test

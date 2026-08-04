@@ -71,17 +71,7 @@ public final class AddView implements LxTool {
 
     Views.ViewInfo view = Views.addView(lx, label, selector, normalization, orientation);
 
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("path", view.path());
-    payload.put("label", view.label());
-    payload.put("selector", view.selector());
-    payload.put("enabled", view.enabled());
-    payload.put("priority", view.priority());
-    payload.put("normalization", view.normalization());
-    payload.put("orientation", view.orientation());
-    payload.put("numGroups", view.numGroups());
-    payload.put("numFixtures", view.numFixtures());
-    payload.put("cuePath", view.cuePath());
+    Map<String, Object> payload = ViewPayload.toMap(view);
     if (view.numFixtures() == 0) {
       payload.put("warning", "selector matched no fixtures — check modelTags from get_views");
     }

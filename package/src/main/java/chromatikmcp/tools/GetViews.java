@@ -57,18 +57,7 @@ public final class GetViews implements LxTool {
 
     List<Map<String, Object>> views = new ArrayList<>();
     for (Views.ViewInfo view : snapshot.views()) {
-      Map<String, Object> entry = new LinkedHashMap<>();
-      entry.put("path", view.path());
-      entry.put("label", view.label());
-      entry.put("selector", view.selector());
-      entry.put("enabled", view.enabled());
-      entry.put("priority", view.priority());
-      entry.put("normalization", view.normalization());
-      entry.put("orientation", view.orientation());
-      entry.put("numGroups", view.numGroups());
-      entry.put("numFixtures", view.numFixtures());
-      entry.put("cuePath", view.cuePath());
-      views.add(entry);
+      views.add(ViewPayload.toMap(view));
     }
 
     List<Map<String, Object>> assignments = new ArrayList<>();
