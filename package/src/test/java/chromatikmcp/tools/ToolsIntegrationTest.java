@@ -221,6 +221,14 @@ class ToolsIntegrationTest {
             "remove_color",
             "list_snapshots", "add_snapshot", "recall_snapshot",
             "update_snapshot", "remove_snapshot",
+            "get_composition", "list_clip_lanes",
+            "get_clip", "launch_clip", "stop_clip", "set_clip_marker",
+            "list_locators", "add_locator", "remove_locator", "move_locator", "go_locator",
+            "add_clip_lane", "remove_clip_lane", "move_clip_lane", "set_clip_lane_visible",
+            "get_clip_lane", "add_automation_point", "set_automation_point",
+            "remove_automation_point", "remove_clip_range", "collapse_clip_range",
+            "add_audio_lane", "add_notes_lane", "add_clip_note", "set_clip_note",
+            "set_composition_arm",
             "apply_operations"),
         names);
     Set<String> mutators = Set.of("save_project", "save_model", "set_parameter", "add_modulator", "wire_modulator",
@@ -234,6 +242,13 @@ class ToolsIntegrationTest {
         "add_snapshot", "recall_snapshot", "update_snapshot", "remove_snapshot",
         "add_midi_mapping", "remove_midi_mapping", "set_midi_input", "set_midi_surface_enabled",
         "add_midi_template",
+        "launch_clip", "stop_clip", "set_clip_marker",
+        "add_locator", "remove_locator", "move_locator", "go_locator",
+        "add_clip_lane", "remove_clip_lane", "move_clip_lane", "set_clip_lane_visible",
+        "add_automation_point", "set_automation_point",
+        "remove_automation_point", "remove_clip_range", "collapse_clip_range",
+        "add_audio_lane", "add_notes_lane", "add_clip_note", "set_clip_note",
+        "set_composition_arm",
         "apply_operations");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
@@ -3632,6 +3647,80 @@ class ToolsIntegrationTest {
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
     assertTrue(text.text().contains("static-model mode"),
         "must report the static-mode reason, not \"no linked model file\": " + text.text());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void compositionToolFamiliesOverMcpRoundTrip() {
+    // The composition families' handler-level suites cover behavior; this exercises the
+    // MCP seam itself for the new surface — structuredContent serialization of the
+    // nested-cursor payload shapes, outputSchema conformance, and the typed-error
+    // mapping — one representative call per family, chained so the test is
+    // self-contained and order-independent (no other test touches the composition).
+    Map<String, Object> composition = structured(call("get_composition", Map.of()));
+    assertEquals("/lx/timeline/composition", composition.get("path"));
+    assertEquals(Boolean.FALSE, composition.get("armed"));
+    assertInstanceOf(List.class, composition.get("lanes"));
+
+    // F1: playEnd on a fresh composition enables the timeline (grows length to 10s);
+    // the follow-up loopEnd request past the end pins the clamp-echo over the wire.
+    structured(call("set_clip_marker",
+        Map.of("marker", "playEnd", "cursor", Map.of("millis", 10_000))));
+    Map<String, Object> clamped = structured(call("set_clip_marker",
+        Map.of("marker", "loopEnd", "cursor", Map.of("millis", 50_000))));
+    assertEquals(Boolean.TRUE, clamped.get("clamped"));
+    Map<String, Object> markerCursor = (Map<String, Object>) clamped.get("cursor");
+    assertEquals(10_000.0, ((Number) markerCursor.get("millis")).doubleValue(), 1e-6);
+
+    // F2: locator payloads are 1-indexed (the documented deviation).
+    Map<String, Object> locator = structured(call("add_locator",
+        Map.of("cursor", Map.of("millis", 2_000), "label", "Verse")));
+    assertEquals(1, ((Number) locator.get("index")).intValue());
+    assertEquals("Verse", locator.get("label"));
+
+    // F3: the shared {clipPath, lane, laneCount} lane-creation envelope.
+    Map<String, Object> added = structured(call("add_clip_lane", Map.of(
+        "kind", "parameter", "targetPath", channel.fader.getCanonicalPath())));
+    assertEquals("/lx/timeline/composition", added.get("clipPath"));
+    String lanePath = (String) ((Map<String, Object>) added.get("lane")).get("path");
+    assertNotNull(lanePath);
+
+    // F4 + F5: insert, paged read, and edit all speak the same "normalized" field and
+    // the two mutations return identical envelopes.
+    Map<String, Object> inserted = structured(call("add_automation_point", Map.of(
+        "lanePath", lanePath, "cursor", Map.of("millis", 1_000), "normalized", 0.5)));
+    assertEquals(0.5, ((Number) inserted.get("normalized")).doubleValue(), 1e-9);
+
+    Map<String, Object> page = structured(call("get_clip_lane",
+        Map.of("path", lanePath, "limit", 1)));
+    List<Map<String, Object>> events = (List<Map<String, Object>>) page.get("events");
+    assertEquals(1, events.size());
+    assertEquals(0.5, ((Number) events.get(0).get("normalized")).doubleValue(), 1e-9);
+    Map<String, Object> eventCursor = (Map<String, Object>) events.get(0).get("cursor");
+    assertTrue(eventCursor.containsKey("millis") && eventCursor.containsKey("beatCount")
+        && eventCursor.containsKey("beatBasis") && eventCursor.containsKey("formatted"),
+        "the full read-side cursor object survives JSON serialization");
+
+    Map<String, Object> edited = structured(call("set_automation_point",
+        Map.of("lanePath", lanePath, "index", 0, "normalized", 0.75)));
+    assertEquals(0.75, ((Number) edited.get("normalized")).doubleValue(), 1e-9);
+    assertEquals(inserted.keySet(), edited.keySet(),
+        "add/set_automation_point share one payload envelope");
+
+    // F7: notes lane + note event.
+    Map<String, Object> notes = structured(call("add_notes_lane", Map.of("label", "Cues")));
+    String notesPath = (String) ((Map<String, Object>) notes.get("lane")).get("path");
+    Map<String, Object> note = structured(call("add_clip_note", Map.of(
+        "lanePath", notesPath, "note", "drop", "cursor", Map.of("millis", 4_000))));
+    assertEquals("drop", note.get("note"));
+
+    // Typed error through the client seam: a missing lane maps to not_found.
+    McpSchema.CallToolResult missing = call("get_clip_lane",
+        Map.of("path", "/lx/timeline/composition/lane/99"));
+    assertEquals(Boolean.TRUE, missing.isError());
+    McpSchema.TextContent text =
+        assertInstanceOf(McpSchema.TextContent.class, missing.content().get(0));
+    assertTrue(text.text().startsWith(Result.NOT_FOUND), text.text());
   }
 
   private static void walkForNullPaths(Object obj, String path, StringBuilder errors) {

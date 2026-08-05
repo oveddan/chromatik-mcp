@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
+import heronarts.lx.clip.Cursor;
 import heronarts.lx.color.ColorParameter;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.osc.LXOscEngine;
@@ -420,6 +421,17 @@ public final class Parameters {
    * unaffected (see {@link Fixtures#isJsonDerived}).
    */
   public static void requireWritable(LXParameter parameter) {
+    // Clip marker cursors: the Cursor.Parameter aggregate throws on a direct setValue,
+    // and its millis/beatCount/beatBasis subparameters resolve and ARE writable — but a
+    // write there re-derives the cursor with none of the marker safety logic (clamping,
+    // loop-length coupling, setPlayEnd's length growth, insert-marker rebound).
+    if (parameter instanceof Cursor.Parameter
+        || parameter.getParentParameter() instanceof Cursor.Parameter) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          Resolve.canonicalPath(parameter) + " is a clip marker cursor — writing it "
+              + "directly bypasses the marker clamping/coupling logic; use set_clip_marker "
+              + "instead");
+    }
     if (parameter instanceof LXListenableParameter listenable
         && listenable.getParent() instanceof LXFixture fixture
         && Fixtures.isJsonDerived(fixture)) {
@@ -453,6 +465,12 @@ public final class Parameters {
     } else if (parameter instanceof ColorParameter c) {
       // Colors pack an int into getValue() via longBitsToDouble; the formatter yields NaN.
       value = String.format("0x%08x", c.getColor());
+    } else if (parameter instanceof Cursor.Parameter cursorParameter) {
+      // A Cursor.Parameter never updates its own double value — set() writes only the
+      // subparameters — so the generic branch would confidently report every clip and
+      // composition length/marker as 0.0. Emit the real cursor object instead.
+      value = Cursors.describe(cursorParameter.clip, cursorParameter.cursor).toMap();
+      formatted = Cursors.format(cursorParameter.clip, cursorParameter.cursor);
     } else if (parameter instanceof DiscreteParameter d) {
       // getValuei()/getOption()/getFormatter().format(getValue()) already read through live
       // modulation on a CompoundDiscreteParameter — only the base needs a separate call.

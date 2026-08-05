@@ -70,6 +70,60 @@ final class Args {
     return number.intValue();
   }
 
+  /**
+   * Required number argument. Rejects NaN/Infinity — a non-finite value can only come from
+   * a caller-side computation bug, and letting it through would corrupt engine state (e.g.
+   * a NaN normalized automation value) rather than fail the call.
+   */
+  static double requireDouble(Map<String, Object> args, String name) {
+    if (!(args.get(name) instanceof Number number)
+        || !Double.isFinite(number.doubleValue())) {
+      throw Resolve.invalidArgument("Required finite number argument: " + name);
+    }
+    return number.doubleValue();
+  }
+
+  /** Required boolean argument. */
+  static boolean requireBoolean(Map<String, Object> args, String name) {
+    if (!(args.get(name) instanceof Boolean value)) {
+      throw Resolve.invalidArgument("Required boolean argument: " + name);
+    }
+    return value;
+  }
+
+  /** Optional boolean argument: {@code defaultValue} if absent, else must be a boolean. */
+  static boolean optionalBoolean(Map<String, Object> args, String name, boolean defaultValue) {
+    Object value = args.get(name);
+    if (value == null) {
+      return defaultValue;
+    }
+    if (!(value instanceof Boolean b)) {
+      throw Resolve.invalidArgument("Optional boolean argument: " + name);
+    }
+    return b;
+  }
+
+  /**
+   * Optional bounded number: {@code null} if absent. Out-of-range is rejected rather than
+   * clamp-echoed: the bounded aspects using this are unit-scaled (a normalized value, a
+   * shaping factor), so an out-of-range number almost always means the caller sent a RAW
+   * parameter value — a silent clamp would look like success at the wrong value.
+   */
+  static Double optionalBoundedNumber(Map<String, Object> args, String name, double min, double max) {
+    Object value = args.get(name);
+    if (value == null) {
+      return null;
+    }
+    if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())) {
+      throw Resolve.invalidArgument("Optional number argument: " + name);
+    }
+    double d = number.doubleValue();
+    if (d < min || d > max) {
+      throw Resolve.invalidArgument(name + " must be within [" + min + ", " + max + "]: " + d);
+    }
+    return d;
+  }
+
   /** Optional string argument: {@code null} if absent, else must be a string. */
   static String optionalString(Map<String, Object> args, String name) {
     return optionalString(args, name, name + " must be a string");
@@ -82,5 +136,30 @@ final class Args {
       throw Resolve.invalidArgument(message);
     }
     return (String) value;
+  }
+
+  /**
+   * Required object argument (e.g. a cursor spec for {@code Cursors.parse}). The SDK has
+   * already schema-validated the value's shape; this recovers the typed map.
+   */
+  @SuppressWarnings("unchecked")
+  static Map<String, Object> requireMap(Map<String, Object> args, String name) {
+    if (!(args.get(name) instanceof Map<?, ?> value)) {
+      throw Resolve.invalidArgument("Required object argument: " + name);
+    }
+    return (Map<String, Object>) value;
+  }
+
+  /** Optional object argument: {@code null} if absent, else must be an object. */
+  @SuppressWarnings("unchecked")
+  static Map<String, Object> optionalMap(Map<String, Object> args, String name) {
+    Object value = args.get(name);
+    if (value == null) {
+      return null;
+    }
+    if (!(value instanceof Map<?, ?> map)) {
+      throw Resolve.invalidArgument("Optional object argument: " + name);
+    }
+    return (Map<String, Object>) map;
   }
 }

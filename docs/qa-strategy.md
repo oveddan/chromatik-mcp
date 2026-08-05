@@ -148,3 +148,25 @@ class AddMacroKnobTest {
 ```
 
 PR-2 onward instantiates this skeleton per tool, drawing each undo assertion from the table in [`lxcommand-mapping.md`](lxcommand-mapping.md).
+
+## Composition/clip test recipes (foundation for the timeline tool families)
+
+Extend `chromatikmcp.CompositionTestSupport` — a bare headless LX already carries a fully
+initialized timeline (composition + master `BusClipLane` + `GlobalModulationClipLane` +
+`ColorPaletteClipLane`; `addChannelWithPattern` adds bus/MIDI/pattern lanes). Four
+recipes that otherwise cost a day each:
+
+- **`playFrom` silently no-ops unless the clip `hasTimeline`**, and a fresh composition
+  has none. The only public way to flip it without recording is
+  `setMarker(PLAY_END, …)` / `setPlayEnd` past the current length, which grows the clip
+  and sets the flag — that's `CompositionTestSupport.enableTimeline(clip, millis)`.
+- **Snapshot cursors with `.immutable()` (or `.clone()`) before the "do"** —
+  `clip.loopStart.cursor` and friends are fields LX rewrites in place, so capturing a
+  live alias makes an undo assertion pass vacuously.
+- **Never `assertEquals` on millis** — under TEMPO timeBase (the default for new clips),
+  `Cursor.Operator.isEqual` ignores millis entirely. Compare through the clip's own
+  `CursorOp()` — that's `CompositionTestSupport.assertCursorEqual(clip, expected, actual)`.
+- **Every marker setter silently clamps** (`setLoopStart`/`setLoopEnd`/`setPlayStart`/
+  `setInsertMarker`; `setPlayEnd` also *grows* length). Mutation payloads echo the cursor
+  read back from the marker, never the requested one — and each family pins that with a
+  clamping test (see `CompositionParametersTest.markerSettersClampAndTheMarkerIsTheEchoSource`).

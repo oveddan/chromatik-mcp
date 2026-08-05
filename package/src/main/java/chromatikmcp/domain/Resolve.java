@@ -1,11 +1,14 @@
 package chromatikmcp.domain;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
 import heronarts.lx.LXPath;
+import heronarts.lx.clip.LXClipLane;
+import heronarts.lx.clip.LXComposition;
 import heronarts.lx.parameter.AggregateParameter;
 import heronarts.lx.parameter.LXParameter;
 import heronarts.lx.structure.LXFixture;
@@ -154,6 +157,20 @@ public final class Resolve {
       object = (segments.length == 1)
           ? lx.structure
           : walk(lx.structure, List.of(segments).subList(1, segments.length).toArray(new String[0]), 0);
+    } else if (segments.length >= 2 && segments[0].equals("timeline") && segments[1].equals("composition")) {
+      // LXTimelineEngine attaches its LXComposition via setParent() alone, never
+      // addChild("composition", …), so LXPath.get returns null for anything under it
+      // (LX itself string-special-cases this in handleOscMessage with a TODO). Everything
+      // else under /lx/timeline (sync, focusedClip) still resolves natively below.
+      // Delegating the remainder to LXPath.get rooted at the composition keeps aggregate
+      // subparameter handling (e.g. length/millis) identical to native resolution.
+      LXComposition composition = lx.engine.timeline.getComposition();
+      if (composition == null || segments.length == 2) {
+        object = composition;
+      } else {
+        object = LXPath.get(composition,
+            String.join("/", Arrays.copyOfRange(segments, 2, segments.length)));
+      }
     } else {
       object = LXPath.get(lx, rooted);
     }
@@ -179,34 +196,75 @@ public final class Resolve {
    * path carries (docs/tool-conventions.md); this normalizes that one exception. Domain
    * code building payloads for structure-tree objects should call this rather than
    * {@code getCanonicalPath()} directly.
+   *
+   * <p>Clip-lane links in the chain are substituted with the {@code lane/<1-based>} form
+   * that {@code LXClip}'s {@code addArray("lane", …)} registration actually resolves — see
+   * {@link #pathSegment(LXPath)}.
    */
   public static String canonicalPath(LXPath object) {
-    String raw = object.getCanonicalPath();
+    String raw = reconstructPath(object);
     return (raw.equals("/lx") || raw.startsWith("/lx/")) ? raw : "/lx" + raw;
   }
 
   /**
-   * {@code object.getCanonicalPath()}, or {@code null} when {@code object} or any ancestor in
-   * its parent chain was never path-registered ({@code getPath() == null}). Unregistered
-   * objects (e.g. a read-only derived parameter that's never {@code addParameter}'d, or an
-   * unregistered ancestor further up the chain) make {@code getCanonicalPath()} build a
-   * literal {@code "null"} segment (LXPath.java:85-93) rather than failing — snapshot builders
-   * call this instead of the raw method so payloads omit the key rather than emit that bogus
-   * path (docs/tool-conventions.md's "omit the key, never emit null" rule). All current
-   * callers address {@code lx.engine} descendants, where the raw path already carries the
-   * {@code /lx} root; unlike {@link #canonicalPath(LXPath)}, this does not apply that method's
-   * structure-tree root normalization.
+   * {@link #canonicalPath} without the {@code /lx} structure-tree normalization, or
+   * {@code null} when {@code object} or any ancestor in its parent chain has no path
+   * segment ({@link #pathSegment} is null). Unregistered objects (e.g. a read-only derived
+   * parameter that's never {@code addParameter}'d, or an unregistered ancestor further up
+   * the chain) make {@code getCanonicalPath()} build a literal {@code "null"} segment
+   * (LXPath.java:85-93) rather than failing — snapshot builders call this instead of the
+   * raw method so payloads omit the key rather than emit that bogus path
+   * (docs/tool-conventions.md's "omit the key, never emit null" rule). Clip lanes are NOT
+   * a null case even though most lane types have a null or bogus {@code getPath()}: their
+   * segment is synthesized (see {@link #pathSegment}), so lane payloads always carry a
+   * resolvable path. All current callers address {@code lx.engine} descendants, where the
+   * raw path already carries the {@code /lx} root; unlike {@link #canonicalPath(LXPath)},
+   * this does not apply that method's structure-tree root normalization.
    */
   public static String canonicalPathOrNull(LXPath object) {
-    if (object.getPath() == null) {
+    if (pathSegment(object) == null) {
       return null;
     }
     for (LXComponent parent = object.getParent(); parent != null; parent = parent.getParent()) {
-      if (parent.getPath() == null) {
+      if (pathSegment(parent) == null) {
         return null;
       }
     }
-    return object.getCanonicalPath();
+    return reconstructPath(object);
+  }
+
+  /**
+   * The path segment contributed by one link of a parent chain. Identical to
+   * {@code getPath()} for everything except clip lanes, whose {@code getPath()} overrides
+   * are inconsistent upstream and mostly unresolvable: {@code ParameterClipLane} has none
+   * (null), {@code PatternClipLane}/{@code MidiNoteClipLane} return bare labels
+   * ({@code "Pattern"}/{@code "MIDI"}), {@code BusClipLane} is 0-indexed
+   * ({@code "lane/" + getIndex()}), and {@code AudioClipLane}/{@code TextNoteClipLane}
+   * use array names ({@code "audioLane/N"}/{@code "notesLane/N"}) that were never
+   * registered. The one address {@code LXPath.get} actually accepts is
+   * {@code <clipPath>/lane/<1-based>} via {@code LXClip}'s {@code addArray("lane", …)}
+   * (LXClip.java:269) — so every lane substitutes that form here, which simultaneously
+   * fixes {@code canonicalPath}'s reconstruction, the over-long-path guard in
+   * {@code get()}, and the {@code path} field of every lane payload.
+   */
+  private static String pathSegment(LXPath object) {
+    if (object instanceof LXClipLane<?> lane) {
+      return "lane/" + (lane.getIndex() + 1);
+    }
+    return object.getPath();
+  }
+
+  /**
+   * Character-identical to {@code LXPath.getCanonicalPath()} except that each link goes
+   * through {@link #pathSegment} (clip-lane substitution). Kept private: callers use
+   * {@link #canonicalPath} or {@link #canonicalPathOrNull}.
+   */
+  private static String reconstructPath(LXPath object) {
+    StringBuilder path = new StringBuilder("/").append(pathSegment(object));
+    for (LXComponent parent = object.getParent(); parent != null; parent = parent.getParent()) {
+      path.insert(0, pathSegment(parent)).insert(0, '/');
+    }
+    return path.toString();
   }
 
   /**

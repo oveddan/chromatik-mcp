@@ -1,6 +1,6 @@
 ---
 title: Usage examples
-description: Task recipes — understanding a project, building show structure, chaining effects, macro mapping, multi-agent patterns.
+description: Task recipes — understanding a project, building show structure, chaining effects, macro mapping, multi-agent patterns, arrange-composition authoring.
 ---
 
 Task recipes for chromatik-mcp: a goal, the tool-call sequence, and the wrinkles the
@@ -111,8 +111,9 @@ undo step. Patterns that work well:
   human at the console. Agents should still clean up after themselves (`remove_*`),
   but a human can always unwind an agent's session step by step.
 
-Caveat for parallel sessions: mutations are in-memory until the human saves in
-Chromatik; there is deliberately no `save_project` tool.
+Caveat for parallel sessions: mutations are in-memory until someone saves — the
+human in Chromatik, or an agent calling `save_project` (coordinate: it persists
+*everyone's* pending work in one write).
 
 ## 7. Capture looks and stay in time
 
@@ -143,3 +144,136 @@ Wrinkles:
   view list, so it silently reassigns to whichever view now sits at that index.
   Re-check `get_views`' `assignments` after removing a view rather than assuming
   affected devices reset.
+
+## 8. Author an arrange composition
+
+The LX 1.2.2 arrange timeline lives at `/lx/timeline/composition`. Two contracts run
+through every call in this flow:
+
+- **Positions are cursor objects** — write exactly one of `{millis}`,
+  `{beatCount[, beatBasis]}`, `{bars, beats, sixteenths}` (1-indexed, as read off the
+  arrange ruler), or `{at: <origin>, offsetBeats/offsetMillis}`.
+- **Every mutation echoes the cursor read back from the engine** as the full object
+  `{millis, beatCount, beatBasis, formatted}` — setters clamp silently, so the echo is
+  the truth, never your request.
+
+The payloads below assume a fresh TEMPO-timeBase composition at the default 120 BPM,
+4 beats per bar — so bar 5 = `beatCount` 16 = 8000 ms.
+
+**Give the fresh composition a timeline, and a lane on a channel fader.** A new
+composition has no content; pushing `playEnd` out grows it:
+
+```json
+set_clip_marker {"marker": "playEnd", "cursor": {"bars": 33}}
+add_clip_lane  {"kind": "parameter", "targetPath": "/lx/mixer/channel/1/fader"}
+```
+
+`add_clip_lane` is idempotent (re-adding echoes the existing lane with
+`alreadyExisted: true`) and returns the lane read back from the engine:
+
+```json
+{
+  "clipPath": "/lx/timeline/composition",
+  "alreadyExisted": false,
+  "laneCount": 7,
+  "lane": {
+    "path": "/lx/timeline/composition/lane/4",
+    "index": 3,
+    "type": "parameter",
+    "label": "Fader",
+    "eventCount": 0,
+    "uiVisible": true,
+    "removable": true,
+    "parameterPath": "/lx/mixer/channel/1/fader"
+  }
+}
+```
+
+**Insert automation points.** `normalized` is [0, 1] normalized space, not the raw
+parameter value:
+
+```json
+add_automation_point {"lanePath": "/lx/timeline/composition/lane/4",
+                      "cursor": {"bars": 1}, "normalized": 0.0}
+add_automation_point {"lanePath": "/lx/timeline/composition/lane/4",
+                      "cursor": {"bars": 5}, "normalized": 1.0}
+```
+
+The second insert echoes (the same envelope `set_automation_point` returns):
+
+```json
+{
+  "lanePath": "/lx/timeline/composition/lane/4",
+  "parameterPath": "/lx/mixer/channel/1/fader",
+  "timeBase": "TEMPO",
+  "index": 1,
+  "cursor": {"millis": 8000.0, "beatCount": 16, "beatBasis": 0.0, "formatted": "5.1.1"},
+  "normalized": 1.0,
+  "curve": "POWER_EASE",
+  "shape": 0.0,
+  "eventCount": 2
+}
+```
+
+**Shape the ramp.** `curve` is the interpolation of the segment arriving *at* this
+point (`POWER_EASE | POWER_S_CURVE | SMOOTHSTEP | SINUSOIDAL`); `atCursor` makes the
+edit fail safely if index 1 no longer sits at bar 5:
+
+```json
+set_automation_point {"lanePath": "/lx/timeline/composition/lane/4", "index": 1,
+                      "atCursor": {"bars": 5}, "curve": "SMOOTHSTEP", "shape": 0.5}
+```
+
+**Set a loop region.** Marker moves return `{marker, cursor, clamped, clip}` — the
+full clip envelope rides along because markers are coupled. The loop on/off flag is an
+ordinary registered parameter:
+
+```json
+set_clip_marker {"marker": "loopStart", "cursor": {"bars": 5}}
+set_clip_marker {"marker": "loopEnd",   "cursor": {"bars": 9}}
+set_parameter   {"path": "/lx/timeline/composition/loop", "value": true}
+```
+
+**Drop named locators.** The locator list re-sorts by cursor on every add or move, so
+the echoed 1-indexed `index` is the position in timeline order:
+
+```json
+add_locator {"cursor": {"bars": 5}, "label": "Verse"}
+add_locator {"cursor": {"bars": 9}, "label": "Chorus"}
+```
+
+```json
+{
+  "path": "/lx/timeline/composition/locator/2",
+  "index": 2,
+  "label": "Chorus",
+  "locatorCount": 2,
+  "cursor": {"millis": 16000.0, "beatCount": 32, "beatBasis": 0.0, "formatted": "9.1.1"}
+}
+```
+
+`go_locator {"label": "Chorus"}` then jumps the transport there — scrubbing the insert
+marker when stopped, relaunching playback (subject to launch quantization) when
+running.
+
+**Truncate.** `truncate` sets the clip length directly and rebounds the insert marker
+into range; read the result off the echoed envelope's `clip.length` /
+`clip.insertMarker`:
+
+```json
+set_clip_marker {"marker": "truncate", "cursor": {"bars": 17}}
+```
+
+Wrinkles:
+
+- Lane paths (`<clipPath>/lane/<n>`) and event indices are **positional** — they shift
+  on every insert, remove, or move (and `remove_modulator` cascade-removes lanes it
+  recorded). Re-run `list_clip_lanes` / `get_clip_lane` rather than reuse addresses,
+  and pass `atCursor` on event edits.
+- Marker, locator, lane-lifecycle, and automation-point edits are undoable with Cmd-Z;
+  transport (`launch_clip` / `stop_clip` / `go_locator`), `set_composition_arm`, lane
+  visibility, and text-note events are not.
+- The same lane/event tools also work on grid clips (`/lx/mixer/channel/N/clip/M`) —
+  the composition is just the default `path`.
+- `add_audio_lane` loads a WAV/AIFF backing track (composing to music);
+  `add_notes_lane` + `add_clip_note` annotate sections without affecting playback.

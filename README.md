@@ -2,7 +2,7 @@
 
 A drop-in LX/Chromatik package that lets an agent read, explain, compose into, and debug a running Chromatik show over MCP.
 
-**Status**: the v1 tool surface is working end-to-end — discovery, parameters, tempo, modulation wiring, channels/patterns/effect chains, mixer performance controls (crossfader, cue/aux), MIDI mapping, palette (read-write), snapshots, model views, render previews, OSC addressing, and a generated semantic catalog of what each component does. See [docs/build-plan.md](docs/build-plan.md) for the roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
+**Status**: the tool surface is 93 tools, working end-to-end — discovery, parameters, tempo, modulation wiring, channels/patterns/effect chains, mixer performance controls (crossfader, cue/aux), MIDI mapping, palette (read-write), snapshots, model views, fixtures & output wiring, render previews, OSC addressing, project/model save, arrange-timeline composition authoring (markers, locators, lanes, automation), and a generated semantic catalog of what each component does. See [docs/build-plan.md](docs/build-plan.md) for the roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
 
 **Docs**: [oveddan.github.io/chromatik-mcp](https://oveddan.github.io/chromatik-mcp/) — for AI agents, the full docs are available as plain markdown at [llms-full.txt](https://oveddan.github.io/chromatik-mcp/llms-full.txt) ([llms.txt](https://oveddan.github.io/chromatik-mcp/llms.txt) index).
 
@@ -20,7 +20,7 @@ The plugin publishes its endpoint in `~/.chromatik-mcp/status.json` (`{pid, port
 
 ## Capabilities
 
-Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`), as returned by the discovery tools. Mutations are undoable in Chromatik with Cmd-Z unless noted.
+Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`), as returned by the discovery tools. Mutations are undoable in Chromatik with Cmd-Z unless noted. This is the highlight reel — the complete 93-tool surface (including model & fixture editing, project/model save, and batched operations) is on the [tool reference](https://oveddan.github.io/chromatik-mcp/tools/).
 
 ### Discover
 
@@ -121,6 +121,23 @@ Selectors are a small CSS-like language over model tags — space for descendant
 add_view {label: "Front+Back", selector: "cubeFrontExterior ; cubeBackExterior", orientation: "group"}
 set_parameter {path: /lx/mixer/channel/1/pattern/1/view, value: "Front+Back"}
 ```
+
+### Author the arrange timeline
+
+The LX 1.2.2 arrange composition (`/lx/timeline/composition`; most tools also accept a grid clip `/lx/mixer/channel/N/clip/M`) is fully authorable — 26 tools:
+
+| tool | what it does |
+|---|---|
+| `get_composition` / `get_clip` / `list_clip_lanes` / `get_clip_lane` | read the timeline: markers, transport state, lanes, and a paged event window |
+| `set_clip_marker` | move `insertMarker` (this IS timeline scrubbing), the loop/play markers, or `truncate` the length — setters clamp silently and echo the cursor read back |
+| `add_locator` / `list_locators` / `move_locator` / `remove_locator` / `go_locator` | named position markers (1-indexed, re-sorted by position) plus transport jump |
+| `add_clip_lane` / `remove_clip_lane` / `move_clip_lane` / `set_clip_lane_visible` | automation-lane lifecycle: `parameter` lanes record one parameter, `pattern` lanes a channel's pattern changes |
+| `add_automation_point` / `set_automation_point` / `remove_automation_point` | insert/edit/delete automation points — normalized value, cursor, interpolation `curve`, `shape`, with an `atCursor` guard on edits |
+| `remove_clip_range` / `collapse_clip_range` | delete every event in a cursor range on one lane, or flatten it to its boundary points |
+| `add_audio_lane` / `add_notes_lane` / `add_clip_note` / `set_clip_note` | an audio backing track (WAV/AIFF) and annotation lanes |
+| `launch_clip` / `stop_clip` / `set_composition_arm` | transport and record-arm (transport is not an `LXCommand` upstream — not undoable) |
+
+Timeline positions are **cursor objects** — exactly one of `{millis}`, `{beatCount[, beatBasis]}`, `{bars, beats, sixteenths}`, or `{at: <origin>, offsetBeats/offsetMillis}` — and every mutation echoes the cursor **read back from the engine** after silent clamping (`{millis, beatCount, beatBasis, formatted}`): trust the echo, never your request. Lane paths (`<clipPath>/lane/<n>`) and event indices are positional — re-list after mutations. Worked flow: [docs/usage-examples.md](docs/usage-examples.md).
 
 ### OSC
 

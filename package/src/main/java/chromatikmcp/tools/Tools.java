@@ -80,7 +80,20 @@ public final class Tools {
           + "pattern, effect, and modulation values together — with an optional fade "
           + "controlled by the engine's transition settings. Every mutation tool above "
           + "changes only the running engine's in-memory state — nothing reaches disk until "
-          + "save_project writes it; a restart or crash before that call loses the work.";
+          + "save_project writes it; a restart or crash before that call loses the work. "
+          + "The arrange timeline (composition) has its own tool family: get_composition / "
+          + "get_clip / list_clip_lanes / get_clip_lane read it, and markers, locators, "
+          + "lanes, automation points, ranges, and audio/text lanes are authored through the "
+          + "composition tools. Timeline positions are cursor objects — write exactly one of "
+          + "{millis}, {beatCount, beatBasis}, {bars, beats, sixteenths}, or {at: <origin>, "
+          + "offsetBeats/offsetMillis} — and every mutation payload echoes the cursor read "
+          + "back from the engine after silent clamping, so trust the echo, never your "
+          + "request. Lane paths (<clipPath>/lane/<n>) and event addresses {lanePath, index} "
+          + "are POSITIONAL and shift on any insert/remove/move — re-list rather than reuse "
+          + "them, and pass atCursor on event edits to fail safely if the lane changed. "
+          + "Transport, go_locator, lane visibility, text-note events, and record-arm are "
+          + "not undoable with Cmd-Z; marker, locator, lane-lifecycle, and automation-point "
+          + "edits are.";
 
   private Tools() {}
 
@@ -160,7 +173,33 @@ public final class Tools {
             new AddSnapshot(),
             new RecallSnapshot(),
             new UpdateSnapshot(),
-            new RemoveSnapshot()));
+            new RemoveSnapshot(),
+            new GetComposition(),
+            new ListClipLanes(),
+            new GetClip(),
+            new LaunchClip(),
+            new StopClip(),
+            new SetClipMarker(),
+            new ListLocators(),
+            new AddLocator(),
+            new RemoveLocator(),
+            new MoveLocator(),
+            new GoLocator(),
+            new AddClipLane(),
+            new RemoveClipLane(),
+            new MoveClipLane(),
+            new SetClipLaneVisible(),
+            new GetClipLane(),
+            new AddAutomationPoint(),
+            new SetAutomationPoint(),
+            new RemoveAutomationPoint(),
+            new RemoveClipRange(),
+            new CollapseClipRange(),
+            new AddAudioLane(),
+            new AddNotesLane(),
+            new AddClipNote(),
+            new SetClipNote(),
+            new SetCompositionArm()));
 
     // Built from the list above, not a static registry: appending after gives ApplyOperations
     // no way to see itself, and filtering readOnly() gives it no way to see a read tool either

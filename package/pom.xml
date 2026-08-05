@@ -166,6 +166,22 @@
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
                                         <exclude>module-info.class</exclude>
+                                        <!-- LX's package loader classloads EVERY jar entry looking
+                                             for patterns/plugins and logs a scary (but harmless)
+                                             "Dependency class not found" for each unloadable one.
+                                             These five groups are the entries that trip it — all
+                                             either non-classes (multi-release variants, module
+                                             metadata) or optional hooks whose trigger library is
+                                             deliberately not bundled (BlockHound, micrometer
+                                             context-propagation, jakarta.mail JNDI, joni regex).
+                                             None are reachable at runtime; the JVM falls back to
+                                             the base-version classes for the MR variants. -->
+                                        <exclude>META-INF/versions/**</exclude>
+                                        <exclude>reactor/core/scheduler/ReactorBlockHoundIntegration.class</exclude>
+                                        <exclude>reactor/util/context/ReactorContextAccessor.class</exclude>
+                                        <exclude>reactor/core/publisher/ContextPropagation$ReactorScopeImpl*.class</exclude>
+                                        <exclude>org/apache/naming/factory/MailSessionFactory*.class</exclude>
+                                        <exclude>com/networknt/schema/regex/JoniRegularExpression*.class</exclude>
                                     </excludes>
                                 </filter>
                             </filters>

@@ -92,10 +92,11 @@ tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutati
 
 ## State lifecycle
 
-- All mutations are **in-memory**. Nothing touches the project file until the human
-  saves in Chromatik — there is deliberately no `save_project` tool. A crash or
-  restart discards unsaved agent work; that's a feature (the human keeps the
-  console), plan for it.
+- All mutations are **in-memory**. Nothing touches the project file until someone
+  saves — the human in Chromatik, or the agent via `save_project` (`save_model` for
+  the structure export). A crash or restart discards unsaved work, so treat saving
+  as a deliberate, human-approved step rather than something to sprinkle after every
+  mutation.
 - After a restart: the port may change (unless pinned), the session is gone, paths
   may resolve differently, and engine state resets (e.g. `output/enabled` can come
   back off). Re-read `status.json`, re-initialize, re-list.

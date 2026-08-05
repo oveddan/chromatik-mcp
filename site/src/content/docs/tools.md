@@ -1,6 +1,6 @@
 ---
 title: Tool reference
-description: The full MCP tool surface — discovery, parameters, project persistence, structure, modulation, palette, snapshots, views, rendering, and batching.
+description: The full MCP tool surface — discovery, parameters, project persistence, structure, modulation, palette, snapshots, views, rendering, composition authoring, and batching.
 ---
 
 Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`), as
@@ -816,6 +816,340 @@ Enable or disable a control surface by its 0-based index into list_midi_surfaces
 |---|---|---|---|---|
 | `index` | integer | yes | -2147483648–2147483647 | 0-based index of the surface, as returned by list_midi_surfaces |
 | `enabled` | boolean | yes | — | Whether the surface should be enabled |
+
+<!-- generated:end -->
+
+## Composition: the arrange timeline
+
+The arrange-window composition at `/lx/timeline/composition` — transport, markers,
+locators, lane lifecycle, audio/text lanes, and the record-arm. (Automation events
+within a lane have their own section below.) Timeline
+positions travel as **cursor objects**: reads always emit the full
+`{millis, beatCount, beatBasis, formatted}`; writes take exactly one of
+`{millis}` | `{beatCount[, beatBasis]}` | `{bars[, beats, sixteenths]}` (1-indexed) |
+`{at: <origin>[, offsetBeats | offsetMillis]}`. The clip's `timeBase` decides which
+fields are authoritative — under `TEMPO`, millis are derived from the clip's fixed
+`referenceBpm`, not the live tempo. Lane paths (`.../lane/<n>`) and event indices are
+positional and shift under edits: re-list rather than reuse them. Clip behavior
+parameters (`timeBase`, `loop`, `referenceBpm`, `/lx/timeline/sync`) are ordinary
+registered parameters for `set_parameter`; marker positions are not.
+
+<!-- generated:start:composition -->
+
+### `get_composition`
+
+_read-only_
+
+The arrange-timeline composition at /lx/timeline/composition: timeBase (ABSOLUTE or TEMPO — decides which cursor fields are authoritative), referenceBpm (the fixed bpm cursors' millis fields are derived from — NOT the live tempo), length/loopStart/loopEnd/playStart/playEnd/insertMarker markers, playhead, running, hasContent, armed (the timeline record-arm — a bare engine field with no canonical path, deliberately unreachable via set_parameter), sync, locatorCount, and a summary of every lane (see list_clip_lanes for the per-lane fields). Every cursor is the full object {millis, beatCount, beatBasis, formatted}; formatted is display-only, and under TEMPO timeBase the beat fields are authoritative while millis is derived via referenceBpm. Clip behavior parameters (timeBase, loop, referenceBpm, /lx/timeline/sync, …) are registered parameters — read/write them with list_parameters/set_parameter on the composition path; marker positions are NOT settable that way. Grid clips (/lx/mixer/channel/N/clip/M) share this envelope shape via their own tools.
+
+No parameters.
+
+### `get_clip`
+
+_read-only_
+
+One clip's timeline envelope: timeBase (ABSOLUTE or TEMPO — decides which cursor fields are authoritative), referenceBpm (the fixed bpm cursor millis are derived from — NOT the live tempo), the length/loopStart/loopEnd/playStart/playEnd/insertMarker markers, loop flag, playhead, running, pending (a quantized launch is scheduled but hasn't fired), hasContent, and laneCount. Every cursor is the full object {millis, beatCount, beatBasis, formatted}; formatted is display-only, and under TEMPO timeBase the beat fields are authoritative. path defaults to the arrange composition (/lx/timeline/composition) and also accepts a grid clip (/lx/mixer/channel/N/clip/M). Marker positions are set with set_clip_marker (NOT set_parameter); lane details come from list_clip_lanes; the composition's extra state (arm, sync, locators) comes from get_composition.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | no | — | Canonical path of the clip — the composition (default: /lx/timeline/composition) or a grid clip (/lx/mixer/channel/N/clip/M) |
+
+### `list_clip_lanes`
+
+_read-only_
+
+Every automation lane on a clip: canonical path (always <clipPath>/lane/<n>, 1-indexed — the address every lane tool takes), 0-based index, type (parameter \| pattern \| midiNote \| bus \| globalModulation \| colorPalette \| audio \| textNote), label, eventCount, uiVisible, removable, and the lane's target where it has one (parameterPath/busPath/channelPath). path defaults to the arrange composition (/lx/timeline/composition) and also accepts a grid clip (/lx/mixer/channel/N/clip/M). Lane paths are POSITIONAL: they shift whenever lanes are added, removed, or moved — and removing a modulator can cascade-remove its composition lanes — so re-list rather than reuse a path from an earlier response. removable:false marks auto-managed lanes (bus, global modulation, color palette, and a grid clip's MIDI/pattern lanes) that must not be removed. Event addressing within a lane is {lanePath, index} with index the absolute 0-based position in the lane's event list.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | no | — | Canonical path of the clip — the composition (default: /lx/timeline/composition) or a grid clip (/lx/mixer/channel/N/clip/M) |
+
+### `launch_clip`
+
+_mutating_
+
+Start clip playback. mode 'play' (the default) is immediate and unquantized, from the 'from' cursor or the current playhead — it requires the clip to have content (a fresh composition has none until something is recorded or playEnd is pushed out with set_clip_marker) and to not already be running. mode 'automation' launches automation playback subject to the global launch quantization, from 'from' or the playStart marker — when quantization is set the response shows pending:true and running flips on the quantization boundary. mode 'launch' is the full quantized grid-style launch from playStart, which also recalls the clip's snapshot if enabled; it does not accept 'from'. path defaults to the arrange composition (/lx/timeline/composition) and also accepts a grid clip (/lx/mixer/channel/N/clip/M). Returns the clip state read back after the call (running, pending, playhead). Transport is not an LXCommand upstream — Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | no | — | Canonical path of the clip — the composition (default: /lx/timeline/composition) or a grid clip (/lx/mixer/channel/N/clip/M) |
+| `mode` | string | no | one of: `play`, `automation`, `launch` | play = immediate unquantized playback from 'from' or the playhead (default); automation = quantized automation launch from 'from' or playStart; launch = quantized grid-style launch from playStart with snapshot recall |
+| `from` | object | no | — | Position to start playback from (play/automation modes only). Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+
+### `stop_clip`
+
+_mutating_
+
+Stop clip playback immediately, bypassing any launch-quantization delay; also cancels a pending quantized launch. Safe to call on a stopped clip (no-op). path defaults to the arrange composition (/lx/timeline/composition) and also accepts a grid clip (/lx/mixer/channel/N/clip/M). Returns the clip state read back after the call (running, pending, playhead — the playhead stays where playback halted). Transport is not an LXCommand upstream — Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | no | — | Canonical path of the clip — the composition (default: /lx/timeline/composition) or a grid clip (/lx/mixer/channel/N/clip/M) |
+
+### `set_clip_marker`
+
+_mutating_
+
+Set or nudge one timeline marker on a clip: insertMarker (the scrub/insert position — this IS how you scrub the arrange timeline), loopStart, loopBrace (moves the whole loop, preserving its length; echoes the resulting loop start), loopEnd, loopLength, playStart, playEnd (pushing playEnd past the current length grows the clip and gives a fresh composition its timeline), or truncate (sets the clip length directly, rebounding the insert marker into range). Exactly one of cursor (absolute target), moveBeats, or moveMillis (signed relative nudge; negative moves earlier, bounded at the clip start). Every marker setter silently clamps to its legal range — the returned cursor is read back from the engine after the mutation and is the truth; clamped (absolute form only) reports whether it differs from the request. The full clip envelope is returned because markers are coupled (loop markers move together, playEnd can grow length). path defaults to the arrange composition (/lx/timeline/composition) and also accepts a grid clip (/lx/mixer/channel/N/clip/M). Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | no | — | Canonical path of the clip — the composition (default: /lx/timeline/composition) or a grid clip (/lx/mixer/channel/N/clip/M) |
+| `marker` | string | yes | one of: `insertMarker`, `loopStart`, `loopBrace`, `loopEnd`, `loopLength`, `playStart`, `playEnd`, `truncate` | Which marker to move; truncate sets the clip length |
+| `cursor` | object | no | — | Absolute target position for the marker. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `moveBeats` | number | no | — | Signed relative nudge in beats (fractions allowed) — alternative to cursor |
+| `moveMillis` | number | no | — | Signed relative nudge in milliseconds — alternative to cursor |
+
+### `list_locators`
+
+_read-only_
+
+Every locator (named position marker) on the arrange-timeline composition, in timeline order: canonical path (/lx/timeline/composition/locator/<n>), 1-indexed index, label, and position as a full cursor object {millis, beatCount, beatBasis, formatted}. Locator addressing is 1-indexed everywhere — these tools, the locator:<n> cursor origin, and the canonical path — unlike lane/event payloads whose index is 0-based. Indices are POSITIONAL: the list re-sorts by cursor on every add or move and shifts on remove, so re-list rather than reuse an index from an earlier response. Locators may sit past the composition length. Labels are set at add_locator or renamed via set_parameter on <locatorPath>/label.
+
+No parameters.
+
+### `add_locator`
+
+_mutating_
+
+Adds a locator (named position marker) to the arrange-timeline composition at the given cursor, optionally labeled. Returns the new locator's summary {path, index, label, cursor} with the cursor read back from the engine. Locator positions are not clamped — a locator may sit past the composition length. The locator list re-sorts by cursor on every add or move, so the returned 1-indexed index is the new locator's position in timeline order and EARLIER locators' indices may have shifted — re-run list_locators rather than reuse indices from earlier responses. Undo removes the locator; a redo restores it unlabeled (the label is applied outside the undo stack).
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `cursor` | object | yes | — | Position for the new locator on the composition timeline Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `label` | string | no | — | Optional display label for the locator (rename later via set_parameter on <locatorPath>/label) |
+
+### `remove_locator`
+
+_mutating_
+
+Removes a locator from the arrange-timeline composition, addressed by exactly one of 1-indexed index or exact label (which must be unambiguous — duplicate labels require the index). Returns the removed locator's last state {index, label, cursor} and the remaining locatorCount. Locator indices are POSITIONAL and shift on every add, move, or remove — re-run list_locators rather than reuse an index from an earlier response. Undo restores the locator with its label and position.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `index` | integer | no | 1–2147483647 | 1-indexed locator position in timeline order (see list_locators); exactly one of index or label |
+| `label` | string | no | — | Exact locator label; must match exactly one locator |
+
+### `move_locator`
+
+_mutating_
+
+Moves a locator on the arrange-timeline composition to a new cursor position. Address by exactly one of 1-indexed index or exact label (which must be unambiguous — duplicate labels require the index). Returns the locator's summary {path, index, label, cursor} read back from the engine: the list re-sorts by cursor on every move, so the returned index is the locator's NEW position in timeline order and other locators' indices may have shifted — re-run list_locators rather than reuse indices from earlier responses. Positions are not clamped; a locator may sit past the composition length.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `index` | integer | no | 1–2147483647 | 1-indexed locator position in timeline order (see list_locators); exactly one of index or label |
+| `label` | string | no | — | Exact locator label; must match exactly one locator |
+| `cursor` | object | yes | — | New position for the locator Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+
+### `go_locator`
+
+_mutating_
+
+Transport jump to a locator on the arrange-timeline composition, addressed by exactly one of 1-indexed index or exact label (which must be unambiguous — duplicate labels require the index). Mirrors the app's own locator navigation: if the composition is RUNNING, relaunches automation playback from the locator (subject to global launch quantization); if STOPPED, moves the insert marker there and scrubs lane values to that point WITHOUT starting playback (launch separately to play). Returns the locator summary, launched (whether the running-relaunch branch was taken), running, and the insertMarker and playhead cursors read back from the engine — the insert marker is bounded to the composition length, so it may differ from a locator sitting past the end. Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `index` | integer | no | 1–2147483647 | 1-indexed locator position in timeline order (see list_locators); exactly one of index or label |
+| `label` | string | no | — | Exact locator label; must match exactly one locator |
+
+### `add_clip_lane`
+
+_mutating_
+
+Add an automation lane to a clip. kind 'parameter': targetPath is a normalized parameter (e.g. /lx/mixer/channel/1/fader) and the lane records that parameter. kind 'pattern': targetPath is a pattern container — a channel like /lx/mixer/channel/1 — and the lane records its pattern changes. path defaults to the arrange composition (/lx/timeline/composition) and also accepts a grid clip (/lx/mixer/channel/N/clip/M). Idempotent: if the lane already exists nothing changes and the response is the existing lane with alreadyExisted:true. Returns the lane summary read back from the engine (its path/index show where the clip actually placed it) plus laneCount. Lane paths and indices are POSITIONAL: they shift whenever lanes are added, removed, or moved — and remove_modulator cascade-removes lanes recorded against the removed modulator's parameters — so re-run list_clip_lanes rather than reuse addresses from earlier responses. Undoable with Cmd-Z when a lane was created.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | no | — | Canonical path of the clip — the composition (default: /lx/timeline/composition) or a grid clip (/lx/mixer/channel/N/clip/M) |
+| `kind` | string | yes | one of: `parameter`, `pattern` | Lane kind: 'parameter' (automate one parameter) or 'pattern' (record a channel's pattern changes) |
+| `targetPath` | string | yes | — | What the lane records: a normalized parameter path for kind 'parameter', or a channel path for kind 'pattern' |
+
+### `remove_clip_lane`
+
+_mutating_
+
+Remove an automation lane from its clip. path is the canonical lane address (<clipPath>/lane/<n>, 1-indexed) from list_clip_lanes. Only lanes reported removable:true may be removed: auto-managed lanes (bus, globalModulation, colorPalette everywhere; midiNote/pattern lanes on grid clips) are structural and rejected with invalid_argument before anything changes. Returns the removed lane's index/type/label plus the clip's resulting lane list read back from the engine. Lane paths and indices are POSITIONAL: every surviving lane after the removed one shifts down (and remove_modulator cascade-removes lanes on its own) — use the returned lanes array or re-run list_clip_lanes rather than reuse addresses from earlier responses. Undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical lane path from list_clip_lanes, e.g. /lx/timeline/composition/lane/4 |
+
+### `move_clip_lane`
+
+_mutating_
+
+Move an automation lane to a new 0-based index within its clip. path is the canonical lane address (<clipPath>/lane/<n>, 1-indexed) from list_clip_lanes. The engine may override the request without failing: on the composition, parameter/midiNote/pattern lanes are constrained to their channel's section and section lanes (audio, textNote, globalModulation, colorPalette) snap across whole sections — the response's lane.index is the ACTUAL position read back from the engine, requestedIndex echoes the ask, and moved is false when the lane ended up where it started. Bus lanes mirror mixer order and are rejected — reorder the channel in the mixer instead. Lane paths and indices are POSITIONAL: every lane crossed by the move shifts, so re-run list_clip_lanes rather than reuse addresses from earlier responses. Undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical lane path from list_clip_lanes, e.g. /lx/timeline/composition/lane/4 |
+| `index` | integer | yes | 0–2147483647 | 0-based destination index within the clip's lane list; the engine may constrain it — check the returned lane.index |
+
+### `set_clip_lane_visible`
+
+_mutating_
+
+Show or hide an automation lane in the arrange/clip editor UI. Editor-only: a hidden lane still plays back. path is the canonical lane address (<clipPath>/lane/<n>, 1-indexed) from list_clip_lanes; lane paths are positional, so re-list rather than reuse one from an earlier response. Returns the lane summary with uiVisible read back from the engine. This is a direct engine edit (uiVisible has no command history). Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical lane path from list_clip_lanes, e.g. /lx/timeline/composition/lane/4 |
+| `visible` | boolean | yes | — | true to show the lane in the editor, false to hide it |
+
+### `add_audio_lane`
+
+_mutating_
+
+Add an audio lane to the arrange composition (/lx/timeline/composition), loading an audio file from an absolute path on the Chromatik machine (WAV/AIFF — whatever javax.sound.sampled reads; MP3 is not supported). The new lane lands at the TOP of the lane list (index 0), shifting every other lane's index — the returned laneCount shows the new lane total — the composition length grows to at least the audio length, and an empty composition gets its timeline enabled. Returns the shared lane-creation envelope {clipPath, lane, laneCount} plus the audio event {index, cursor, fileName, sourceLengthMs, length, end, filePath} and the composition's resulting length. The lane's enabled/gain are registered parameters — use set_parameter on the lane path. Lane paths are positional: they shift whenever lanes are added, removed, or moved, so re-run list_clip_lanes rather than reuse a path from an earlier response. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `file` | string | yes | — | Absolute path of the audio file on the machine running Chromatik (WAV/AIFF; rejected with invalid_argument if missing or unreadable) |
+
+### `add_notes_lane`
+
+_mutating_
+
+Add a text-notes lane to the arrange composition (/lx/timeline/composition): a lane of timestamped annotation events (section names, cues, TODOs) that never affects playback. The lane is appended at the end of the lane list; pass an optional label to name it — multiple notes lanes are allowed and otherwise indistinguishable. Returns {clipPath, lane, laneCount} — the same envelope as the other lane-creating tools; add events with add_clip_note. Lane paths are positional: they shift whenever lanes are added, removed, or moved, so re-run list_clip_lanes rather than reuse a path from an earlier response. Undoable in Chromatik with Cmd-Z (undo removes the lane; the optional label rename is not a separate undo step).
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `label` | string | no | — | Optional display label for the lane (default "Notes") |
+
+### `set_composition_arm`
+
+_mutating_
+
+Set the arrange timeline's record-arm. The arm flag is a bare engine field with no canonical path (/lx/timeline/arm deliberately does not resolve), so this is its only write path — set_parameter cannot reach it. Arming while the composition is stopped immediately launches it into recording: from the start when the composition is empty, from the playhead when it has content (upstream LX behavior). Disarming does NOT stop a running composition — use stop_clip. Returns armed and running read back from the engine. Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `armed` | boolean | yes | — | true to arm the timeline for recording (may start the composition — see tool description), false to disarm |
+
+<!-- generated:end -->
+
+## Composition events: automation points & ranges
+
+Automation events have no canonical path — an event's address is the pair
+`{lanePath, index}`, where `index` is its absolute 0-based position in the lane's
+event list, and it shifts on every insert or remove. Never carry an index across a
+mutation: re-read the lane with `get_clip_lane`, or pass `atCursor` on event-editing
+tools to fail safely if the event moved. Point moves silently clamp between the
+neighboring events and the clip bounds (a point can never cross a neighbor — remove
+and re-insert to leapfrog), so always trust the echoed `cursor`/`value` in a payload
+over what you sent. Range tools are lane-scoped — LX has no clip-wide range command —
+and an empty range is a benign success with `removedCount: 0` that puts nothing on
+the undo stack.
+
+<!-- generated:start:composition-events -->
+
+### `get_clip_lane`
+
+_read-only_
+
+One automation lane in full: the lane summary (as in list_clip_lanes) plus a paged read of its events. path is the lane address from list_clip_lanes (<clipPath>/lane/<n>, 1-indexed) and works on every lane type. Each event carries its ABSOLUTE 0-based index in the lane's event list — the address every event mutation takes — its cursor, and type-appropriate fields: parameter events have normalized/curve/shape, pattern events patternLabel/patternPath, MIDI events noteOn/pitch/velocity/midiChannel, audio events fileName/sourceLengthMs/length/end, text notes note/length/end. from/to are an INCLUSIVE cursor window; offset (default 0) indexes into the matched set and limit caps the page (default 200, max 1000). The envelope reports eventCount (lane total), total (matched by from/to), returned, and truncated (more matches exist past this page — advance offset). Event indices are positional and shift on every insert or remove — re-read the lane rather than reuse an index from an earlier response; the event-editing tools (set_automation_point, remove_automation_point, set_clip_note) take an atCursor guard to fail safely if it moved.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical lane path from list_clip_lanes: <clipPath>/lane/<n> (1-indexed), e.g. /lx/timeline/composition/lane/4 or /lx/mixer/channel/1/clip/1/lane/2. Lane paths are positional — re-list after lane mutations. |
+| `from` | object | no | — | Only events at or after this position are matched (inclusive). Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `to` | object | no | — | Only events at or before this position are matched (inclusive). Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `offset` | integer | no | 0–2147483647 | 0-based offset into the MATCHED events (after from/to filtering), default 0 |
+| `limit` | integer | no | 1–1000 | Maximum events to return, default 200 |
+
+### `add_automation_point`
+
+_mutating_
+
+Insert an automation point on a parameter clip lane (undoable). lanePath is the lane address from list_clip_lanes (<clipPath>/lane/<n>) and must be a parameter-type lane — create one first with add_clip_lane if needed. normalized is the value in [0,1] normalized space; the engine clamps it (boolean lanes snap to 0/1, trigger lanes fire on 1.0), so the payload echoes the stored normalized, the cursor, and curve/shape read back from the created event, plus its resulting absolute index and the lane's new eventCount. Event indices are positional and shift on every insert or remove — re-read the lane rather than reuse an index from an earlier response; the event-editing tools (set_automation_point, remove_automation_point, set_clip_note) take an atCursor guard to fail safely if it moved.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `lanePath` | string | yes | — | Canonical path of a parameter clip lane, e.g. /lx/timeline/composition/lane/4 (see list_clip_lanes) |
+| `cursor` | object | yes | — | Timeline position for the new point. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `normalized` | number | yes | — | Value at this point in [0,1] normalized space (clamped by the engine; boolean lanes snap to 0/1) |
+
+### `set_automation_point`
+
+_mutating_
+
+Edit one existing automation point on a parameter clip lane, addressed by {lanePath, index} (lanePath from list_clip_lanes, type 'parameter'; index is the absolute 0-based position in the lane's event list). Applies any combination of: cursor (move the point in time), normalized (new value in [0,1] normalized space, not the raw parameter value — on a boolean parameter's lane it snaps to 0 or 1), curve (the interpolation type of the segment arriving AT this point from the previous point), shape (curve shaping factor -1 to 1; 0 is the neutral/linear shape), or resetShape (shape back to 0; mutually exclusive with shape). At least one edit is required. cursor+normalized together apply as a single undoable move; every other aspect is its own undo step (one Cmd-Z each, in the order value/move, curve, shape). A move is silently clamped between the neighboring points' cursors and the clip bounds — a point can never cross its neighbors (remove and re-add it to jump past one). The payload echoes the point read back from the engine (resulting index, cursor, normalized, curve, shape — the same field names get_clip_lane emits), never the request, so any clamp or snap is visible by comparison. Event indices are positional and shift on every insert or remove — re-read the lane rather than reuse an index from an earlier response, or pass atCursor to fail safely if it moved.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `lanePath` | string | yes | — | Canonical path of the parameter automation lane, e.g. /lx/timeline/composition/lane/4 (see list_clip_lanes; lane paths are positional — re-list rather than reuse one from an earlier response) |
+| `index` | integer | yes | 0–2147483647 | Absolute 0-based index of the point in the lane's event list |
+| `atCursor` | object | no | — | Optional guard: expected cursor of the event at index — rejects if the lane changed since it was read. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `cursor` | object | no | — | New time position for the point (clamped between the neighboring points and the clip bounds). Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `normalized` | number | no | — | New value as a normalized fraction of the parameter's range, 0-1 (not the raw parameter value). With cursor, both apply as one undoable move. |
+| `curve` | string | no | one of: `POWER_EASE`, `POWER_S_CURVE`, `SMOOTHSTEP`, `SINUSOIDAL` | Interpolation curve of the segment arriving at this point from the previous point |
+| `shape` | number | no | — | Curve shaping factor, -1 to 1 (0 = neutral: linear for POWER_EASE; negative and positive bend the segment toward its start/end) |
+| `resetShape` | boolean | no | — | Reset the shaping factor to 0 (mutually exclusive with shape) |
+
+### `remove_automation_point`
+
+_mutating_
+
+Remove one event from a clip lane by {lanePath, index}: an automation point on a parameter lane, or any other lane type's event — except MIDI note lanes, whose paired note-on/off events have no single-event removal. Returns the removed event's former index and cursor plus the lane's remaining eventCount. Event indices are positional and shift on every insert or remove — re-read the lane rather than reuse an index from an earlier response, or pass atCursor to fail safely if it moved. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `lanePath` | string | yes | — | Canonical lane path (<clipPath>/lane/<n>, 1-indexed) from list_clip_lanes |
+| `index` | integer | yes | 0–2147483647 | Absolute 0-based position of the event in the lane's event list |
+| `atCursor` | object | no | — | Optional guard: expected cursor of the event at index — rejects if the lane changed since it was read. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+
+### `remove_clip_range`
+
+_mutating_
+
+Delete every event in the cursor range [from, to] (inclusive at both ends) on one clip lane. Lane-scoped by design — LX has no clip-wide range command; loop over the lanes from list_clip_lanes for a whole-clip cut. On MIDI note lanes, note-on/off pairs overlapping the range are removed together. Leaves the gap open: events after the range keep their cursors, and markers and clip length are unchanged (compose with set_clip_marker's truncate to also shorten the clip). A range containing no events succeeds with removedCount 0 and pushes nothing onto the undo stack; otherwise undoable in Chromatik with Cmd-Z. Event indices across the lane shift after a removal — re-read the lane rather than reuse indices from an earlier response.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `lanePath` | string | yes | — | Canonical lane path (<clipPath>/lane/<n>, 1-indexed) from list_clip_lanes |
+| `from` | object | yes | — | Start of the range to delete. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `to` | object | yes | — | End of the range to delete (must not be before from). Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+
+### `collapse_clip_range`
+
+_mutating_
+
+Collapse the automation envelope inside [from, to] on one clip lane: removes the interior events, keeping the first and last events in the range as the surviving boundary points (Chromatik's Collapse Envelope). Use it to flatten a busy recorded envelope into a single segment between its endpoints. A range holding fewer than three events has no interior — succeeds with removedCount 0 and pushes nothing onto the undo stack; otherwise undoable in Chromatik with Cmd-Z. Event indices across the lane shift after a collapse — re-read the lane rather than reuse indices from an earlier response.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `lanePath` | string | yes | — | Canonical lane path (<clipPath>/lane/<n>, 1-indexed) from list_clip_lanes |
+| `from` | object | yes | — | Start of the range to collapse. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `to` | object | yes | — | End of the range to collapse (must not be before from). Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+
+### `add_clip_note`
+
+_mutating_
+
+Insert a text-note event on a textNote lane (lanePath from list_clip_lanes, form <clipPath>/lane/<n>) at a cursor position, with optional length (default zero). Notes are annotations only — they never affect playback. Returns the resulting event {index, cursor, note, length, end} read back from the engine. Event indices are positional and shift on every insert or remove — re-read the lane rather than reuse an index from an earlier response; the event-editing tools (set_automation_point, remove_automation_point, set_clip_note) take an atCursor guard to fail safely if it moved. Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `lanePath` | string | yes | — | Canonical path of the textNote lane (<clipPath>/lane/<n>, from list_clip_lanes); create one with add_notes_lane |
+| `note` | string | yes | — | The note text |
+| `cursor` | object | yes | — | Timeline position of the note. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `length` | object | no | — | Optional duration of the note event (a cursor-shaped span from its position; default zero). Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+
+### `set_clip_note`
+
+_mutating_
+
+Edit the text-note event at {lanePath, index}: set its text (note), move it (cursor — clamped between the neighboring events and the clip length), and/or set its duration (length — floored at the minimum event length). At least one of note/cursor/length is required. The response echoes the event state read back from the engine, which may differ from the request due to clamping. Event indices are positional and shift on every insert or remove — re-read the lane rather than reuse an index from an earlier response, or pass atCursor to fail safely if it moved. Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `lanePath` | string | yes | — | Canonical path of the textNote lane (<clipPath>/lane/<n>, from list_clip_lanes) |
+| `index` | integer | yes | 0–2147483647 | Absolute 0-based position of the event in the lane's event list |
+| `atCursor` | object | no | — | Optional guard: expected cursor of the event at index — rejects if the lane changed since it was read. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `note` | string | no | — | New note text (omit to keep) |
+| `cursor` | object | no | — | New timeline position (omit to keep); clamped between the neighboring events and the clip length. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
+| `length` | object | no | — | New duration (omit to keep); floored at the minimum event length. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
 
 <!-- generated:end -->
 
