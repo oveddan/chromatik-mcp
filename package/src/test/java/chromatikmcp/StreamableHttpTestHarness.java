@@ -5,9 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpServlet;
 
@@ -35,7 +33,6 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
   private final Thread drainer;
   private final EmbeddedMcpServer server;
   private final McpSyncClient client;
-  private final Set<String> readOnlyTools;
 
   private StreamableHttpTestHarness(
       LX lx,
@@ -44,10 +41,6 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
       ConnectionTracker connectionTracker,
       Map<String, HttpServlet> extraServlets,
       boolean initializeClient) {
-    this.readOnlyTools = tools.stream()
-        .filter(spec -> Boolean.TRUE.equals(spec.tool().annotations().readOnlyHint()))
-        .map(spec -> spec.tool().name())
-        .collect(Collectors.toUnmodifiableSet());
     this.drainer = new Thread(() -> {
       while (this.draining.get()) {
         lx.engine.run();
@@ -68,12 +61,7 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
           "Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1", tools, instructions,
           connectionTracker, extraServlets);
       if (initializeClient) {
-        HttpClientStreamableHttpTransport transport =
-            HttpClientStreamableHttpTransport.builder(
-                    "http://127.0.0.1:" + startedServer.port())
-                .endpoint(EmbeddedMcpServer.ENDPOINT)
-                .build();
-        startedClient = McpClient.sync(transport).build();
+        startedClient = createClient(startedServer.port());
         startedClient.initialize();
       }
     } catch (RuntimeException | Error e) {
@@ -118,16 +106,14 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
   }
 
   public McpSchema.CallToolResult call(String tool, Map<String, Object> args) {
+    // Use one transport per call so no mutating request can land on a stale pooled
+    // keep-alive connection and tempt an ambiguous retry.
+    McpSyncClient callClient = createClient(this.server.port());
     try {
-      return client().callTool(new McpSchema.CallToolRequest(tool, args));
-    } catch (RuntimeException e) {
-      // A closed pooled connection can fail before any response bytes arrive. Retrying is
-      // safe only for tools the server explicitly advertises as read-only: for mutations,
-      // the missing response cannot prove that the operation was not already applied.
-      if (this.readOnlyTools.contains(tool) && isHeaderParserNoBytes(e)) {
-        return client().callTool(new McpSchema.CallToolRequest(tool, args));
-      }
-      throw e;
+      callClient.initialize();
+      return callClient.callTool(new McpSchema.CallToolRequest(tool, args));
+    } finally {
+      callClient.closeGracefully();
     }
   }
 
@@ -164,14 +150,12 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
     }
   }
 
-  private static boolean isHeaderParserNoBytes(Throwable throwable) {
-    for (Throwable cause = throwable; cause != null; cause = cause.getCause()) {
-      if (cause instanceof java.io.IOException
-          && cause.getMessage() != null
-          && cause.getMessage().contains("header parser received no bytes")) {
-        return true;
-      }
-    }
-    return false;
+  private static McpSyncClient createClient(int port) {
+    HttpClientStreamableHttpTransport transport =
+        HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + port)
+            .endpoint(EmbeddedMcpServer.ENDPOINT)
+            .build();
+    return McpClient.sync(transport).build();
   }
+
 }
