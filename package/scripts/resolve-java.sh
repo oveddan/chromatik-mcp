@@ -26,7 +26,8 @@ resolve_java() {
     fi
   done
   candidate="$(command -v java || true)"
-  if [[ -n "$candidate" && "$candidate" != "/usr/bin/java" && -x "$candidate" ]]; then
+  if [[ -n "$candidate" && -x "$candidate"
+      && ( "$candidate" != "/usr/bin/java" || "$(uname -s)" != "Darwin" ) ]]; then
     echo "$candidate"
     return
   fi
