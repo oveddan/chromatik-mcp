@@ -5,12 +5,15 @@ The drop-in LX/Chromatik jar.
 See [../docs/build-plan.md](../docs/build-plan.md) for the roadmap and [../CLAUDE.md](../CLAUDE.md) for contributor conventions.
 
 **Status**: `ChromatikMcpPlugin` starts an embedded streamable-HTTP MCP server (official
-Java MCP SDK on embedded Tomcat) from `initialize()` and exposes 68 domain tools spanning
-project/model reads, channels, patterns/effects, parameters, modulators, MIDI mapping,
-snapshots, views/fixtures, and a component-doc catalog. It writes `~/.chromatik-mcp/status.json`
-for client discovery on startup, and reads the optional `~/.chromatik-mcp/config.json` for a
-fixed port / bind host. See [../docs/build-plan.md](../docs/build-plan.md) for the PR history
-and [../docs/sdk-feasibility.md](../docs/sdk-feasibility.md) for the original SDK spike.
+Java MCP SDK on embedded Tomcat) from `initialize()` and exposes the generated domain-tool
+surface spanning project/model reads and saves, channels, patterns/effects, parameters,
+modulators, MIDI mapping and templates, snapshots, views/fixtures, render previews,
+arrange-timeline authoring, batched operations, and a component-doc catalog. The authoritative
+current inventory is the generated [tool reference](../site/src/content/docs/tools.md). It
+writes `~/.chromatik-mcp/status.json` for client discovery on startup, and reads the optional
+`~/.chromatik-mcp/config.json` for a fixed port / bind host. See
+[../docs/build-plan.md](../docs/build-plan.md) for the PR history and
+[../docs/sdk-feasibility.md](../docs/sdk-feasibility.md) for the original SDK spike.
 
 ## Build & verify
 

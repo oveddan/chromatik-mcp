@@ -2,7 +2,7 @@
 
 A drop-in LX/Chromatik package that lets an agent read, explain, compose into, and debug a running Chromatik show over MCP.
 
-**Status**: the tool surface is 93 tools, working end-to-end — discovery, parameters, tempo, modulation wiring, channels/patterns/effect chains, mixer performance controls (crossfader, cue/aux), MIDI mapping, palette (read-write), snapshots, model views, fixtures & output wiring, render previews, OSC addressing, project/model save, arrange-timeline composition authoring (markers, locators, lanes, automation), and a generated semantic catalog of what each component does. See [docs/build-plan.md](docs/build-plan.md) for the roadmap and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
+**Status**: the tool surface works end-to-end — discovery, parameters, tempo, modulation wiring, channels/patterns/effect chains, mixer performance controls (crossfader, cue/aux), MIDI mapping and templates, palette (read-write), snapshots, model views, fixtures & output wiring, render previews, OSC addressing, project/model save, arrange-timeline composition authoring (markers, locators, lanes, automation), and a generated semantic catalog of what each component does. See the generated [tool reference](https://oveddan.github.io/chromatik-mcp/tools/) for the authoritative current inventory, [docs/build-plan.md](docs/build-plan.md) for the roadmap, and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
 
 **Docs**: [oveddan.github.io/chromatik-mcp](https://oveddan.github.io/chromatik-mcp/) — for AI agents, the full docs are available as plain markdown at [llms-full.txt](https://oveddan.github.io/chromatik-mcp/llms-full.txt) ([llms.txt](https://oveddan.github.io/chromatik-mcp/llms.txt) index).
 
@@ -20,7 +20,7 @@ The plugin publishes its endpoint in `~/.chromatik-mcp/status.json` (`{pid, port
 
 ## Capabilities
 
-Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`), as returned by the discovery tools. Mutations are undoable in Chromatik with Cmd-Z unless noted. This is the highlight reel — the complete 93-tool surface (including model & fixture editing, project/model save, and batched operations) is on the [tool reference](https://oveddan.github.io/chromatik-mcp/tools/).
+Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`), as returned by the discovery tools. Mutations are undoable in Chromatik with Cmd-Z unless noted. This is the highlight reel — the complete generated surface (including model & fixture editing, project/model save, and batched operations) is on the [tool reference](https://oveddan.github.io/chromatik-mcp/tools/).
 
 ### Discover
 

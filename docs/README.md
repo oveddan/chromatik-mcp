@@ -1,6 +1,13 @@
 # chromatik-mcp — Docs
 
-- [build-plan.md](build-plan.md) — current PR roadmap + progress tracker. Start here.
+- [install.md](install.md) — install the jar, enable the plugin, discover its endpoint, and connect a client.
+- [usage-examples.md](usage-examples.md) — concrete agent flows for discovery, structure, modulation, snapshots/views, and arrange-timeline authoring.
+- [tool-conventions.md](tool-conventions.md) — tool naming, canonical paths, wire shapes, threading, pagination, and mutation contracts.
+- [catalog-format.md](catalog-format.md) — semantic component-documentation format and runtime lookup behavior.
+- [osc-addressing.md](osc-addressing.md) — canonical paths versus OSC addresses and the label-based modulator exception.
+- [lx-coding-guidelines.md](lx-coding-guidelines.md), [review-criteria.md](review-criteria.md) — implementation and review conventions.
+- [live-findings.md](live-findings.md) — verified live gaps, queued follow-ups, and merged findings history.
+- [build-plan.md](build-plan.md) — shipped milestones, current follow-ups, and historical PR plan.
 - [releasing.md](releasing.md) — how a release is cut (bump the pom version, merge; CI tags and publishes).
 - [sdk-feasibility.md](sdk-feasibility.md), [lxcommand-mapping.md](lxcommand-mapping.md), [qa-strategy.md](qa-strategy.md) — spike-phase deliverables (PR-1a SDK feasibility, PR-1b LXCommand mapping, PR-1c QA strategy).
 - Per-client connection setup (Claude Code, Claude Desktop, Cursor, VS Code, Codex, generic HTTP) lives on the docs site: [Connect your AI client](../site/src/content/docs/connect.mdx) (published at https://oveddan.github.io/chromatik-mcp/connect/). This supersedes the `install/` snippets dir planned in PR-6.
