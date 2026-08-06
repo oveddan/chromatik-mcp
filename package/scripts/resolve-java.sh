@@ -14,8 +14,10 @@ resolve_java() {
     echo "$candidate/bin/java"
     return
   fi
-  if candidate="$(mvn -v 2>/dev/null | sed -n 's/^Java home: //p')" \
-      && [[ -x "$candidate/bin/java" ]]; then
+  if candidate="$(mvn -v 2>/dev/null \
+      | sed -n -e 's/^Java home: //p' -e 's/^Java version: .* runtime: //p' \
+      | head -n 1)" \
+      && [[ -n "$candidate" && -x "$candidate/bin/java" ]]; then
     echo "$candidate/bin/java"
     return
   fi
