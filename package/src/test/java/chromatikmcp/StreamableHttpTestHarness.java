@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpServlet;
 
@@ -33,6 +35,7 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
   private final Thread drainer;
   private final EmbeddedMcpServer server;
   private final McpSyncClient client;
+  private final Set<String> readOnlyTools;
 
   private StreamableHttpTestHarness(
       LX lx,
@@ -41,6 +44,10 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
       ConnectionTracker connectionTracker,
       Map<String, HttpServlet> extraServlets,
       boolean initializeClient) {
+    this.readOnlyTools = tools.stream()
+        .filter(spec -> Boolean.TRUE.equals(spec.tool().annotations().readOnlyHint()))
+        .map(spec -> spec.tool().name())
+        .collect(Collectors.toUnmodifiableSet());
     this.drainer = new Thread(() -> {
       while (this.draining.get()) {
         lx.engine.run();
@@ -114,7 +121,10 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
     try {
       return client().callTool(new McpSchema.CallToolRequest(tool, args));
     } catch (RuntimeException e) {
-      if (isHeaderParserNoBytes(e)) {
+      // A closed pooled connection can fail before any response bytes arrive. Retrying is
+      // safe only for tools the server explicitly advertises as read-only: for mutations,
+      // the missing response cannot prove that the operation was not already applied.
+      if (this.readOnlyTools.contains(tool) && isHeaderParserNoBytes(e)) {
         return client().callTool(new McpSchema.CallToolRequest(tool, args));
       }
       throw e;
