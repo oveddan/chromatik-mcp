@@ -18,7 +18,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterAll;
@@ -51,6 +50,7 @@ import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTranspor
 import io.modelcontextprotocol.spec.McpSchema;
 
 import chromatikmcp.ServerStatus;
+import chromatikmcp.StreamableHttpTestHarness;
 import chromatikmcp.domain.Projects;
 import chromatikmcp.domain.Registry;
 import chromatikmcp.domain.Resolve;
@@ -81,11 +81,9 @@ class ToolsIntegrationTest {
   private static LX lx;
   private static LXChannel channel;
   private static heronarts.lx.structure.view.LXViewDefinition view;
-  private static EmbeddedMcpServer server;
-  private static ServerStatus status;
+  private static StreamableHttpTestHarness harness;
   private static McpSyncClient client;
-  private static final AtomicBoolean draining = new AtomicBoolean(true);
-  private static Thread drainer;
+  private static EngineExecutor engineExecutor;
 
   /**
    * Registered but never cataloged: the fixture for undocumented-class assertions.
@@ -119,83 +117,32 @@ class ToolsIntegrationTest {
     view.label.setValue("Whole Grid");
     view.selector.setValue("grid");
 
-    drainer = new Thread(() -> {
-      while (draining.get()) {
-        lx.engine.run();
-        try {
-          Thread.sleep(2);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-          return;
-        }
-      }
-    }, "test-engine-drainer");
-    drainer.start();
-
-    status = new ServerStatus();
+    ServerStatus status = new ServerStatus();
     ConnectionTracker connectionTracker = new ConnectionTracker();
     GetStatus getStatus = new GetStatus(
         status, () -> connectionTracker.snapshot(System.currentTimeMillis()));
-    server = EmbeddedMcpServer.start("Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1",
-        Tools.specifications(lx, new EngineExecutor(lx), getStatus), Tools.INSTRUCTIONS,
+    engineExecutor = new EngineExecutor(lx);
+    harness = StreamableHttpTestHarness.startMcp(
+        lx, Tools.specifications(lx, engineExecutor, getStatus), Tools.INSTRUCTIONS,
         connectionTracker);
-    status.initialize("127.0.0.1", server.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
-    HttpClientStreamableHttpTransport transport =
-        HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
-            .endpoint(EmbeddedMcpServer.ENDPOINT)
-            .build();
-    client = McpClient.sync(transport).build();
-    client.initialize();
+    status.initialize(
+        "127.0.0.1", harness.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
+    client = harness.client();
   }
 
   @AfterAll
-  static void tearDown() throws InterruptedException {
-    if (client != null) {
-      client.closeGracefully();
-    }
-    if (server != null) {
-      server.stop();
-    }
-    draining.set(false);
-    if (drainer != null) {
-      drainer.join(2_000);
+  static void tearDown() {
+    if (harness != null) {
+      harness.close();
     }
   }
 
   private static McpSchema.CallToolResult call(String tool, Map<String, Object> args) {
-    try {
-      return client.callTool(new McpSchema.CallToolRequest(tool, args));
-    } catch (RuntimeException e) {
-      // The JDK HttpClient occasionally reuses a pooled keep-alive connection the server
-      // side already closed between tests, surfacing as a wrapped IOException ("HTTP/1.1
-      // header parser received no bytes") rather than a real product failure. One retry on
-      // a fresh connection is sound here even for mutating tools: the failure signature
-      // means zero response bytes were parsed (stale connection died before the request
-      // landed), and each test's own assertions verify resulting state against live
-      // lx.engine.* regardless of how many attempts the call took.
-      if (isHeaderParserNoBytes(e)) {
-        return client.callTool(new McpSchema.CallToolRequest(tool, args));
-      }
-      throw e;
-    }
+    return harness.call(tool, args);
   }
 
-  private static boolean isHeaderParserNoBytes(Throwable t) {
-    for (Throwable cause = t; cause != null; cause = cause.getCause()) {
-      if (cause instanceof java.io.IOException
-          && cause.getMessage() != null
-          && cause.getMessage().contains("header parser received no bytes")) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  @SuppressWarnings("unchecked")
   private static Map<String, Object> structured(McpSchema.CallToolResult result) {
-    assertNotEquals(Boolean.TRUE, result.isError(), "expected a success result");
-    assertInstanceOf(Map.class, result.structuredContent(), "success carries structuredContent");
-    return (Map<String, Object>) result.structuredContent();
+    return harness.structured(result);
   }
 
   @Test
@@ -1149,8 +1096,10 @@ class ToolsIntegrationTest {
     assertFalse(((String) payload.get("buildTime")).isBlank());
     assertNotNull(payload.get("lxVersion"));
     assertEquals("127.0.0.1", payload.get("host"));
-    assertEquals(server.port(), ((Number) payload.get("port")).intValue());
-    assertEquals("http://127.0.0.1:" + server.port() + EmbeddedMcpServer.ENDPOINT, payload.get("url"));
+    assertEquals(harness.port(), ((Number) payload.get("port")).intValue());
+    assertEquals(
+        "http://127.0.0.1:" + harness.port() + EmbeddedMcpServer.ENDPOINT,
+        payload.get("url"));
     assertNotNull(payload.get("startedAt"));
     assertNotNull(payload.get("uptimeSeconds"));
 
@@ -1374,11 +1323,10 @@ class ToolsIntegrationTest {
     final MutableGroupHolder holder = new MutableGroupHolder();
 
     // Setup: add channel and group on engine thread.
-    lx.engine.addTask(() -> {
+    engineExecutor.execute(() -> {
       holder.grouped = lx.engine.mixer.addChannel();
       holder.group = lx.engine.mixer.addGroup(List.of(holder.grouped));
     });
-    lx.engine.run();
 
     try {
       String groupPath = holder.group.getCanonicalPath();
@@ -1392,7 +1340,7 @@ class ToolsIntegrationTest {
               .get("group"));
     } finally {
       // Teardown: remove group and channel on engine thread.
-      lx.engine.addTask(() -> {
+      engineExecutor.execute(() -> {
         if (lx.engine.mixer.channels.contains(holder.group)) {
           lx.engine.mixer.removeChannel(holder.group);
         }
@@ -1400,7 +1348,6 @@ class ToolsIntegrationTest {
           lx.engine.mixer.removeChannel(holder.grouped);
         }
       });
-      lx.engine.run();
     }
   }
 
@@ -1412,18 +1359,15 @@ class ToolsIntegrationTest {
    */
   private static void withChannel(
       java.util.function.Supplier<LXChannel> setup, Runnable assertions) {
-    LXChannel[] created = new LXChannel[1];
-    lx.engine.addTask(() -> created[0] = setup.get());
-    lx.engine.run();
+    LXChannel[] created = new LXChannel[] {engineExecutor.call(setup)};
     try {
       assertions.run();
     } finally {
-      lx.engine.addTask(() -> {
+      engineExecutor.execute(() -> {
         if (lx.engine.mixer.channels.contains(created[0])) {
           lx.engine.mixer.removeChannel(created[0]);
         }
       });
-      lx.engine.run();
     }
   }
 
@@ -3142,7 +3086,7 @@ class ToolsIntegrationTest {
   void unicodeStringArgumentsRoundTripAndSetDiscreteOptionsByName() {
     String label = "Trigger → Café 東京 🌈";
     HttpClientStreamableHttpTransport transport =
-        HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + server.port())
+        HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + harness.port())
             .endpoint(EmbeddedMcpServer.ENDPOINT)
             // Exercise clients that follow JSON's UTF-8 default but omit a redundant
             // charset parameter. The servlet container must not fall back to Latin-1.
@@ -3195,8 +3139,11 @@ class ToolsIntegrationTest {
   @Test
   @SuppressWarnings("unchecked")
   void getPaletteDescribesActiveSwatchAndSavedSwatches() {
-    heronarts.lx.color.LXSwatch saved = lx.engine.palette.saveSwatch();
-    saved.label.setValue("Cool");
+    heronarts.lx.color.LXSwatch saved = engineExecutor.call(() -> {
+      heronarts.lx.color.LXSwatch swatch = lx.engine.palette.saveSwatch();
+      swatch.label.setValue("Cool");
+      return swatch;
+    });
     try {
       Map<String, Object> payload = structured(call("get_palette", Map.of()));
 
@@ -3228,21 +3175,23 @@ class ToolsIntegrationTest {
       assertEquals(lx.engine.palette.autoCycleEnabled.isOn(), autoCycle.get("enabled"));
 
       // Recall via fire_trigger loads the saved swatch's colors onto the active swatch.
-      lx.engine.palette.transitionEnabled.setValue(false);
-      saved.colors.get(0).primary.setColor(0xff123456);
+      engineExecutor.execute(() -> {
+        lx.engine.palette.transitionEnabled.setValue(false);
+        saved.colors.get(0).primary.setColor(0xff123456);
+      });
       Map<String, Object> fired = structured(call("fire_trigger", Map.of("path", saved.recall.getCanonicalPath())));
       assertEquals(Boolean.TRUE, fired.get("fired"));
       assertEquals(0xff123456, lx.engine.palette.swatch.colors.get(0).getColor(),
           "recall (not transitioning) loads the saved swatch's colors immediately");
     } finally {
-      lx.engine.palette.removeSwatch(saved);
+      engineExecutor.execute(() -> lx.engine.palette.removeSwatch(saved));
     }
   }
 
   @Test
   @SuppressWarnings("unchecked")
   void getTempoDescribesTransportStateAndPaths() {
-    lx.engine.tempo.bpm.setValue(140);
+    engineExecutor.execute(() -> lx.engine.tempo.bpm.setValue(140));
 
     Map<String, Object> payload = structured(call("get_tempo", Map.of()));
 
@@ -3273,8 +3222,10 @@ class ToolsIntegrationTest {
     assertNotNull(saved.get("recallPath"));
     LXSwatch swatch = (LXSwatch) LXPath.get(lx, path);
     try {
-      lx.engine.palette.transitionEnabled.setValue(false);
-      swatch.colors.get(0).primary.setColor(0xff445566);
+      engineExecutor.execute(() -> {
+        lx.engine.palette.transitionEnabled.setValue(false);
+        swatch.colors.get(0).primary.setColor(0xff445566);
+      });
 
       Map<String, Object> applied = structured(call("set_swatch", Map.of("path", path)));
       assertEquals(path, applied.get("applied"));
@@ -3282,7 +3233,7 @@ class ToolsIntegrationTest {
       assertEquals(0xff445566, lx.engine.palette.swatch.colors.get(0).getColor(),
           "set_swatch applied the saved colors onto the active swatch");
 
-      lx.command.undo();
+      engineExecutor.execute(lx.command::undo);
       assertNotEquals(0xff445566, lx.engine.palette.swatch.colors.get(0).getColor(),
           "undo restores the active swatch's prior colors");
     } finally {
@@ -3309,11 +3260,13 @@ class ToolsIntegrationTest {
       assertEquals(before + 1, firstSwatch.getIndex());
       assertEquals(before, secondSwatch.getIndex());
 
-      lx.command.undo();
+      engineExecutor.execute(lx.command::undo);
       assertEquals(before, firstSwatch.getIndex(), "undo restores the original order");
     } finally {
-      lx.engine.palette.removeSwatch(firstSwatch);
-      lx.engine.palette.removeSwatch(secondSwatch);
+      engineExecutor.execute(() -> {
+        lx.engine.palette.removeSwatch(firstSwatch);
+        lx.engine.palette.removeSwatch(secondSwatch);
+      });
     }
   }
 
@@ -3338,8 +3291,10 @@ class ToolsIntegrationTest {
       assertEquals("Required integer argument: index", e.getMessage());
       assertEquals(indexBefore, firstSwatch.getIndex(), "no mutation occurred");
     } finally {
-      lx.engine.palette.removeSwatch(firstSwatch);
-      lx.engine.palette.removeSwatch(secondSwatch);
+      engineExecutor.execute(() -> {
+        lx.engine.palette.removeSwatch(firstSwatch);
+        lx.engine.palette.removeSwatch(secondSwatch);
+      });
     }
   }
 
@@ -3358,8 +3313,10 @@ class ToolsIntegrationTest {
       assertEquals(before + 1, ((Number) moved.get("index")).intValue());
       assertEquals(before + 1, firstSwatch.getIndex());
     } finally {
-      lx.engine.palette.removeSwatch(firstSwatch);
-      lx.engine.palette.removeSwatch(secondSwatch);
+      engineExecutor.execute(() -> {
+        lx.engine.palette.removeSwatch(firstSwatch);
+        lx.engine.palette.removeSwatch(secondSwatch);
+      });
     }
   }
 
@@ -3372,7 +3329,7 @@ class ToolsIntegrationTest {
           Map.of("path", swatch.getCanonicalPath(), "index", 99));
       assertEquals(Boolean.TRUE, result.isError());
     } finally {
-      lx.engine.palette.removeSwatch(swatch);
+      engineExecutor.execute(() -> lx.engine.palette.removeSwatch(swatch));
     }
   }
 
@@ -3385,7 +3342,7 @@ class ToolsIntegrationTest {
     assertEquals(before + 1, lx.engine.palette.swatch.colors.size());
     assertNotNull(added.get("primaryPath"));
 
-    lx.command.undo();
+    engineExecutor.execute(lx.command::undo);
     assertEquals(before, lx.engine.palette.swatch.colors.size(), "undo removes the added color");
 
     LXDynamicColor readded = addColorViaTool();
@@ -3395,9 +3352,9 @@ class ToolsIntegrationTest {
     assertEquals(readdedPath, removed.get("removed"));
     assertEquals(before, lx.engine.palette.swatch.colors.size());
 
-    lx.command.undo();
+    engineExecutor.execute(lx.command::undo);
     assertEquals(before + 1, lx.engine.palette.swatch.colors.size(), "undo restores the removed color");
-    lx.command.undo();
+    engineExecutor.execute(lx.command::undo);
     assertEquals(before, lx.engine.palette.swatch.colors.size(), "clean up the leftover add");
   }
 
@@ -3417,7 +3374,7 @@ class ToolsIntegrationTest {
       assertEquals(Boolean.TRUE, result.isError());
       assertEquals(1, swatch.colors.size());
     } finally {
-      lx.engine.palette.removeSwatch(swatch);
+      engineExecutor.execute(() -> lx.engine.palette.removeSwatch(swatch));
     }
   }
 
@@ -3447,7 +3404,7 @@ class ToolsIntegrationTest {
   void snapshotLifecycleOverMcp() {
     int before = ((List<Object>) structured(call("list_snapshots", Map.of())).get("snapshots")).size();
 
-    channel.fader.setValue(0.7);
+    engineExecutor.execute(() -> channel.fader.setValue(0.7));
     Map<String, Object> added = structured(call("add_snapshot", Map.of("label", "My Look")));
     String path = (String) added.get("path");
     try {
@@ -3464,8 +3421,10 @@ class ToolsIntegrationTest {
 
       // Recalling restores the captured fader value; immediate=true forces an instant
       // apply even with transitions enabled, so the assertion holds synchronously.
-      channel.fader.setValue(0.2);
-      lx.engine.snapshots.transitionEnabled.setValue(true);
+      engineExecutor.execute(() -> {
+        channel.fader.setValue(0.2);
+        lx.engine.snapshots.transitionEnabled.setValue(true);
+      });
       try {
         Map<String, Object> recalled = structured(
             call("recall_snapshot", Map.of("path", path, "immediate", true)));
@@ -3475,22 +3434,22 @@ class ToolsIntegrationTest {
         assertTrue(lx.engine.snapshots.transitionEnabled.isOn(),
             "immediate recall restores the engine's transition setting afterwards");
       } finally {
-        lx.engine.snapshots.transitionEnabled.setValue(false);
+        engineExecutor.execute(() -> lx.engine.snapshots.transitionEnabled.setValue(false));
       }
 
       // update_snapshot recaptures the current state.
-      channel.fader.setValue(0.3);
+      engineExecutor.execute(() -> channel.fader.setValue(0.3));
       Map<String, Object> updated = structured(call("update_snapshot", Map.of("path", path)));
       assertEquals(path, updated.get("updated"));
 
-      channel.fader.setValue(0.9);
+      engineExecutor.execute(() -> channel.fader.setValue(0.9));
       structured(call("recall_snapshot", Map.of("path", path)));
       assertEquals(0.3, channel.fader.getValue(), 1e-9);
     } finally {
       Map<String, Object> removed = structured(call("remove_snapshot", Map.of("path", path)));
       assertEquals(path, removed.get("removed"));
       assertEquals("snapshot", removed.get("kind"));
-      channel.fader.setValue(1.0);
+      engineExecutor.execute(() -> channel.fader.setValue(1.0));
     }
 
     Map<String, Object> afterRemove = structured(call("list_snapshots", Map.of()));
@@ -3553,12 +3512,16 @@ class ToolsIntegrationTest {
     // conditional-put guards would not fail this test. The only currently-reachable instance
     // of the "/null" hazard is LXAbstractChannel.isAutoMuted, covered by list_channels'
     // existing null-path walk test.
-    lx.engine.palette.saveSwatch();
-    Map<String, Object> payload = structured(call("get_palette", Map.of()));
-    StringBuilder errors = new StringBuilder();
-    walkForNullPaths(payload, "", errors);
-    assertEquals("", errors.toString(),
-        "payload contains no unregistered-parameter \"/null\" paths: " + errors);
+    LXSwatch saved = engineExecutor.call(lx.engine.palette::saveSwatch);
+    try {
+      Map<String, Object> payload = structured(call("get_palette", Map.of()));
+      StringBuilder errors = new StringBuilder();
+      walkForNullPaths(payload, "", errors);
+      assertEquals("", errors.toString(),
+          "payload contains no unregistered-parameter \"/null\" paths: " + errors);
+    } finally {
+      engineExecutor.execute(() -> lx.engine.palette.removeSwatch(saved));
+    }
   }
 
   @Test
