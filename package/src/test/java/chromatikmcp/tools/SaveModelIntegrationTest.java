@@ -20,7 +20,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import heronarts.lx.LX;
 
-import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
 
 import chromatikmcp.ServerStatus;
@@ -48,7 +47,6 @@ class SaveModelIntegrationTest {
   @AutoClose("dispose")
   private static LX lx;
   private static StreamableHttpTestHarness harness;
-  private static McpSyncClient client;
 
   @BeforeAll
   static void setUp() {
@@ -65,7 +63,6 @@ class SaveModelIntegrationTest {
         connectionTracker);
     status.initialize(
         "127.0.0.1", harness.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
-    client = harness.client();
   }
 
   @AfterAll
@@ -80,8 +77,8 @@ class SaveModelIntegrationTest {
   void saveModelOverMcpWritesAFileAndMovesTheLinkedModel() {
     File target = new File(mediaPath.toFile(), "integration-rig.lxm");
     McpSchema.CallToolResult result =
-        client.callTool(new McpSchema.CallToolRequest("save_model", Map.of(
-            "path", target.getAbsolutePath())));
+        harness.call("save_model", Map.of(
+            "path", target.getAbsolutePath()));
     assertNotEquals(Boolean.TRUE, result.isError(), "expected a success result");
     Map<String, Object> payload = (Map<String, Object>) result.structuredContent();
 
@@ -103,8 +100,8 @@ class SaveModelIntegrationTest {
     byte[] before = Files.readAllBytes(target.toPath());
 
     McpSchema.CallToolResult result =
-        client.callTool(new McpSchema.CallToolRequest("save_model", Map.of(
-            "path", target.getAbsolutePath())));
+        harness.call("save_model", Map.of(
+            "path", target.getAbsolutePath()));
     assertEquals(Boolean.TRUE, result.isError());
     McpSchema.TextContent text = assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));

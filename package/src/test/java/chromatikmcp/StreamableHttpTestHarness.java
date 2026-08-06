@@ -65,13 +65,19 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
         startedClient.initialize();
       }
     } catch (RuntimeException | Error e) {
-      if (startedClient != null) {
-        startedClient.closeGracefully();
+      try {
+        if (startedClient != null) {
+          startedClient.closeGracefully();
+        }
+      } finally {
+        try {
+          if (startedServer != null) {
+            startedServer.stop();
+          }
+        } finally {
+          stopDrainer();
+        }
       }
-      if (startedServer != null) {
-        startedServer.stop();
-      }
-      stopDrainer();
       throw e;
     }
     this.server = startedServer;
