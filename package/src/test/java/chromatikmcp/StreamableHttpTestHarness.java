@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpServlet;
 
@@ -33,6 +35,7 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
   private final Thread drainer;
   private final EmbeddedMcpServer server;
   private final McpSyncClient client;
+  private final Set<String> readOnlyTools;
 
   private StreamableHttpTestHarness(
       LX lx,
@@ -41,6 +44,11 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
       ConnectionTracker connectionTracker,
       Map<String, HttpServlet> extraServlets,
       boolean initializeClient) {
+    this.readOnlyTools = tools.stream()
+        .filter(spec -> spec.tool().annotations() != null
+            && Boolean.TRUE.equals(spec.tool().annotations().readOnlyHint()))
+        .map(spec -> spec.tool().name())
+        .collect(Collectors.toUnmodifiableSet());
     this.drainer = new Thread(() -> {
       while (this.draining.get()) {
         lx.engine.run();
@@ -112,14 +120,42 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
   }
 
   public McpSchema.CallToolResult call(String tool, Map<String, Object> args) {
-    // Use one transport per call so no mutating request can land on a stale pooled
-    // keep-alive connection and tempt an ambiguous retry.
+    if (this.readOnlyTools.contains(tool)) {
+      try {
+        return client().callTool(new McpSchema.CallToolRequest(tool, args));
+      } catch (RuntimeException e) {
+        // Retrying is safe only when the server advertises the operation as read-only.
+        if (isHeaderParserNoBytes(e)) {
+          return callFresh(tool, args);
+        }
+        throw e;
+      }
+    }
+
+    // Mutations use a new transport and are issued exactly once. A missing response
+    // cannot prove that a mutating request did not already reach the server.
+    return callFresh(tool, args);
+  }
+
+  private McpSchema.CallToolResult callFresh(String tool, Map<String, Object> args) {
     McpSyncClient callClient = createClient(this.server.port());
+    Throwable failure = null;
     try {
       callClient.initialize();
       return callClient.callTool(new McpSchema.CallToolRequest(tool, args));
+    } catch (RuntimeException | Error e) {
+      failure = e;
+      throw e;
     } finally {
-      callClient.closeGracefully();
+      try {
+        callClient.closeGracefully();
+      } catch (RuntimeException | Error closeFailure) {
+        if (failure != null) {
+          failure.addSuppressed(closeFailure);
+        } else {
+          throw closeFailure;
+        }
+      }
     }
   }
 
@@ -157,6 +193,17 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
     if (this.drainer.isAlive()) {
       throw new IllegalStateException("Test engine drainer did not stop within 2 seconds");
     }
+  }
+
+  private static boolean isHeaderParserNoBytes(Throwable throwable) {
+    for (Throwable cause = throwable; cause != null; cause = cause.getCause()) {
+      if (cause instanceof java.io.IOException
+          && cause.getMessage() != null
+          && cause.getMessage().contains("header parser received no bytes")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static McpSyncClient createClient(int port) {
