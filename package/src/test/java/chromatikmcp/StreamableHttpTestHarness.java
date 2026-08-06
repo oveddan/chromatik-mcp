@@ -130,9 +130,12 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
       if (this.client != null) {
         this.client.closeGracefully();
       }
-      this.server.stop();
     } finally {
-      stopDrainer();
+      try {
+        this.server.stop();
+      } finally {
+        stopDrainer();
+      }
     }
   }
 
