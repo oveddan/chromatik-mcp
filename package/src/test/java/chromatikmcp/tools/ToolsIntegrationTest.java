@@ -3454,11 +3454,13 @@ class ToolsIntegrationTest {
       assertEquals("My Look", added.get("label"));
       assertNotNull(added.get("id"));
       assertNotNull(added.get("transitionTimeSecs"));
+      assertNotNull(added.get("hasCustomTransitionTime"));
 
       Map<String, Object> afterAdd = structured(call("list_snapshots", Map.of()));
       List<Map<String, Object>> snapshots = (List<Map<String, Object>>) afterAdd.get("snapshots");
       assertEquals(before + 1, snapshots.size());
-      assertEquals(path, snapshots.get(snapshots.size() - 1).get("path"));
+      assertEquals(added, snapshots.get(snapshots.size() - 1),
+          "add_snapshot and list_snapshots must share the complete snapshot wire shape");
 
       // Recalling restores the captured fader value; immediate=true forces an instant
       // apply even with transitions enabled, so the assertion holds synchronously.

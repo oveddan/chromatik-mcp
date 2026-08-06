@@ -5,8 +5,6 @@ import java.util.List;
 import java.util.Map;
 
 import heronarts.lx.LX;
-import heronarts.lx.snapshot.LXGlobalSnapshot;
-
 import chromatikmcp.domain.Snapshots;
 
 public final class AddSnapshot implements LxTool {
@@ -39,12 +37,7 @@ public final class AddSnapshot implements LxTool {
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
     String labelArg = Args.optionalString(args, "label");
-    LXGlobalSnapshot snapshot = Snapshots.addSnapshot(lx, labelArg);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("path", snapshot.getCanonicalPath());
-    payload.put("id", snapshot.getId());
-    payload.put("label", snapshot.getLabel());
-    payload.put("transitionTimeSecs", snapshot.transitionTimeSecs.getValue());
-    return Result.ok(payload);
+    Snapshots.SnapshotInfo snapshot = Snapshots.addSnapshot(lx, labelArg);
+    return Result.ok(SnapshotPayload.toMap(snapshot));
   }
 }

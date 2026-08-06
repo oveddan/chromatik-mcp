@@ -38,20 +38,20 @@ class SnapshotsTest extends HeadlessLxTest {
     channel.fader.setValue(0.7);
     int before = lx.engine.snapshots.snapshots.size();
 
-    LXGlobalSnapshot added = Snapshots.addSnapshot(lx, null);
+    Snapshots.SnapshotInfo added = Snapshots.addSnapshot(lx, null);
 
     assertEquals(before + 1, lx.engine.snapshots.snapshots.size());
-    assertEquals("Snapshot-1", added.getLabel());
-    assertTrue(added.getCanonicalPath().startsWith("/lx/snapshots/snapshot/"));
+    assertEquals("Snapshot-1", added.label());
+    assertTrue(added.path().startsWith("/lx/snapshots/snapshot/"));
   }
 
   @Test
   void addSnapshotAppliesCustomLabel() {
     LX lx = newHeadlessLx();
 
-    LXGlobalSnapshot added = Snapshots.addSnapshot(lx, "My Look");
+    Snapshots.SnapshotInfo added = Snapshots.addSnapshot(lx, "My Look");
 
-    assertEquals("My Look", added.getLabel());
+    assertEquals("My Look", added.label());
   }
 
   @Test
@@ -59,7 +59,7 @@ class SnapshotsTest extends HeadlessLxTest {
     LX lx = newHeadlessLx();
     int before = lx.engine.snapshots.snapshots.size();
 
-    LXGlobalSnapshot added = Snapshots.addSnapshot(lx, "Undo Me");
+    LXGlobalSnapshot added = addSnapshot(lx, "Undo Me");
     assertEquals(before + 1, lx.engine.snapshots.snapshots.size());
 
     lx.command.undo();
@@ -73,7 +73,7 @@ class SnapshotsTest extends HeadlessLxTest {
     LX lx = newHeadlessLx();
     LXChannel channel = lx.engine.mixer.addChannel();
     channel.fader.setValue(0.7);
-    LXGlobalSnapshot snapshot = Snapshots.addSnapshot(lx, "Look");
+    LXGlobalSnapshot snapshot = addSnapshot(lx, "Look");
 
     channel.fader.setValue(0.2);
     Snapshots.recall(lx, snapshot, true);
@@ -93,7 +93,7 @@ class SnapshotsTest extends HeadlessLxTest {
     LX lx = newHeadlessLx();
     LXChannel channel = lx.engine.mixer.addChannel();
     channel.fader.setValue(0.7);
-    LXGlobalSnapshot snapshot = Snapshots.addSnapshot(lx, "Look");
+    LXGlobalSnapshot snapshot = addSnapshot(lx, "Look");
 
     channel.fader.setValue(0.2);
     Snapshots.recall(lx, snapshot, true);
@@ -110,7 +110,7 @@ class SnapshotsTest extends HeadlessLxTest {
     LX lx = newHeadlessLx();
     LXChannel channel = lx.engine.mixer.addChannel();
     channel.fader.setValue(0.5);
-    LXGlobalSnapshot snapshot = Snapshots.addSnapshot(lx, "Look");
+    LXGlobalSnapshot snapshot = addSnapshot(lx, "Look");
     lx.engine.snapshots.transitionEnabled.setValue(true);
 
     channel.fader.setValue(0.1);
@@ -126,7 +126,7 @@ class SnapshotsTest extends HeadlessLxTest {
     LX lx = newHeadlessLx();
     LXChannel channel = lx.engine.mixer.addChannel();
     channel.fader.setValue(0.4);
-    LXGlobalSnapshot snapshot = Snapshots.addSnapshot(lx, "Look");
+    LXGlobalSnapshot snapshot = addSnapshot(lx, "Look");
 
     channel.fader.setValue(0.9);
     Snapshots.update(lx, snapshot);
@@ -148,7 +148,7 @@ class SnapshotsTest extends HeadlessLxTest {
   @Test
   void removeSnapshotDeletesItAndUndoRestoresIt() {
     LX lx = newHeadlessLx();
-    LXGlobalSnapshot snapshot = Snapshots.addSnapshot(lx, "Doomed");
+    LXGlobalSnapshot snapshot = addSnapshot(lx, "Doomed");
     int before = lx.engine.snapshots.snapshots.size();
 
     Snapshots.removeSnapshot(lx, snapshot);
@@ -168,7 +168,7 @@ class SnapshotsTest extends HeadlessLxTest {
   @Test
   void resolveByPathFindsTheSnapshot() {
     LX lx = newHeadlessLx();
-    LXGlobalSnapshot snapshot = Snapshots.addSnapshot(lx, "Findable");
+    LXGlobalSnapshot snapshot = addSnapshot(lx, "Findable");
 
     LXGlobalSnapshot resolved =
         Resolve.component(lx, snapshot.getCanonicalPath(), LXGlobalSnapshot.class);
@@ -184,5 +184,10 @@ class SnapshotsTest extends HeadlessLxTest {
     Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
         () -> Resolve.component(lx, "/lx/snapshots/snapshot/99", LXGlobalSnapshot.class));
     assertEquals(Resolve.Failure.NOT_FOUND, e.failure);
+  }
+
+  private static LXGlobalSnapshot addSnapshot(LX lx, String label) {
+    Snapshots.SnapshotInfo added = Snapshots.addSnapshot(lx, label);
+    return Resolve.component(lx, added.path(), LXGlobalSnapshot.class);
   }
 }

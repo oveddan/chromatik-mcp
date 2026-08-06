@@ -50,7 +50,7 @@ public final class Snapshots {
    * whole component regardless, so there is nothing further for Cmd-Z to restore (same
    * pattern as {@link Views#addView}).
    */
-  public static LXGlobalSnapshot addSnapshot(LX lx, String label) {
+  public static SnapshotInfo addSnapshot(LX lx, String label) {
     List<LXGlobalSnapshot> snapshots = lx.engine.snapshots.snapshots;
     int before = snapshots.size();
     Commands.perform(lx, new LXCommand.Snapshots.AddSnapshot());
@@ -61,7 +61,7 @@ public final class Snapshots {
     if (label != null) {
       snapshot.label.setValue(label);
     }
-    return snapshot;
+    return describe(snapshot);
   }
 
   /**
