@@ -43,9 +43,6 @@ public final class RemoveSnapshot implements LxTool {
     String path = Args.requireString(args, "path");
     LXGlobalSnapshot snapshot = Resolve.component(lx, path, LXGlobalSnapshot.class);
     Snapshots.removeSnapshot(lx, snapshot);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("removed", path);
-    payload.put("kind", "snapshot");
-    return Result.ok(payload);
+    return Result.ok(RemovalPayload.of(path, "snapshot"));
   }
 }

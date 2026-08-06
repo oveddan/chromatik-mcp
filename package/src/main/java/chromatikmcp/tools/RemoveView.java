@@ -47,9 +47,6 @@ public final class RemoveView implements LxTool {
     String path = Args.requireString(args, "path");
     LXViewDefinition view = Resolve.component(lx, path, LXViewDefinition.class);
     Views.removeView(lx, view);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("removed", path);
-    payload.put("kind", "view");
-    return Result.ok(payload);
+    return Result.ok(RemovalPayload.of(path, "view"));
   }
 }

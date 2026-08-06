@@ -44,9 +44,6 @@ public final class RemoveModulation implements LxTool {
     LXParameterModulation modulation =
         Resolve.component(lx, path, LXParameterModulation.class);
     String kind = Modulators.remove(lx, modulation);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("removed", path);
-    payload.put("kind", kind);
-    return Result.ok(payload);
+    return Result.ok(RemovalPayload.of(path, kind));
   }
 }

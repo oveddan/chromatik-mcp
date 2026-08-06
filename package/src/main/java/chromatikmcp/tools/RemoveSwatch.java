@@ -43,9 +43,6 @@ public final class RemoveSwatch implements LxTool {
     String path = Args.requireString(args, "path");
     LXSwatch swatch = Resolve.component(lx, path, LXSwatch.class);
     Palettes.removeSwatch(lx, swatch);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("removed", path);
-    payload.put("kind", "swatch");
-    return Result.ok(payload);
+    return Result.ok(RemovalPayload.of(path, "swatch"));
   }
 }
