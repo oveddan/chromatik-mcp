@@ -27,7 +27,7 @@ main-branch push that touches `package/` and passes the full test suite:
 **Or build from source:**
 
 ```sh
-git clone git@github.com:oveddan/chromatik-mcp.git
+git clone https://github.com/oveddan/chromatik-mcp.git
 cd chromatik-mcp/package
 mvn install -Pinstall
 ```
@@ -56,8 +56,9 @@ This project was renamed from **lx-mcp**. If you installed it under that name:
 The `install` profile copies the shaded jar into `~/Chromatik/Packages/`, where Chromatik
 discovers packages. (Without the profile, `mvn package` just builds it under `target/`.)
 The `install` profile also skips tests — they're the developer/PR gate, not part of the
-consumer install flow. Run `mvn package` for the full suite, or force tests during install
-with `mvn install -Pinstall -DskipTests=false`.
+consumer install flow. From the `package/` directory, contributors should run
+`./scripts/build-gate.sh` for the full suite, or force tests during install with
+`mvn install -Pinstall -DskipTests=false`.
 
 To sanity-check the jar loads inside real LX from a deployment-faithful classpath before
 touching Chromatik:
@@ -75,8 +76,11 @@ Restart once more if Chromatik asks. On startup the plugin:
   must run on the same machine; there is no authentication layer
 - writes the discovery file `~/.chromatik-mcp/status.json`
 
-To also see a live status indicator in the Chromatik UI, enable **Chromatik-MCP UI** as well
-(see [step 5](#5-optional-enable-the-chromatik-ui-status-section)).
+The core plugin automatically enables its bundled **Chromatik-MCP UI** companion, which adds
+the live status section to the left pane's **Global** tab. **Chromatik-MCP** is the only
+checkbox users need to enable. The companion remains a separate internal plugin because its
+Chromatik UI dependencies are unavailable in headless LX; the core MCP server still loads in
+CI and other UI-free runtimes.
 
 ### Configuring the port and host
 
@@ -129,6 +133,8 @@ startup whenever a non-loopback host is configured.
   "url": "http://127.0.0.1:51234/mcp",
   "projectPath": "/Users/you/Chromatik/Projects/MyShow.lxp",
   "lxVersion": "1.2.2",
+  "serverVersion": "0.1.0",
+  "buildTime": "2026-07-20T18:04:33Z",
   "connected": false,
   "lastActivityAt": null
 }
@@ -139,7 +145,9 @@ startup whenever a non-loopback host is configured.
   disabling the plugin) rewrites the file with `connected: false` first, but a crashed or
   force-killed session leaves whatever was last written, which can point at a dead port.
   If two Chromatik instances run at once, the last one wins the file.
-- `projectPath` is the project open at startup (`null` if none).
+- `projectPath` is the project seen at the most recent status-file rewrite (`null` if none).
+  Project changes do not trigger a rewrite by themselves, so query `get_project_info` when the
+  live project path matters.
 - `connected` and `lastActivityAt` track live client activity and are rewritten whenever
   the connection state flips (an MCP client connects or its stream/window of recent
   activity expires); `lastActivityAt` is an ISO-8601 timestamp, or `null` if no client
@@ -200,22 +208,6 @@ Chromatik has restarted since the last call.
 
 Verify the connection by calling `get_project_info` — it should report the LX version,
 channel count, and OSC ports of the running instance.
-
-## 5. (Optional) Enable the Chromatik UI status section
-
-The jar also bundles a second, Chromatik-only plugin, **Chromatik-MCP UI**, that adds a small
-"Chromatik-MCP" section to the left pane's **Global** tab: a connected/disconnected indicator, the
-server URL, and time since the last client activity.
-
-Enable it the same way as the core plugin — **Preferences → Plugins → Chromatik-MCP UI** —
-alongside (not instead of) **Chromatik-MCP**. The UI plugin reads state from the core plugin and
-does nothing on its own; if the core plugin isn't enabled, Chromatik-MCP UI logs a message and
-skips adding the section rather than erroring.
-
-This split exists because the UI plugin depends on Chromatik's studio/UI classes, which
-aren't present in a pure-core headless LX run (e.g. `scripts/verify-load.sh`, CI). Only
-the core **Chromatik-MCP** plugin is required to run the MCP server headlessly; **Chromatik-MCP UI** is
-a visual convenience for interactive Chromatik sessions.
 
 ## Reinstalling while Chromatik is running
 
