@@ -22,8 +22,8 @@ import heronarts.lx.LX;
  *
  * <p>Composes existing tool handlers rather than reimplementing any mutation (CLAUDE.md
  * layering) — constructed with the same {@link LxTool} instances {@link Tools#allTools}
- * already built, filtered to mutations only, so this tool structurally cannot see itself or
- * any read-only tool.
+ * already built, filtered to batchable mutations only, so this tool structurally cannot see
+ * itself, any read-only tool, or global history operations.
  */
 public final class ApplyOperations implements LxTool {
 
@@ -47,10 +47,10 @@ public final class ApplyOperations implements LxTool {
         + "once and every operation lands in the same engine frame — no intermediate "
         + "half-built state is ever rendered or output between operations, unlike issuing "
         + "the same calls one at a time. Each entry is {tool, args}: 'tool' names any "
-        + "registered mutation tool (by its normal tool name) and 'args' is exactly the "
+        + "registered batchable mutation tool (by its normal tool name) and 'args' is exactly the "
         + "argument object a top-level call to that tool would take. Every operations[i].tool "
-        + "is validated up front — an unknown name, a read-only tool, or apply_operations "
-        + "itself (batches cannot nest) fails the whole call with invalid_argument and "
+        + "is validated up front — an unknown name, a read-only tool, undo/redo, or "
+        + "apply_operations itself (batches cannot nest) fails the whole call with invalid_argument and "
         + "applies nothing. Once validated, execution is continue-on-error: an operation that "
         + "fails does not stop the ones after it. The response's results array has one entry "
         + "per operation, in order: {index, ok: true, result} on success or {index, ok: "
@@ -75,8 +75,8 @@ public final class ApplyOperations implements LxTool {
   public Map<String, Object> inputSchema() {
     Map<String, Object> operationProperties = new LinkedHashMap<>();
     operationProperties.put("tool", Schemas.string(
-        "Name of a registered mutation tool to invoke (read-only tools and apply_operations "
-            + "itself are rejected)"));
+        "Name of a registered batchable mutation tool to invoke (read-only tools, undo/redo, "
+            + "and apply_operations itself are rejected)"));
     Map<String, Object> argsSchema = new LinkedHashMap<>();
     argsSchema.put("type", "object");
     argsSchema.put("description",
@@ -136,7 +136,7 @@ public final class ApplyOperations implements LxTool {
       if (subTool == null) {
         validationErrors.add(
             "operations[" + i + "].tool '" + toolName + "' is not a known mutation tool "
-                + "(unknown, read-only, or apply_operations itself)");
+                + "(unknown, read-only, non-batchable, or apply_operations itself)");
         continue;
       }
       Object argsValue = entryMap.get("args");

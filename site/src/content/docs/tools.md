@@ -225,6 +225,32 @@ Set a parameter by its canonical LX path (e.g. /lx/mixer/channel/1/fader). The v
 
 <!-- generated:end -->
 
+## Undo and redo
+
+Chromatik and every connected MCP client share one linear command history. Each call
+moves exactly one command between the undo and redo stacks; it cannot recover an older
+change without also undoing every newer command first.
+
+<!-- generated:start:history -->
+
+### `undo`
+
+_mutating_
+
+Undo the newest command in Chromatik's shared linear history, exactly like one Cmd-Z. History includes command-backed changes from the UI and other MCP clients, not only this session. Returns changed:false when there is nothing to undo; otherwise command names what was undone. One call affects one command only — it cannot selectively skip newer work. Re-list affected state after undoing structural or move commands because canonical paths may have shifted. Call this tool directly; it is unavailable inside apply_operations so a batch cannot unexpectedly rewrite shared history.
+
+No parameters.
+
+### `redo`
+
+_mutating_
+
+Redo the newest command in Chromatik's shared linear history, exactly like one Cmd-Shift-Z. History includes command-backed changes from the UI and other MCP clients, not only this session. Returns changed:false when there is nothing to redo; otherwise command names what was redone. One call affects one command only. Any new command-backed mutation after an undo clears LX's redo stack. Re-list affected state after redoing structural or move commands because canonical paths may have shifted. Call this tool directly; it is unavailable inside apply_operations so a batch cannot unexpectedly rewrite shared history.
+
+No parameters.
+
+<!-- generated:end -->
+
 ## Build structure: channels, patterns, effect chains
 
 Effect chains run serially in list order, on channels, the master bus, or an individual
@@ -1166,7 +1192,7 @@ earlier operations in that same batch even though they still report success.
 
 _mutating_
 
-Apply up to 50 mutation-tool calls in one MCP round-trip. Every handler already runs on the LX engine thread, so a batch schedules onto it once and every operation lands in the same engine frame — no intermediate half-built state is ever rendered or output between operations, unlike issuing the same calls one at a time. Each entry is {tool, args}: 'tool' names any registered mutation tool (by its normal tool name) and 'args' is exactly the argument object a top-level call to that tool would take. Every operations[i].tool is validated up front — an unknown name, a read-only tool, or apply_operations itself (batches cannot nest) fails the whole call with invalid_argument and applies nothing. Once validated, execution is continue-on-error: an operation that fails does not stop the ones after it. The response's results array has one entry per operation, in order: {index, ok: true, result} on success or {index, ok: false, code, message} on failure, using the same error codes a top-level call would return. Two sharp edges this tool does NOT smooth over: (1) it does not collapse the batch into one undo step — each operation still produces its own undo entry (or entries) exactly as if called individually, so undoing an N-operation batch takes N presses of Cmd-Z; (2) LX's lx.command.perform() wipes the entire undo/redo history when a command fails — in a batch, one failing operation can silently erase undo history for every earlier operation in the SAME batch, even though those operations still report ok: true; (3) all operations run inside one engine frame, so an I/O-heavy operation stalls the whole batch's cost onto that single frame — save_project (full project serialization plus a disk write, plus a .lxm write-through when syncModelFile is on) is now the worst case, ahead of reload_fixtures (which re-reads every .lxf from disk); a large or slow batch can hit the 30s executor timeout. A batch still queued at that point is cancelled; one already started on the engine thread cannot be interrupted safely and may still complete.
+Apply up to 50 mutation-tool calls in one MCP round-trip. Every handler already runs on the LX engine thread, so a batch schedules onto it once and every operation lands in the same engine frame — no intermediate half-built state is ever rendered or output between operations, unlike issuing the same calls one at a time. Each entry is {tool, args}: 'tool' names any registered batchable mutation tool (by its normal tool name) and 'args' is exactly the argument object a top-level call to that tool would take. Every operations[i].tool is validated up front — an unknown name, a read-only tool, undo/redo, or apply_operations itself (batches cannot nest) fails the whole call with invalid_argument and applies nothing. Once validated, execution is continue-on-error: an operation that fails does not stop the ones after it. The response's results array has one entry per operation, in order: {index, ok: true, result} on success or {index, ok: false, code, message} on failure, using the same error codes a top-level call would return. Two sharp edges this tool does NOT smooth over: (1) it does not collapse the batch into one undo step — each operation still produces its own undo entry (or entries) exactly as if called individually, so undoing an N-operation batch takes N presses of Cmd-Z; (2) LX's lx.command.perform() wipes the entire undo/redo history when a command fails — in a batch, one failing operation can silently erase undo history for every earlier operation in the SAME batch, even though those operations still report ok: true; (3) all operations run inside one engine frame, so an I/O-heavy operation stalls the whole batch's cost onto that single frame — save_project (full project serialization plus a disk write, plus a .lxm write-through when syncModelFile is on) is now the worst case, ahead of reload_fixtures (which re-reads every .lxf from disk); a large or slow batch can hit the 30s executor timeout. A batch still queued at that point is cancelled; one already started on the engine thread cannot be interrupted safely and may still complete.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|

@@ -25,6 +25,11 @@ public interface LxTool {
   /** Advertised via the MCP readOnlyHint tool annotation. */
   boolean readOnly();
 
+  /** Whether this mutation may be nested inside {@code apply_operations}. */
+  default boolean batchable() {
+    return !readOnly();
+  }
+
   /** Runs on the LX engine thread; expected failures return {@code Result.error}. */
   Result<Map<String, Object>> handle(LX lx, Map<String, Object> args);
 }

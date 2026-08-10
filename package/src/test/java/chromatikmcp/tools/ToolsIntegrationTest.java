@@ -152,7 +152,7 @@ class ToolsIntegrationTest {
     assertEquals(
         Set.of("get_project_info", "save_project", "save_model", "get_status", "list_channels", "get_channel", "list_available_patterns",
             "list_available_effects", "list_available_modulators", "get_parameter",
-            "list_parameters", "set_parameter", "add_modulator", "wire_modulator", "wire_trigger",
+            "list_parameters", "set_parameter", "undo", "redo", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "remove_modulator", "move_modulator", "list_modulations", "fire_trigger",
             "get_component_doc", "get_fixture_format",
             "get_frame", "get_palette", "describe_model", "get_views", "add_view", "remove_view",
@@ -179,7 +179,7 @@ class ToolsIntegrationTest {
             "set_composition_arm",
             "apply_operations"),
         names);
-    Set<String> mutators = Set.of("save_project", "save_model", "set_parameter", "add_modulator", "wire_modulator",
+    Set<String> mutators = Set.of("save_project", "save_model", "set_parameter", "undo", "redo", "add_modulator", "wire_modulator",
         "wire_trigger", "remove_modulation", "remove_modulator", "move_modulator", "fire_trigger",
         "add_view", "remove_view", "add_fixture", "remove_fixture", "move_fixture",
         "duplicate_fixture", "set_fixture_params", "set_fixture_tags", "reload_fixtures",

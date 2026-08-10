@@ -181,6 +181,16 @@ class ApplyOperationsTest {
   }
 
   @Test
+  void globalHistoryToolsAreRejected() {
+    McpSchema.CallToolResult result = call("apply_operations", Map.of(
+        "operations", List.of(op("undo", Map.of()), op("redo", Map.of()))));
+    String text = errorText(result);
+    assertTrue(text.startsWith(Result.INVALID_ARGUMENT), text);
+    assertTrue(text.contains("undo"), text);
+    assertTrue(text.contains("redo"), text);
+  }
+
+  @Test
   void nestedApplyOperationsIsRejectedTheSameWayAsAReadOnlyTool() {
     // No special-cased "am I nested?" check exists — apply_operations is simply absent from
     // the mutation-tool map it was built from (Tools.allTools), so it fails the same
