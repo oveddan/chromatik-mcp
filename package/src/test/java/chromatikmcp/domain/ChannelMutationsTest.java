@@ -114,6 +114,24 @@ class ChannelMutationsTest extends HeadlessLxTest {
   }
 
   @Test
+  void addPatternToPatternRackAndUndo() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    heronarts.lx.pattern.PatternRack rack = new heronarts.lx.pattern.PatternRack(lx);
+    channel.addPattern(rack);
+
+    LXPattern nested = Channels.addPattern(
+        lx, rack.getCanonicalPath(), SolidPattern.class, -1);
+
+    assertEquals(1, rack.patternEngine.patterns.size());
+    assertSame(nested, rack.patternEngine.patterns.get(0));
+    assertEquals(rack.getCanonicalPath() + "/pattern/1", nested.getCanonicalPath());
+
+    lx.command.undo();
+    assertTrue(rack.patternEngine.patterns.isEmpty(), "nested pattern removed after undo");
+  }
+
+  @Test
   void addPatternRejectsOutOfRangeIndex() {
     LX lx = newHeadlessLx();
     LXChannel channel = lx.engine.mixer.addChannel();

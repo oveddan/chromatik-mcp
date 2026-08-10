@@ -235,26 +235,32 @@ public final class Channels {
   }
 
   /**
-   * Add a pattern of {@code patternClass} to the channel at {@code channelPath}.
-   * When this is the first pattern added via MCP (the channel was empty), the pattern
+   * Add a pattern of {@code patternClass} to the pattern engine at {@code containerPath}.
+   * The container may be a channel or a nested pattern host such as {@code PatternRack}.
+   * When this is the first pattern added via MCP (the engine was empty), the pattern
    * auto-activates because LX's engine treats the first pattern as active.
    *
    * @param index 0-based insertion index, or -1 to append
    */
-  public static LXPattern addPattern(LX lx, String channelPath,
+  public static LXPattern addPattern(LX lx, String containerPath,
       Class<? extends LXPattern> patternClass, int index) {
-    LXChannel channel = Resolve.component(lx, channelPath, LXChannel.class);
-    LXPatternEngine engine = channel.getPatternEngine();
+    LXComponent component = Resolve.component(lx, containerPath);
+    if (!(component instanceof LXPatternEngine.Container container)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Not a channel or pattern-engine container at path: " + containerPath
+              + " (found " + component.getClass().getSimpleName() + ")");
+    }
+    LXPatternEngine engine = container.getPatternEngine();
     int before = engine.patterns.size();
     // LX's addPattern throws on index > size INSIDE perform(), which swallows it and
     // wipes the undo stack — reject up front like the other index-taking primitives.
     if (index > before) {
       throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
-          "Pattern index " + index + " out of range [0," + before + "] on " + channelPath);
+          "Pattern index " + index + " out of range [0," + before + "] on " + containerPath);
     }
     Commands.perform(lx, new LXCommand.Channel.AddPattern(engine, patternClass, index));
     if (engine.patterns.size() != before + 1) {
-      throw new IllegalStateException("AddPattern did not add a pattern to " + channelPath);
+      throw new IllegalStateException("AddPattern did not add a pattern to " + containerPath);
     }
     // Inserted patterns land at their target index; new appended patterns are last.
     int resultIndex = (index >= 0 && index <= before) ? index : before;

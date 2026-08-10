@@ -257,11 +257,11 @@ Remove a channel (or group) from the mixer by its canonical path. Undoable in Ch
 
 _mutating_
 
-Add a pattern ('class', from list_available_patterns — either the full class name or the short name it lists) to a channel ('containerPath'). Pass an optional 0-based index to insert at a specific position; omit to append. The first pattern added to an empty channel auto-activates. Targets channels only (not PatternRacks). Inserting shifts the 1-based paths of later sibling patterns — re-list rather than reusing cached paths. Undoable in Chromatik with Cmd-Z.
+Add a pattern ('class', from list_available_patterns — either the full class name or the short name it lists) to a channel or PatternRack ('containerPath'). Pass an optional 0-based index to insert at a specific position; omit to append. The first pattern added to an empty container auto-activates. In list_channels detail:'full', a PatternRack entry has nestedPatternCount and its path is the containerPath. Inserting shifts the 1-based paths of later sibling patterns — re-list rather than reusing cached paths. Undoable in Chromatik with Cmd-Z.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
-| `containerPath` | string | yes | — | Canonical path of the channel, e.g. /lx/mixer/channel/1 |
+| `containerPath` | string | yes | — | Canonical path of the channel or PatternRack, e.g. /lx/mixer/channel/1 or /lx/mixer/channel/1/pattern/1 when that pattern is a PatternRack |
 | `class` | string | yes | — | Pattern class name, as returned by list_available_patterns — full class name or short name |
 | `index` | integer | no | -2147483648–2147483647 | 0-based insertion index; omit to append at the end |
 

@@ -17,7 +17,7 @@ Decided once (#108) so it isn't re-litigated per tool:
 - An arg naming a **class to instantiate** is `class` (e.g. `add_pattern`, `add_effect`,
   `add_modulator`, `add_channel`'s optional seed pattern, `get_component_doc`).
 - An arg naming the **canonical path of the container being added to** is `containerPath`
-  (e.g. `add_pattern`'s channel, `add_effect`'s channel/master/pattern chain).
+  (e.g. `add_pattern`'s channel/PatternRack, `add_effect`'s channel/master/pattern chain).
 - Modulation endpoints are `sourcePath` / `targetPath` (`wire_modulator`, `wire_trigger`).
 - `scope` remains for optional engine/device scoping (unrelated to the above — it says
   *where* a mutation lands, not *what* it targets).

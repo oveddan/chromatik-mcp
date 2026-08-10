@@ -820,6 +820,49 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void addPatternAcceptsPatternRackContainer() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      PatternRack rack = new PatternRack(lx);
+      LXChannel channel = (LXChannel) LXPath.get(lx, channelPath);
+      channel.addPattern(rack);
+
+      Map<String, Object> nested = structured(call("add_pattern", Map.of(
+          "containerPath", rack.getCanonicalPath(),
+          "class", GradientPattern.class.getName())));
+
+      assertEquals(rack.getCanonicalPath() + "/pattern/1", nested.get("path"));
+      assertEquals(GradientPattern.class.getName(), nested.get("class"));
+      assertSame(rack.patternEngine.patterns.get(0), LXPath.get(lx, (String) nested.get("path")));
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  void addPatternRejectsPlainPatternContainer() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> plain = structured(call("add_pattern", Map.of(
+          "containerPath", channelPath,
+          "class", GradientPattern.class.getName())));
+
+      McpSchema.CallToolResult result = call("add_pattern", Map.of(
+          "containerPath", plain.get("path"),
+          "class", GradientPattern.class.getName()));
+
+      assertEquals(Boolean.TRUE, result.isError());
+      McpSchema.TextContent text =
+          assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+      assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
   void activatePatternUnknownPathIsNotFound() {
     McpSchema.CallToolResult result =
         call("activate_pattern", Map.of("path", "/lx/mixer/channel/999/pattern/1"));
