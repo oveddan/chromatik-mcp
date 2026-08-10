@@ -19,9 +19,10 @@ public final class AddPattern implements LxTool {
   @Override
   public String description() {
     return "Add a pattern ('class', from list_available_patterns — either the full class "
-        + "name or the short name it lists) to a channel ('containerPath'). Pass an optional 0-based "
+        + "name or the short name it lists) to a channel or PatternRack ('containerPath'). "
+        + "Pass an optional 0-based "
         + "index to insert at a specific position; omit to append. The first pattern added "
-        + "to an empty channel auto-activates. Targets channels only (not PatternRacks). "
+        + "to an empty container auto-activates. "
         + "Inserting shifts the 1-based paths of later sibling patterns — re-list rather "
         + "than reusing cached paths. Undoable in Chromatik with Cmd-Z.";
   }
@@ -30,7 +31,8 @@ public final class AddPattern implements LxTool {
   public Map<String, Object> inputSchema() {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("containerPath", Schemas.string(
-        "Canonical path of the channel, e.g. /lx/mixer/channel/1"));
+        "Canonical path of the channel or PatternRack, e.g. /lx/mixer/channel/1 or "
+            + "/lx/mixer/channel/1/pattern/1"));
     properties.put("class", Schemas.string(
         "Pattern class name, as returned by list_available_patterns — full class name or "
             + "short name"));
@@ -46,11 +48,11 @@ public final class AddPattern implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
-    String channelPath = Args.requireString(args, "containerPath");
+    String containerPath = Args.requireString(args, "containerPath");
     String typeName = Args.requireString(args, "class");
     int index = Args.optionalInt(args, "index", -1);
     Class<? extends LXPattern> patternClass = Channels.resolvePatternClass(lx, typeName);
-    LXPattern pattern = Channels.addPattern(lx, channelPath, patternClass, index);
+    LXPattern pattern = Channels.addPattern(lx, containerPath, patternClass, index);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("path", pattern.getCanonicalPath());
     payload.put("id", pattern.getId());
