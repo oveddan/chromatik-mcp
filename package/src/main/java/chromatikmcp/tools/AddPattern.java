@@ -22,7 +22,8 @@ public final class AddPattern implements LxTool {
         + "name or the short name it lists) to a channel or PatternRack ('containerPath'). "
         + "Pass an optional 0-based "
         + "index to insert at a specific position; omit to append. The first pattern added "
-        + "to an empty container auto-activates. "
+        + "to an empty container auto-activates. In list_channels detail:'full', a "
+        + "PatternRack entry has nestedPatternCount and its path is the containerPath. "
         + "Inserting shifts the 1-based paths of later sibling patterns — re-list rather "
         + "than reusing cached paths. Undoable in Chromatik with Cmd-Z.";
   }
@@ -32,7 +33,7 @@ public final class AddPattern implements LxTool {
     Map<String, Object> properties = new LinkedHashMap<>();
     properties.put("containerPath", Schemas.string(
         "Canonical path of the channel or PatternRack, e.g. /lx/mixer/channel/1 or "
-            + "/lx/mixer/channel/1/pattern/1"));
+            + "/lx/mixer/channel/1/pattern/1 when that pattern is a PatternRack"));
     properties.put("class", Schemas.string(
         "Pattern class name, as returned by list_available_patterns — full class name or "
             + "short name"));

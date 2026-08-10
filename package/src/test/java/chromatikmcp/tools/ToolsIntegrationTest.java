@@ -841,6 +841,28 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void addPatternRejectsPlainPatternContainer() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> plain = structured(call("add_pattern", Map.of(
+          "containerPath", channelPath,
+          "class", GradientPattern.class.getName())));
+
+      McpSchema.CallToolResult result = call("add_pattern", Map.of(
+          "containerPath", plain.get("path"),
+          "class", GradientPattern.class.getName()));
+
+      assertEquals(Boolean.TRUE, result.isError());
+      McpSchema.TextContent text =
+          assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+      assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
   void activatePatternUnknownPathIsNotFound() {
     McpSchema.CallToolResult result =
         call("activate_pattern", Map.of("path", "/lx/mixer/channel/999/pattern/1"));
