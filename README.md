@@ -46,10 +46,15 @@ Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`),
 
 `class` arguments everywhere (`add_pattern`, `add_effect`, `add_modulator`, `add_channel`, `get_component_doc`) accept either the full class name or the short `name` the `list_available_*` tools return; an ambiguous short name errors listing the candidates.
 
+### Undo and redo
+
 `undo` and `redo` expose Chromatik's shared linear command history one step at a time.
 Their responses name the command that moved and report whether another undo or redo is
 available. The history is global to the running engine — it may include changes from the
-UI or another MCP client, not only the current agent session.
+UI or another MCP client, not only the current agent session. If an upstream command fails
+while undoing or redoing, LX clears both history stacks and may leave partially changed
+state; the MCP error reports the post-failure availability so callers know to stop and
+inspect the affected area.
 
 ### Build structure: channels, patterns, effect chains
 

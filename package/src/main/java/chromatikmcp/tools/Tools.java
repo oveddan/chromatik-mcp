@@ -206,14 +206,19 @@ public final class Tools {
     // Built from the list above, not a static registry: appending after gives ApplyOperations
     // no way to see itself, and filtering batchable() excludes reads and global history
     // operations — all three are rejected structurally, not by special cases in the handler.
+    Map<String, LxTool> batchableTools = batchableTools(tools);
+    tools.add(new ApplyOperations(batchableTools));
+    return tools;
+  }
+
+  static Map<String, LxTool> batchableTools(List<LxTool> tools) {
     Map<String, LxTool> batchableTools = new LinkedHashMap<>();
     for (LxTool tool : tools) {
-      if (tool.batchable()) {
+      if (!tool.readOnly() && tool.batchable()) {
         batchableTools.put(tool.name(), tool);
       }
     }
-    tools.add(new ApplyOperations(batchableTools));
-    return tools;
+    return batchableTools;
   }
 
   public static List<McpServerFeatures.SyncToolSpecification> specifications(

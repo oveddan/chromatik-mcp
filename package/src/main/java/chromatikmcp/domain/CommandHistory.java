@@ -30,7 +30,7 @@ public final class CommandHistory {
     String description = describe(command);
     lx.command.undo();
     if (lx.command.getRedoCommand() != command) {
-      throw new IllegalStateException("Undo failed for command: " + description);
+      throw failure(Action.UNDO, description, lx);
     }
     return result(lx, Action.UNDO, true, description);
   }
@@ -45,7 +45,7 @@ public final class CommandHistory {
     String description = describe(command);
     lx.command.redo();
     if (lx.command.getUndoCommand() != command) {
-      throw new IllegalStateException("Redo failed for command: " + description);
+      throw failure(Action.REDO, description, lx);
     }
     return result(lx, Action.REDO, true, description);
   }
@@ -60,6 +60,17 @@ public final class CommandHistory {
         describe(lx.command.getRedoCommand()));
   }
 
+  private static IllegalStateException failure(Action action, String command, LX lx) {
+    boolean canUndo = lx.command.getUndoCommand() != null;
+    boolean canRedo = lx.command.getRedoCommand() != null;
+    String verb = (action == Action.UNDO) ? "Undo" : "Redo";
+    return new IllegalStateException(
+        verb + " failed for command '" + command + "'; post-failure canUndo=" + canUndo
+            + ", canRedo=" + canRedo + ". LX clears the full undo/redo history when a command "
+            + "fails, and the command may have partially changed engine state; inspect affected "
+            + "state before continuing.");
+  }
+
   private static String describe(LXCommand command) {
     if (command == null) {
       return null;
@@ -72,6 +83,13 @@ public final class CommandHistory {
     } catch (RuntimeException ignored) {
       // Mirror LXCommandEngine's private getName() fallback without depending on internals.
     }
-    return command.getClass().getSimpleName();
+    String className = command.getClass().getName();
+    String marker = ".LXCommand.";
+    int markerIndex = className.indexOf(marker);
+    if (markerIndex >= 0) {
+      return className.substring(markerIndex + marker.length());
+    }
+    String simpleName = command.getClass().getSimpleName();
+    return simpleName.isBlank() ? className : simpleName;
   }
 }

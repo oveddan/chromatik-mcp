@@ -22,7 +22,10 @@ public final class Redo implements LxTool {
         + "mutation after an undo clears LX's redo stack. Re-list affected state after redoing "
         + "structural or move commands because canonical paths may have shifted. Call this tool "
         + "directly; it is unavailable inside apply_operations so a batch cannot unexpectedly "
-        + "rewrite shared history.";
+        + "rewrite shared history. If the LX command throws while redoing, the call returns "
+        + "internal after Chromatik also reports the error; LX clears both history stacks, the "
+        + "error reports post-failure canUndo/canRedo, and engine state may be partially changed "
+        + "— inspect affected state before continuing.";
   }
 
   @Override

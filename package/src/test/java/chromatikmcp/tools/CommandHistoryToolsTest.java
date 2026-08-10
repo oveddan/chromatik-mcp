@@ -87,4 +87,22 @@ class CommandHistoryToolsTest {
     assertEquals(Boolean.FALSE, result.get("canUndo"));
     assertEquals(Boolean.FALSE, result.get("canRedo"));
   }
+
+  @Test
+  void toolsUndoAndRedoStructuralChannelCreation() {
+    lx.command.clear();
+    int before = lx.engine.mixer.channels.size();
+    harness.structured(harness.call("add_channel", Map.of()));
+    assertEquals(before + 1, lx.engine.mixer.channels.size());
+
+    Map<String, Object> undone = call("undo");
+    assertEquals(Boolean.TRUE, undone.get("changed"));
+    assertTrue(((String) undone.get("command")).contains("Channel"));
+    assertEquals(before, lx.engine.mixer.channels.size());
+
+    Map<String, Object> redone = call("redo");
+    assertEquals(Boolean.TRUE, redone.get("changed"));
+    assertEquals(undone.get("command"), redone.get("command"));
+    assertEquals(before + 1, lx.engine.mixer.channels.size());
+  }
 }

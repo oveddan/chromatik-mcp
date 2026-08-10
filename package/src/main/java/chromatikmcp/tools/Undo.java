@@ -21,7 +21,10 @@ public final class Undo implements LxTool {
         + "command names what was undone. One call affects one command only — it cannot selectively "
         + "skip newer work. Re-list affected state after undoing structural or move commands because "
         + "canonical paths may have shifted. Call this tool directly; it is unavailable inside "
-        + "apply_operations so a batch cannot unexpectedly rewrite shared history.";
+        + "apply_operations so a batch cannot unexpectedly rewrite shared history. If the LX "
+        + "command throws while undoing, the call returns internal after Chromatik also reports "
+        + "the error; LX clears both history stacks, the error reports post-failure canUndo/canRedo, "
+        + "and engine state may be partially changed — inspect affected state before continuing.";
   }
 
   @Override
