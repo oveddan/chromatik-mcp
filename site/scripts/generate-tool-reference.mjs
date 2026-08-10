@@ -32,6 +32,7 @@ const CATEGORIES = {
     'get_component_doc',
   ],
   parameters: ['set_parameter'],
+  history: ['undo', 'redo'],
   project: ['save_project', 'save_model'],
   structure: [
     'add_channel',

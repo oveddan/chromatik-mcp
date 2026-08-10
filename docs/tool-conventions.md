@@ -324,6 +324,22 @@ large (`list_parameters` on a big project is the known next candidate):
 - Every mutation's domain test is do → undo → assert restored (qa-strategy); the undo
   assertion doubles as proof the primitive used a real `LXCommand`.
 
+### Command-history tools
+
+- `undo` and `redo` expose the engine's existing shared, linear `LXCommandEngine`
+  history one step at a time. That history includes UI and other-client commands; it is
+  not scoped to the calling MCP session. Empty history is a successful no-op with
+  `changed:false`.
+- The primitive captures the command description before invoking LX, then verifies that
+  the exact command object moved to the opposite stack. A failed upstream undo/redo is
+  therefore detected even though `LXCommandEngine` swallows the command exception.
+- Upstream clears both history stacks after an undo/redo failure, and a command can throw
+  after partially mutating state. The MCP call returns `internal` naming the attempted
+  command, post-failure `canUndo`/`canRedo`, and the partial-state/history-cleared warning;
+  callers inspect affected state before continuing.
+- A read-only history-peek tool is deliberately outside issue #198's one-step mutation
+  surface. The mutation response reports the next command on each available side.
+
 ### Not-undoable disclosure
 
 - Some things LX ships **no command for** (transport launch/stop, the timeline `arm`
@@ -364,6 +380,19 @@ large (`list_parameters` on a big project is the known next candidate):
 
 - `readOnlyHint` is set from `LxTool.readOnly()` — `true` for all PR-3 discovery tools,
   `false` for mutations (PR-4 onward).
+
+### Batch composition
+
+- `LxTool.batchable()` defaults to `!readOnly()`. A mutation overrides it to `false`
+  when nesting would violate `apply_operations`' forward-operation/history contract;
+  currently `undo` and `redo` are the only overrides because a batch must not silently
+  unwind an earlier entry or unrelated shared history.
+- The batch registry independently requires both `!tool.readOnly()` and
+  `tool.batchable()`. The redundant read-only predicate is intentional defense in depth:
+  a read tool cannot opt itself into a mutating batch by returning `true` from an override.
+- `apply_operations` itself is appended only after this registry is built, so batches
+  cannot nest. Registry tests pin all three exclusions: reads, non-batchable mutations,
+  and the batch tool itself.
 
 ## Test shape
 

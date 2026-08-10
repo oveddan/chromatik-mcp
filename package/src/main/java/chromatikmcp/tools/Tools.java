@@ -117,6 +117,8 @@ public final class Tools {
             new GetParameter(),
             new ListParameters(),
             new SetParameter(),
+            new Undo(),
+            new Redo(),
             new AddModulator(),
             new WireModulator(),
             new WireTrigger(),
@@ -202,16 +204,21 @@ public final class Tools {
             new SetCompositionArm()));
 
     // Built from the list above, not a static registry: appending after gives ApplyOperations
-    // no way to see itself, and filtering readOnly() gives it no way to see a read tool either
-    // — nested batches and read-in-batch are rejected structurally, not by a special case.
-    Map<String, LxTool> mutationTools = new LinkedHashMap<>();
+    // no way to see itself, and filtering batchable() excludes reads and global history
+    // operations — all three are rejected structurally, not by special cases in the handler.
+    Map<String, LxTool> batchableTools = batchableTools(tools);
+    tools.add(new ApplyOperations(batchableTools));
+    return tools;
+  }
+
+  static Map<String, LxTool> batchableTools(List<LxTool> tools) {
+    Map<String, LxTool> batchableTools = new LinkedHashMap<>();
     for (LxTool tool : tools) {
-      if (!tool.readOnly()) {
-        mutationTools.put(tool.name(), tool);
+      if (!tool.readOnly() && tool.batchable()) {
+        batchableTools.put(tool.name(), tool);
       }
     }
-    tools.add(new ApplyOperations(mutationTools));
-    return tools;
+    return batchableTools;
   }
 
   public static List<McpServerFeatures.SyncToolSpecification> specifications(
