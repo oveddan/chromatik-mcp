@@ -14,6 +14,9 @@ import chromatikmcp.HeadlessLxTest;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
+import heronarts.lx.clip.BusClipLane;
+import heronarts.lx.clip.LXClip;
+import heronarts.lx.clip.LXClipLane;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.effect.LXEffect;
@@ -107,6 +110,37 @@ class ChannelMutationsTest extends HeadlessLxTest {
   }
 
   @Test
+  void moveChannelReportsClipLaneBusModulationAndCompositionLanePaths() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXChannel c = lx.engine.mixer.addChannel();
+    LXClip clip = b.addClip(0);
+    LXClipLane<?> gridLane = clip.lanes.get(0);
+    heronarts.lx.modulator.VariableLFO lfo = new heronarts.lx.modulator.VariableLFO();
+    c.modulation.addModulator(lfo, -1, null);
+    BusClipLane compositionLane = lx.engine.timeline.getComposition().lanes.stream()
+        .filter(BusClipLane.class::isInstance)
+        .map(BusClipLane.class::cast)
+        .filter(lane -> lane.bus == b)
+        .findFirst().orElseThrow();
+    String clipBefore = Resolve.canonicalPath(clip);
+    String gridLaneBefore = Resolve.canonicalPath(gridLane);
+    String lfoBefore = Resolve.canonicalPath(lfo);
+    String compositionLaneBefore = Resolve.canonicalPath(compositionLane);
+
+    Channels.ChannelMoveResult result =
+        Channels.moveChannel(lx, a.getCanonicalPath(), 2);
+
+    assertPathChange(result.oscChanges(), clip.getId(), clipBefore, Resolve.canonicalPath(clip));
+    assertPathChange(result.oscChanges(), gridLane.getId(), gridLaneBefore,
+        Resolve.canonicalPath(gridLane));
+    assertPathChange(result.oscChanges(), lfo.getId(), lfoBefore, Resolve.canonicalPath(lfo));
+    assertPathChange(result.oscChanges(), compositionLane.getId(), compositionLaneBefore,
+        Resolve.canonicalPath(compositionLane));
+  }
+
+  @Test
   void moveChannelOutOfRangePreservesUndoHistory() {
     LX lx = newHeadlessLx();
     LXChannel a = Channels.addChannel(lx, null);
@@ -143,6 +177,75 @@ class ChannelMutationsTest extends HeadlessLxTest {
 
     lx.command.undo();
     assertEquals(List.of(a, group, b, c, d), lx.engine.mixer.channels);
+  }
+
+  @Test
+  void moveGroupLeftAndUndo() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXChannel c = lx.engine.mixer.addChannel();
+    LXChannel d = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(c, d));
+    assertEquals(List.of(a, b, group, c, d), lx.engine.mixer.channels);
+
+    Channels.moveChannel(lx, group.getCanonicalPath(), 0);
+    assertEquals(List.of(group, c, d, a, b), lx.engine.mixer.channels);
+    assertEquals(0, group.getIndex());
+
+    lx.command.undo();
+    assertEquals(List.of(a, b, group, c, d), lx.engine.mixer.channels);
+  }
+
+  @Test
+  void moveTopLevelChannelAllowsGroupBoundaries() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXChannel c = lx.engine.mixer.addChannel();
+    LXChannel d = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(b, c));
+
+    Channels.moveChannel(lx, d.getCanonicalPath(), 1);
+    assertEquals(List.of(a, d, group, b, c), lx.engine.mixer.channels,
+        "destination immediately before a group is legal");
+    lx.command.undo();
+
+    Channels.moveChannel(lx, a.getCanonicalPath(), 3);
+    assertEquals(List.of(group, b, c, a, d), lx.engine.mixer.channels,
+        "destination immediately after the group's last member is legal");
+  }
+
+  @Test
+  void moveChannelCanAppendPastTrailingGroup() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel d = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXChannel c = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(b, c));
+
+    Channels.moveChannel(lx, a.getCanonicalPath(), 4);
+
+    assertEquals(List.of(d, group, b, c, a), lx.engine.mixer.channels);
+    assertEquals(4, a.getIndex());
+  }
+
+  @Test
+  void moveEmptyGroupAndNoOpAreSupported() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXGroup emptyGroup = lx.engine.mixer.addGroup();
+
+    Channels.moveChannel(lx, emptyGroup.getCanonicalPath(), 0);
+    assertEquals(List.of(emptyGroup, a, b), lx.engine.mixer.channels);
+    lx.command.undo();
+    assertEquals(List.of(a, b, emptyGroup), lx.engine.mixer.channels);
+
+    Channels.ChannelMoveResult noOp = Channels.moveChannel(lx, a.getCanonicalPath(), 0);
+    assertEquals(List.of(a, b, emptyGroup), lx.engine.mixer.channels);
+    assertTrue(noOp.oscChanges().isEmpty());
   }
 
   @Test

@@ -803,10 +803,14 @@ class ToolsIntegrationTest {
           "path", added[0].getCanonicalPath(), "index", destination)));
 
       assertEquals(destination, ((Number) moved.get("index")).intValue());
-      assertSame(added[0], lx.engine.mixer.channels.get(added[0].getIndex()));
+      assertSame(added[0], lx.engine.mixer.channels.get(destination));
       List<Map<String, Object>> changes =
           (List<Map<String, Object>>) assertOscChanges(moved.get("oscChanges"));
-      assertEquals(3, changes.size(), "moved channel and two crossed siblings changed paths");
+      for (LXChannel changed : added) {
+        assertTrue(changes.stream().anyMatch(change ->
+            ((Number) change.get("componentId")).intValue() == changed.getId()),
+            "moved channel and each crossed sibling are reported");
+      }
     } finally {
       engineExecutor.execute(() -> {
         for (LXChannel addedChannel : added) {
