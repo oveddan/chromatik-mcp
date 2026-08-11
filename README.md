@@ -2,7 +2,7 @@
 
 A drop-in LX/Chromatik package that lets an agent read, explain, compose into, and debug a running Chromatik show over MCP.
 
-**Status**: the tool surface works end-to-end — discovery, parameters, tempo, modulation wiring, channels/patterns/effect chains, mixer performance controls (crossfader, cue/aux), MIDI mapping and templates, palette (read-write), snapshots, model views, fixtures & output wiring, render previews, OSC addressing, project/model save, arrange-timeline composition authoring (markers, locators, lanes, automation), and a generated semantic catalog of what each component does. See the generated [tool reference](https://oveddan.github.io/chromatik-mcp/tools/) for the authoritative current inventory, [docs/build-plan.md](docs/build-plan.md) for the roadmap, and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
+**Status**: the tool surface works end-to-end — discovery, parameters, tempo, modulation wiring, channels/groups/patterns/effect chains, mixer performance controls (crossfader, cue/aux), MIDI mapping and templates, palette (read-write), snapshots, model views, fixtures & output wiring, render previews, OSC addressing, project/model save, arrange-timeline composition authoring (markers, locators, lanes, automation), and a generated semantic catalog of what each component does. See the generated [tool reference](https://oveddan.github.io/chromatik-mcp/tools/) for the authoritative current inventory, [docs/build-plan.md](docs/build-plan.md) for the roadmap, and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
 
 **Docs**: [oveddan.github.io/chromatik-mcp](https://oveddan.github.io/chromatik-mcp/) — for AI agents, the full docs are available as plain markdown at [llms-full.txt](https://oveddan.github.io/chromatik-mcp/llms-full.txt) ([llms.txt](https://oveddan.github.io/chromatik-mcp/llms.txt) index).
 
@@ -61,11 +61,15 @@ inspect the affected area.
 | tool | what it does |
 |---|---|
 | `add_channel {class?}` / `remove_channel {path}` / `move_channel {path, index}` | add, remove, or reorder mixer channels and group blocks; move destinations are 0-based post-removal indices and preserve group membership |
+| `group_channels {paths}` / `ungroup_channel {path}` / `ungroup_channels {path}` | create a group bus over an explicit channel set, pull out one member, or dissolve the group. Group creation is the exception: LX has no explicit-list command, so it is not undoable; both ungroup operations are undoable |
 | `add_pattern {containerPath, class, index?}` / `remove_pattern` / `move_pattern {path, index}` | manage a channel's or PatternRack's pattern list |
 | `activate_pattern {path}` | switch the active pattern (PLAYLIST mode; BLEND-mode channels layer patterns via their `enabled` params instead) |
 | `add_effect {containerPath, class}` / `remove_effect` / `move_effect {path, index}` | effect chains — run serially in list order — on channels, the master bus, or an individual pattern |
 
-Structural paths are 1-based and reindex on remove/insert — re-list rather than reusing cached paths.
+Structural paths are 1-based and reindex on remove/insert/group/ungroup — re-list rather than reusing cached paths. Group members remain flat top-level channel paths; their `group` field in `list_channels` identifies membership.
+Grouping moves main/aux focus and selection to the new group. Pulling out a focused member
+moves focus with it; pulling out the final member leaves an empty group bus, which must be
+dissolved separately with `ungroup_channels`.
 
 ### Map macro knobs (and any modulation)
 

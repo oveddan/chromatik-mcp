@@ -46,11 +46,6 @@ public final class AddChannel implements LxTool {
       patternClass = Channels.resolvePatternClass(lx, patternArg);
     }
     LXChannel channel = Channels.addChannel(lx, patternClass);
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("path", channel.getCanonicalPath());
-    payload.put("id", channel.getId());
-    payload.put("label", channel.getLabel());
-    payload.put("index", channel.getIndex());
-    return Result.ok(payload);
+    return Result.ok(ChannelPayload.channel(channel));
   }
 }
