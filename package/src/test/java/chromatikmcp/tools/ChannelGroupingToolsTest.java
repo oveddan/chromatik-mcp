@@ -130,6 +130,16 @@ class ChannelGroupingToolsTest {
     assertEquals(null, channel.getGroup(), "rejected batch must not mutate the mixer");
   }
 
+  @Test
+  void batchRegistryExcludesOnlyDirectGroupingFromTheGroupLifecycle() {
+    Map<String, LxTool> batchable = Tools.batchableTools(List.of(
+        new GroupChannels(), new UngroupChannel(), new UngroupChannels()));
+
+    assertFalse(batchable.containsKey("group_channels"));
+    assertTrue(batchable.containsKey("ungroup_channel"));
+    assertTrue(batchable.containsKey("ungroup_channels"));
+  }
+
   private static McpSchema.CallToolResult call(String tool, Map<String, Object> args) {
     return harness.call(tool, args);
   }

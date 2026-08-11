@@ -67,6 +67,9 @@ inspect the affected area.
 | `add_effect {containerPath, class}` / `remove_effect` / `move_effect {path, index}` | effect chains — run serially in list order — on channels, the master bus, or an individual pattern |
 
 Structural paths are 1-based and reindex on remove/insert/group/ungroup — re-list rather than reusing cached paths. Group members remain flat top-level channel paths; their `group` field in `list_channels` identifies membership.
+Grouping moves main/aux focus and selection to the new group. Pulling out a focused member
+moves focus with it; pulling out the final member leaves an empty group bus, which must be
+dissolved separately with `ungroup_channels`.
 
 ### Map macro knobs (and any modulation)
 

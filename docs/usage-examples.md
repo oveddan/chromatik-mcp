@@ -57,6 +57,10 @@ Wrinkles:
   the bus. Grouping reorders members contiguously and is not undoable because LX has
   no explicit-list command; `ungroup_channel` and `ungroup_channels` are undoable.
   Every grouping mutation returns `oscChanges`; re-list before reusing channel paths.
+- `group_channels` focuses and selects the new bus. `ungroup_channel` follows a focused
+  member to its new index, but removing the final member leaves the now-empty group bus;
+  call `ungroup_channels` on that bus to remove it. Dissolving a group rehomes focus and
+  selection using LX's normal channel-removal behavior.
 
 ## 3. Chain effects
 

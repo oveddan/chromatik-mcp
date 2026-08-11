@@ -19,7 +19,9 @@ public final class UngroupChannels implements LxTool {
   public String description() {
     return "Dissolve a mixer group by its canonical path, leaving all members as top-level "
         + "channels. Returns the removed group's id and former path plus each freed channel's "
-        + "current path. Dissolving shifts positional channel paths, including descendants; "
+        + "current path. Removing the bus makes LX rehome focus and selection using its normal "
+        + "channel-removal rules (typically to the first freed channel or adjacent bus). "
+        + "Dissolving shifts positional channel paths, including descendants; "
         + "the response reports every changed canonical path in oscChanges, and callers should "
         + "re-list channels before reusing cached paths. Undoable in Chromatik with Cmd-Z.";
   }
@@ -44,7 +46,7 @@ public final class UngroupChannels implements LxTool {
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("removedGroupPath", result.groupPath());
     payload.put("groupId", result.groupId());
-    payload.put("channels", ChannelGroupingPayload.channels(result.channels()));
+    payload.put("channels", ChannelPayload.channels(result.channels()));
     payload.put("oscChanges", OscChanges.payload(result.oscChanges()));
     return Result.ok(payload);
   }

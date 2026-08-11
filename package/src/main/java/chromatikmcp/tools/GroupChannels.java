@@ -22,7 +22,8 @@ public final class GroupChannels implements LxTool {
         + "reordered contiguously in their current mixer order. Rejects duplicate paths, group paths, and channels "
         + "already in a group. Grouping shifts positional channel paths, including descendants; "
         + "the response reports every changed canonical path in oscChanges, and callers should "
-        + "re-list channels before reusing cached paths. LX has no explicit-list grouping command, "
+        + "re-list channels before reusing cached paths. LX moves main and aux focus to the new "
+        + "group and selects only that bus. LX has no explicit-list grouping command, "
         + "so this is a direct engine edit. Not undoable with Cmd-Z.";
   }
 
@@ -45,8 +46,9 @@ public final class GroupChannels implements LxTool {
 
   @Override
   public boolean batchable() {
-    // apply_operations promises one undo entry per successful structural mutation.
-    // Explicit-list grouping has no LXCommand and therefore cannot satisfy that contract.
+    // With no command entry above it, a direct regroup inside apply_operations would leave
+    // earlier commands as the next undo against mixer topology that no longer matches the
+    // state in which those commands were created.
     return false;
   }
 
@@ -54,8 +56,8 @@ public final class GroupChannels implements LxTool {
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
     List<String> paths = Args.requireStringList(args, "paths");
     Channels.GroupChannelsResult result = Channels.groupChannels(lx, paths);
-    Map<String, Object> payload = ChannelGroupingPayload.channel(result.group());
-    payload.put("channels", ChannelGroupingPayload.channels(result.channels()));
+    Map<String, Object> payload = ChannelPayload.channel(result.group());
+    payload.put("channels", ChannelPayload.channels(result.channels()));
     payload.put("oscChanges", OscChanges.payload(result.oscChanges()));
     return Result.ok(payload);
   }

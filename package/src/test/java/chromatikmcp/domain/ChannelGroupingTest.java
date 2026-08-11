@@ -32,12 +32,13 @@ class ChannelGroupingTest extends HeadlessLxTest {
     String lastBefore = last.getCanonicalPath();
     int originalCount = lx.engine.mixer.channels.size();
     lx.command.clear();
+    LXChannel priorCommandChannel = Channels.addChannel(lx, null);
 
     Channels.GroupChannelsResult result = Channels.groupChannels(
         lx, List.of(lastBefore, firstBefore));
 
     LXGroup group = result.group();
-    assertEquals(originalCount + 1, lx.engine.mixer.channels.size());
+    assertEquals(originalCount + 2, lx.engine.mixer.channels.size());
     assertSame(group, lx.engine.mixer.channels.get(0),
         "the leftmost selected channel determines group insertion regardless of input order");
     assertEquals(List.of(first, last), group.channels, "existing mixer order is preserved");
@@ -45,6 +46,13 @@ class ChannelGroupingTest extends HeadlessLxTest {
     assertSame(group, first.getGroup());
     assertNull(skipped.getGroup());
     assertTrue(lx.command.isDirty(), "the direct mutation still marks the project dirty");
+    assertSame(group, lx.engine.mixer.getFocusedChannel());
+    assertSame(group, lx.engine.mixer.getFocusedChannelAux());
+    assertTrue(group.selected.isOn());
+    assertTrue(lx.engine.mixer.channels.stream()
+        .filter(channel -> channel != group)
+        .noneMatch(channel -> channel.selected.isOn()),
+        "grouping selects only the new group bus");
     assertPathChange(result, first.getId(), firstBefore, first.getCanonicalPath());
     assertPathChange(result, skipped.getId(), skippedBefore, skipped.getCanonicalPath());
     assertTrue(result.oscChanges().stream().noneMatch(change ->
@@ -56,7 +64,33 @@ class ChannelGroupingTest extends HeadlessLxTest {
 
     lx.command.undo();
     assertSame(group, lx.engine.mixer.channels.get(0),
-        "explicit-list grouping deliberately creates no undo command");
+        "the non-undoable group remains while Cmd-Z reaches the preceding command");
+    assertNull(lx.getComponent(priorCommandChannel.getId()),
+        "group creation leaves prior history intact, so Cmd-Z removes the prior channel");
+  }
+
+  @Test
+  void groupChannelsAcrossAnExistingGroupPreservesThatTopology() {
+    LX lx = newHeadlessLx();
+    LXChannel left = channelWithPattern(lx);
+    LXChannel groupedFirst = channelWithPattern(lx);
+    LXChannel groupedSecond = channelWithPattern(lx);
+    LXChannel right = channelWithPattern(lx);
+    LXGroup existing = lx.engine.mixer.addGroup(List.of(groupedFirst, groupedSecond));
+    int existingId = existing.getId();
+    String existingBefore = existing.getCanonicalPath();
+
+    Channels.GroupChannelsResult result = Channels.groupChannels(lx,
+        List.of(right.getCanonicalPath(), left.getCanonicalPath()));
+
+    assertEquals(List.of(left, right), result.group().channels);
+    assertSame(existing, lx.getComponent(existingId));
+    assertEquals(List.of(groupedFirst, groupedSecond), existing.channels);
+    assertSame(existing, groupedFirst.getGroup());
+    assertSame(existing, groupedSecond.getGroup());
+    assertPathChange(result, existingId, existingBefore, existing.getCanonicalPath());
+    assertSame(result.group(), lx.engine.mixer.channels.get(0));
+    assertSame(existing, lx.engine.mixer.channels.get(3));
   }
 
   @Test
@@ -143,6 +177,29 @@ class ChannelGroupingTest extends HeadlessLxTest {
     assertTrue(group.channels.containsAll(List.of(first, second)));
     assertEquals(2, group.channels.size());
     assertSame(group, first.getGroup());
+  }
+
+  @Test
+  void ungroupOnlyMemberLeavesEmptyGroupAndFocusFollowsMember() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = channelWithPattern(lx);
+    LXGroup group = lx.engine.mixer.addGroup(List.of(channel));
+    int groupId = group.getId();
+    lx.engine.mixer.focusedChannel.setValue(channel.getIndex());
+    lx.engine.mixer.focusedChannelAux.setValue(channel.getIndex());
+    lx.command.clear();
+
+    Channels.ungroupChannel(lx, channel.getCanonicalPath());
+
+    assertTrue(group.channels.isEmpty());
+    assertSame(group, lx.getComponent(groupId),
+        "ungrouping the last member does not dissolve the empty bus");
+    assertNull(channel.getGroup());
+    assertSame(channel, lx.engine.mixer.getFocusedChannel());
+    assertSame(channel, lx.engine.mixer.getFocusedChannelAux());
+
+    Channels.ungroupChannels(lx, group.getCanonicalPath());
+    assertNull(lx.getComponent(groupId), "ungroup_channels explicitly removes the empty bus");
   }
 
   @Test

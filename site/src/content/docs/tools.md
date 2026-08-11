@@ -294,7 +294,7 @@ Move a channel or group to a 0-based destination index in the mixer's flat chann
 
 _mutating_
 
-Create a mixer group from a non-empty list of top-level channel paths. The leftmost selected channel determines where the group bus is inserted; members are reordered contiguously in their current mixer order. Rejects duplicate paths, group paths, and channels already in a group. Grouping shifts positional channel paths, including descendants; the response reports every changed canonical path in oscChanges, and callers should re-list channels before reusing cached paths. LX has no explicit-list grouping command, so this is a direct engine edit. Not undoable with Cmd-Z.
+Create a mixer group from a non-empty list of top-level channel paths. The leftmost selected channel determines where the group bus is inserted; members are reordered contiguously in their current mixer order. Rejects duplicate paths, group paths, and channels already in a group. Grouping shifts positional channel paths, including descendants; the response reports every changed canonical path in oscChanges, and callers should re-list channels before reusing cached paths. LX moves main and aux focus to the new group and selects only that bus. LX has no explicit-list grouping command, so this is a direct engine edit. Not undoable with Cmd-Z.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
@@ -304,7 +304,7 @@ Create a mixer group from a non-empty list of top-level channel paths. The leftm
 
 _mutating_
 
-Pull one member channel out of its mixer group and place it immediately after the remaining group span. Returns invalid_argument if the channel is not grouped. The operation shifts positional channel paths, including descendants; the response reports every changed canonical path in oscChanges, and callers should re-list channels before reusing cached paths. Undoable in Chromatik with Cmd-Z.
+Pull one member channel out of its mixer group and place it immediately after the remaining group span. Removing the last member leaves an empty group bus; call ungroup_channels on that bus to dissolve it. If the member has main or aux focus, LX follows it to its new index. Returns invalid_argument if the channel is not grouped. The operation shifts positional channel paths, including descendants; the response reports every changed canonical path in oscChanges, and callers should re-list channels before reusing cached paths. Undoable in Chromatik with Cmd-Z.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
@@ -314,7 +314,7 @@ Pull one member channel out of its mixer group and place it immediately after th
 
 _mutating_
 
-Dissolve a mixer group by its canonical path, leaving all members as top-level channels. Returns the removed group's id and former path plus each freed channel's current path. Dissolving shifts positional channel paths, including descendants; the response reports every changed canonical path in oscChanges, and callers should re-list channels before reusing cached paths. Undoable in Chromatik with Cmd-Z.
+Dissolve a mixer group by its canonical path, leaving all members as top-level channels. Returns the removed group's id and former path plus each freed channel's current path. Removing the bus makes LX rehome focus and selection using its normal channel-removal rules (typically to the first freed channel or adjacent bus). Dissolving shifts positional channel paths, including descendants; the response reports every changed canonical path in oscChanges, and callers should re-list channels before reusing cached paths. Undoable in Chromatik with Cmd-Z.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|

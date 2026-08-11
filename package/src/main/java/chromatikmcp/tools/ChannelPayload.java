@@ -7,10 +7,10 @@ import java.util.Map;
 
 import heronarts.lx.mixer.LXAbstractChannel;
 
-/** Shared JSON shaping for channel grouping mutations. */
-final class ChannelGroupingPayload {
+/** Shared JSON shaping for the stable path/id/label/index mixer-channel payload. */
+final class ChannelPayload {
 
-  private ChannelGroupingPayload() {}
+  private ChannelPayload() {}
 
   static Map<String, Object> channel(LXAbstractChannel channel) {
     Map<String, Object> payload = new LinkedHashMap<>();
