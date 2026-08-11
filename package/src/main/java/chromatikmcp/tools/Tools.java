@@ -140,6 +140,7 @@ public final class Tools {
             new RemoveColor(),
             new AddChannel(),
             new RemoveChannel(),
+            new MoveChannel(),
             new AddPattern(),
             new RemovePattern(),
             new ActivatePattern(),

@@ -9,6 +9,9 @@ import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
 import heronarts.lx.LXDeviceComponent;
 import heronarts.lx.blend.LXBlend;
+import heronarts.lx.clip.LXClip;
+import heronarts.lx.clip.LXClipLane;
+import heronarts.lx.clip.LXComposition;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.LXEffect;
 import heronarts.lx.mixer.LXAbstractChannel;
@@ -18,6 +21,7 @@ import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.mixer.LXMixerEngine;
 import heronarts.lx.mixer.LXPatternEngine;
 import heronarts.lx.modulation.LXCompoundModulation;
+import heronarts.lx.modulation.LXModulationContainer;
 import heronarts.lx.modulation.LXModulationEngine;
 import heronarts.lx.modulation.LXTriggerModulation;
 import heronarts.lx.modulator.LXModulator;
@@ -308,8 +312,90 @@ public final class Channels {
   /** The moved pattern plus every sibling whose canonical path changed as a result. */
   public record PatternMoveResult(LXPattern pattern, List<PathChange> oscChanges) {}
 
+  /** The moved channel/group plus every mixer component whose canonical path changed. */
+  public record ChannelMoveResult(LXAbstractChannel channel, List<PathChange> oscChanges) {}
+
   /** The moved effect plus every sibling whose canonical path changed as a result. */
   public record EffectMoveResult(LXEffect effect, List<PathChange> oscChanges) {}
+
+  /**
+   * Move a channel or group to an absolute 0-based index in the mixer list. The destination
+   * is interpreted after removing the moved channel (or the whole group block). Membership
+   * is preserved: grouped channels may only move within their group, and top-level buses may
+   * not be inserted into the middle of a group.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the destination is out of range or
+   *     would change group membership
+   */
+  public static ChannelMoveResult moveChannel(LX lx, String path, int toIndex) {
+    LXAbstractChannel channel = Resolve.component(lx, path, LXAbstractChannel.class);
+    List<LXAbstractChannel> channels = lx.engine.mixer.channels;
+    int blockSize = channel instanceof LXGroup movedGroup ? movedGroup.channels.size() + 1 : 1;
+    int remainingSize = channels.size() - blockSize;
+    if (toIndex < 0 || toIndex > remainingSize) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Channel index " + toIndex + " out of range [0," + remainingSize + "] on "
+              + Resolve.canonicalPath(lx.engine.mixer));
+    }
+
+    LXGroup currentGroup = channel.getGroup();
+    if (currentGroup != null) {
+      int firstMemberIndex = currentGroup.getIndex() + 1;
+      int afterLastMemberIndex = currentGroup.getIndex() + currentGroup.channels.size();
+      if (toIndex < firstMemberIndex || toIndex > afterLastMemberIndex) {
+        throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+            "Grouped channel destination " + toIndex + " must stay within ["
+                + firstMemberIndex + "," + afterLastMemberIndex + "] for "
+                + currentGroup.getCanonicalPath() + "; move_channel does not change membership");
+      }
+    } else if (insertionSplitsGroup(channels, channel, toIndex)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Channel destination " + toIndex + " would split a group; group membership is "
+              + "outside move_channel's scope");
+    }
+
+    var before = snapshotPaths(channels);
+    LXComposition composition = lx.engine.timeline.getComposition();
+    if (composition != null) {
+      for (LXClipLane<?> lane : composition.lanes) {
+        collectSubtree(lane, before);
+      }
+    }
+    // DropChannel's group implementation expects the old flat-list coordinate and then
+    // subtracts the member count after removing the block. Translate our consistent
+    // post-removal destination contract back to that coordinate for rightward moves.
+    int commandIndex = toIndex;
+    if (channel instanceof LXGroup movedGroup && toIndex > channel.getIndex()) {
+      commandIndex += movedGroup.channels.size();
+    }
+    Commands.perform(lx, new LXCommand.Mixer.DropChannel(channel, commandIndex, currentGroup));
+    if (channel.getIndex() != toIndex) {
+      throw new IllegalStateException("DropChannel placed " + channel.getId() + " at index "
+          + channel.getIndex() + " instead of requested index " + toIndex);
+    }
+    return new ChannelMoveResult(channel, pathChanges(lx, before));
+  }
+
+  private static boolean insertionSplitsGroup(List<LXAbstractChannel> channels,
+      LXAbstractChannel moving, int toIndex) {
+    List<LXAbstractChannel> remaining = new ArrayList<>();
+    LXGroup movedGroup = moving instanceof LXGroup group ? group : null;
+    for (LXAbstractChannel candidate : channels) {
+      if (candidate == moving || (movedGroup != null && candidate.getGroup() == movedGroup)) {
+        continue;
+      }
+      remaining.add(candidate);
+    }
+    if (toIndex == 0 || toIndex == remaining.size()) {
+      return false;
+    }
+    LXAbstractChannel left = remaining.get(toIndex - 1);
+    LXAbstractChannel right = remaining.get(toIndex);
+    if (left instanceof LXGroup leftGroup) {
+      return right.getGroup() == leftGroup;
+    }
+    return left.getGroup() != null && left.getGroup() == right.getGroup();
+  }
 
   /**
    * Move a pattern to a new 0-based index within its channel.
@@ -524,7 +610,23 @@ public final class Channels {
   // (throws if a parent is already set, or if parent == this), so the component graph
   // is a tree and this recursion always terminates without revisiting a node.
   private static void collectSubtree(LXComponent component, Map<Integer, String> snapshot) {
-    snapshot.put(component.getId(), component.getCanonicalPath());
+    String path = Resolve.canonicalPathOrNull(component);
+    if (path != null) {
+      snapshot.put(component.getId(), path);
+    }
+    if (component instanceof LXBus bus) {
+      for (LXClip clip : bus.clips) {
+        collectSubtree(clip, snapshot);
+      }
+    }
+    if (component instanceof LXClip clip) {
+      // Lanes are LXComponents with resolvable canonical paths (synthesized by Resolve
+      // because upstream lane getPath() implementations are inconsistent). Clip events
+      // are serializable value objects, not LXComponents, and have no canonical address.
+      for (LXClipLane<?> lane : clip.lanes) {
+        collectSubtree(lane, snapshot);
+      }
+    }
     if (component instanceof LXEffect.Container container) {
       for (LXEffect effect : container.getEffects()) {
         collectSubtree(effect, snapshot);
@@ -535,18 +637,18 @@ public final class Channels {
         collectSubtree(pattern, snapshot);
       }
     }
-    // Every LXPattern/LXEffect is an LXDeviceComponent and unconditionally owns a
-    // modulation engine (LXDeviceComponent.java:87,157); its modulators, compound
-    // modulations, and triggers are addressed by canonical paths prefixed with this
-    // component's own path segment, so they shift right alongside it.
-    if (component instanceof LXDeviceComponent device) {
-      for (LXModulator modulator : device.modulation.modulators) {
+    // Patterns/effects and mixer buses all implement LXModulationContainer. Their
+    // modulators, compound modulations, and triggers are addressed by canonical paths
+    // prefixed with the owner, so they shift right alongside it.
+    if (component instanceof LXModulationContainer container) {
+      LXModulationEngine modulation = container.getModulationEngine();
+      for (LXModulator modulator : modulation.modulators) {
         collectSubtree(modulator, snapshot);
       }
-      for (LXCompoundModulation modulation : device.modulation.modulations) {
-        collectSubtree(modulation, snapshot);
+      for (LXCompoundModulation wiring : modulation.modulations) {
+        collectSubtree(wiring, snapshot);
       }
-      for (LXTriggerModulation trigger : device.modulation.triggers) {
+      for (LXTriggerModulation trigger : modulation.triggers) {
         collectSubtree(trigger, snapshot);
       }
     }
@@ -570,8 +672,8 @@ public final class Channels {
         // reports paths that changed, not components that disappeared.
         continue;
       }
-      String after = component.getCanonicalPath();
-      if (!after.equals(entry.getValue())) {
+      String after = Resolve.canonicalPathOrNull(component);
+      if (after != null && !after.equals(entry.getValue())) {
         changes.add(new PathChange(entry.getKey(), entry.getValue(), after));
       }
     }
