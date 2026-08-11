@@ -40,6 +40,10 @@ add_channel {class: heronarts.lx.pattern.color.GradientPattern}
                                         → channel path (LX focuses/selects it in the UI)
 add_pattern {containerPath: <path>, class: heronarts.lx.pattern.texture.SparklePattern}
 activate_pattern {path: <pattern path>} → switch to it (PLAYLIST mode)
+group_channels {paths: [<channel 1 path>, <channel 3 path>]}
+                                        → group bus + reordered member paths + oscChanges
+add_effect {containerPath: <group path>, class: heronarts.lx.effect.color.ColorizeEffect}
+                                        → one effect over the members' composite
 ```
 
 Wrinkles:
@@ -48,6 +52,11 @@ Wrinkles:
   pattern's `enabled` parameter with `set_parameter`.
 - With a transition blend configured, the response's `active` is `false` until the
   transition lands — don't re-fire.
+- The mixer list stays flat after grouping: the group and its members all retain
+  top-level `/lx/mixer/channel/N` paths, while each member's `group` field points to
+  the bus. Grouping reorders members contiguously and is not undoable because LX has
+  no explicit-list command; `ungroup_channel` and `ungroup_channels` are undoable.
+  Every grouping mutation returns `oscChanges`; re-list before reusing channel paths.
 
 ## 3. Chain effects
 

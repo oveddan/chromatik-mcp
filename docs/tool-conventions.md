@@ -343,7 +343,8 @@ large (`list_parameters` on a big project is the known next candidate):
 ### Not-undoable disclosure
 
 - Some things LX ships **no command for** (transport launch/stop, the timeline `arm`
-  field, a lane's `uiVisible`, text-note events, MIDI device/surface flags). The tool
+  field, a lane's `uiVisible`, text-note events, MIDI device/surface flags, explicit-list
+  channel grouping). The tool
   still ships, as a direct engine edit — but its description must say so, with the
   literal sentence **"Not undoable with Cmd-Z."** as the closing disclosure (agents relay
   it to users deciding whether an edit is safe to try). Silence means command-backed and
@@ -385,8 +386,8 @@ large (`list_parameters` on a big project is the known next candidate):
 
 - `LxTool.batchable()` defaults to `!readOnly()`. A mutation overrides it to `false`
   when nesting would violate `apply_operations`' forward-operation/history contract;
-  currently `undo` and `redo` are the only overrides because a batch must not silently
-  unwind an earlier entry or unrelated shared history.
+  `undo` and `redo` must not silently unwind an earlier entry or unrelated shared history,
+  while `group_channels` cannot provide the per-operation undo entry that batching promises.
 - The batch registry independently requires both `!tool.readOnly()` and
   `tool.batchable()`. The redundant read-only predicate is intentional defense in depth:
   a read tool cannot opt itself into a mutating batch by returning `true` from an override.

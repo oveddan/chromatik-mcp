@@ -1,9 +1,12 @@
 package chromatikmcp.domain;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
@@ -31,7 +34,8 @@ import heronarts.lx.pattern.LXPattern;
 /**
  * Read-only snapshots and mutations of the mixer. Snapshot records are immutable copies
  * assembled on the engine thread, so tool handlers never hold live LX objects off-thread.
- * Mutation primitives are also called on the engine thread and route through LXCommand.
+ * Mutation primitives are also called on the engine thread. They route through LXCommand
+ * except where LX exposes no explicit-argument command, as documented on that primitive.
  */
 public final class Channels {
 
@@ -236,6 +240,90 @@ public final class Channels {
   public static void removeChannel(LX lx, String path) {
     LXAbstractChannel channel = Resolve.component(lx, path, LXAbstractChannel.class);
     Commands.perform(lx, new LXCommand.Mixer.RemoveChannel(channel));
+  }
+
+  /** A newly created group plus all mixer component paths changed by its insertion. */
+  public record GroupChannelsResult(LXGroup group, List<LXChannel> channels,
+      List<PathChange> oscChanges) {}
+
+  /** A dissolved group plus the now-top-level channels and all changed mixer paths. */
+  public record UngroupChannelsResult(int groupId, String groupPath, List<LXChannel> channels,
+      List<PathChange> oscChanges) {}
+
+  /** One channel removed from a group plus all changed mixer paths. */
+  public record UngroupChannelResult(LXChannel channel, int groupId, String groupPath,
+      List<PathChange> oscChanges) {}
+
+  /**
+   * Create a group from an explicit list of top-level channel paths.
+   *
+   * <p>LX has no explicit-list grouping command: GroupSelectedChannels reads UI selection.
+   * This therefore calls the engine API directly and is not undoable. Every path is resolved
+   * and validated before mutation so a bad request cannot leave a partially built group.
+   */
+  public static GroupChannelsResult groupChannels(LX lx, List<String> paths) {
+    if (paths.isEmpty()) {
+      throw Resolve.invalidArgument("paths must contain at least one channel path");
+    }
+    List<LXChannel> channels = new ArrayList<>();
+    Set<Integer> ids = new LinkedHashSet<>();
+    for (String path : paths) {
+      LXChannel channel = Resolve.component(lx, path, LXChannel.class);
+      if (!ids.add(channel.getId())) {
+        throw Resolve.invalidArgument("Duplicate channel path: " + path);
+      }
+      if (channel.getGroup() != null) {
+        throw Resolve.invalidArgument("Channel is already in a group: " + path);
+      }
+      channels.add(channel);
+    }
+
+    // LXMixerEngine.addGroup(List) was built for getSelectedChannelsForGroup(), whose
+    // result is always mixer-ordered. Supplying a later channel before an earlier one can
+    // make its internal insertion index exceed the shrinking list size, after it has already
+    // moved a member. Normalize explicit MCP input to that engine precondition.
+    channels.sort(Comparator.comparingInt(LXChannel::getIndex));
+
+    var before = snapshotPaths(lx.engine.mixer.channels);
+    LXGroup group = lx.engine.mixer.addGroup(channels);
+    if (group == null || group.channels.size() != channels.size()
+        || !group.channels.containsAll(channels)) {
+      throw new IllegalStateException("Mixer did not create the requested channel group");
+    }
+    lx.command.setDirty(true);
+    return new GroupChannelsResult(group, List.copyOf(channels), pathChanges(lx, before));
+  }
+
+  /** Dissolve a group through LXCommand so the operation is undoable. */
+  public static UngroupChannelsResult ungroupChannels(LX lx, String path) {
+    LXGroup group = Resolve.component(lx, path, LXGroup.class);
+    int groupId = group.getId();
+    String groupPath = group.getCanonicalPath();
+    List<LXChannel> channels = List.copyOf(group.channels);
+    var before = snapshotPaths(lx.engine.mixer.channels);
+    Commands.perform(lx, new LXCommand.Mixer.Ungroup(group));
+    if (lx.getComponent(groupId) != null
+        || channels.stream().anyMatch(channel -> channel.getGroup() != null)) {
+      throw new IllegalStateException("Ungroup did not dissolve group " + groupPath);
+    }
+    return new UngroupChannelsResult(groupId, groupPath, channels, pathChanges(lx, before));
+  }
+
+  /** Remove one member from its group through LXCommand so the operation is undoable. */
+  public static UngroupChannelResult ungroupChannel(LX lx, String path) {
+    LXChannel channel = Resolve.component(lx, path, LXChannel.class);
+    LXGroup group = channel.getGroup();
+    if (group == null) {
+      throw Resolve.invalidArgument("Channel is not in a group: " + path);
+    }
+    int groupId = group.getId();
+    String groupPath = group.getCanonicalPath();
+    var before = snapshotPaths(lx.engine.mixer.channels);
+    Commands.perform(lx, new LXCommand.Mixer.UngroupChannel(channel));
+    if (channel.getGroup() != null) {
+      throw new IllegalStateException("UngroupChannel did not remove channel " + path);
+    }
+    return new UngroupChannelResult(channel, groupId, groupPath, pathChanges(lx, before));
   }
 
   /**

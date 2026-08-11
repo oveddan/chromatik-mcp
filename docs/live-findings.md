@@ -97,9 +97,11 @@ into slices when related items accumulate; lines deleted when their fix merges.
 - view lifecycle now undoable via LXCommand.Structure.AddView/RemoveView (#56) —
   closes the round-3 "not undoable" caveat below. The remove_view index-clamp trap
   remains (undo restores the view definition, not stale device assignments).
-- Deliberately skipped: channel group/ungroup tools — LXCommand.Mixer.GroupSelectedChannels
-  reads UI selection state, not an explicit channel list. Revisit if LX grows an
-  explicit-list command.
+- Channel group/ungroup tools shipped in #200 after correcting the earlier skip rationale:
+  `LXMixerEngine.addGroup(List<LXChannel>)` does accept an explicit list, though no matching
+  LXCommand exists. `group_channels` therefore uses that engine API directly and documents
+  that it is not undoable; `ungroup_channel` and `ungroup_channels` use the existing
+  command-backed operations and are undoable.
 - Known LX quirk (documented + pinned by test, not fixable server-side): undo after
   recall_snapshot is a no-op for plain parameters (LX captures undo state post-mutation).
 

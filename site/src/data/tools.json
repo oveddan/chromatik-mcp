@@ -1099,6 +1099,26 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "group_channels",
+  "description" : "Create a mixer group from a non-empty list of top-level channel paths. The leftmost selected channel determines where the group bus is inserted; members are reordered contiguously in their current mixer order. Rejects duplicate paths, group paths, and channels already in a group. Grouping shifts positional channel paths, including descendants; the response reports every changed canonical path in oscChanges, and callers should re-list channels before reusing cached paths. LX has no explicit-list grouping command, so this is a direct engine edit. Not undoable with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "paths" : {
+        "type" : "array",
+        "description" : "Non-empty list of top-level channel paths to group; input order does not matter",
+        "items" : {
+          "type" : "string",
+          "description" : "Canonical path of a top-level channel"
+        },
+        "minItems" : 1
+      }
+    },
+    "required" : [ "paths" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "launch_clip",
   "description" : "Start clip playback. mode 'play' (the default) is immediate and unquantized, from the 'from' cursor or the current playhead — it requires the clip to have content (a fresh composition has none until something is recorded or playEnd is pushed out with set_clip_marker) and to not already be running. mode 'automation' launches automation playback subject to the global launch quantization, from 'from' or the playStart marker — when quantization is set the response shows pending:true and running flips on the quantization boundary. mode 'launch' is the full quantized grid-style launch from playStart, which also recalls the clip's snapshot if enabled; it does not accept 'from'. path defaults to the arrange composition (/lx/timeline/composition) and also accepts a grid clip (/lx/mixer/channel/N/clip/M). Returns the clip state read back after the call (running, pending, playhead). Transport is not an LXCommand upstream — Not undoable with Cmd-Z.",
   "readOnly" : false,
@@ -2618,6 +2638,36 @@
   "inputSchema" : {
     "type" : "object",
     "properties" : { },
+    "additionalProperties" : false
+  }
+}, {
+  "name" : "ungroup_channel",
+  "description" : "Pull one member channel out of its mixer group and place it immediately after the remaining group span. Returns invalid_argument if the channel is not grouped. The operation shifts positional channel paths, including descendants; the response reports every changed canonical path in oscChanges, and callers should re-list channels before reusing cached paths. Undoable in Chromatik with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "path" : {
+        "type" : "string",
+        "description" : "Canonical path of a channel currently in a group"
+      }
+    },
+    "required" : [ "path" ],
+    "additionalProperties" : false
+  }
+}, {
+  "name" : "ungroup_channels",
+  "description" : "Dissolve a mixer group by its canonical path, leaving all members as top-level channels. Returns the removed group's id and former path plus each freed channel's current path. Dissolving shifts positional channel paths, including descendants; the response reports every changed canonical path in oscChanges, and callers should re-list channels before reusing cached paths. Undoable in Chromatik with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "path" : {
+        "type" : "string",
+        "description" : "Canonical path of the group to dissolve, e.g. /lx/mixer/channel/1"
+      }
+    },
+    "required" : [ "path" ],
     "additionalProperties" : false
   }
 }, {

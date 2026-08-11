@@ -1,5 +1,7 @@
 package chromatikmcp.tools;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import chromatikmcp.domain.Resolve;
@@ -161,5 +163,20 @@ final class Args {
       throw Resolve.invalidArgument("Optional object argument: " + name);
     }
     return (Map<String, Object>) map;
+  }
+
+  /** Required array whose every entry is a string. Semantic emptiness is caller-owned. */
+  static List<String> requireStringList(Map<String, Object> args, String name) {
+    if (!(args.get(name) instanceof List<?> values)) {
+      throw Resolve.invalidArgument("Required string-array argument: " + name);
+    }
+    List<String> strings = new ArrayList<>();
+    for (Object value : values) {
+      if (!(value instanceof String string)) {
+        throw Resolve.invalidArgument("Required string-array argument: " + name);
+      }
+      strings.add(string);
+    }
+    return strings;
   }
 }
