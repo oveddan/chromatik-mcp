@@ -94,6 +94,31 @@ class ChannelGroupingTest extends HeadlessLxTest {
   }
 
   @Test
+  void newlyCreatedGroupMovesAsOneBlockAndUndoRestoresItsPosition() {
+    LX lx = newHeadlessLx();
+    LXChannel first = channelWithPattern(lx);
+    LXChannel ungrouped = channelWithPattern(lx);
+    LXChannel last = channelWithPattern(lx);
+    Channels.GroupChannelsResult grouped = Channels.groupChannels(lx,
+        List.of(last.getCanonicalPath(), first.getCanonicalPath()));
+    LXGroup group = grouped.group();
+    lx.command.clear();
+
+    Channels.ChannelMoveResult moved =
+        Channels.moveChannel(lx, group.getCanonicalPath(), 1);
+
+    assertSame(group, moved.channel());
+    assertEquals(List.of(ungrouped, group, first, last), lx.engine.mixer.channels);
+    assertEquals(List.of(first, last), group.channels);
+    assertSame(group, first.getGroup());
+    assertSame(group, last.getGroup());
+
+    lx.command.undo();
+    assertEquals(List.of(group, first, last, ungrouped), lx.engine.mixer.channels);
+    assertEquals(List.of(first, last), group.channels);
+  }
+
+  @Test
   void groupChannelsValidatesWholeRequestBeforeMutation() {
     LX lx = newHeadlessLx();
     LXChannel first = channelWithPattern(lx);
