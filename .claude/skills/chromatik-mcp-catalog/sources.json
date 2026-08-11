@@ -12,5 +12,12 @@
     "classBytes": "target/classes",
     "version": "local",
     "target": "repo"
+  },
+  "chromatik-mcp": {
+    "url": "git@github.com:oveddan/chromatik-mcp.git",
+    "srcDir": "package/src/main/java",
+    "classBytes": "package/target/classes",
+    "version": "local",
+    "target": "repo"
   }
 }
