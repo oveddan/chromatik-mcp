@@ -1345,6 +1345,27 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "move_channel",
+  "description" : "Move a channel or group to a 0-based destination index in the mixer's flat channel list. The index is interpreted after removing the moved channel or entire group block: moving index 0 to index 2 in [A, B, C] produces [B, C, A]. Groups move together with all their members. This tool preserves membership: a grouped channel must stay within its group, and a top-level channel cannot be inserted into a group. Moving shifts 1-based paths for the moved block, crossed siblings, and their descendants — re-list rather than reusing cached paths. The response's oscChanges array reports every changed canonical path (componentId, before, after). Returns invalid_argument for an out-of-range index or a destination that would change group membership. Undoable in Chromatik with Cmd-Z; an undo inverts every path in oscChanges with no separate signal.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "path" : {
+        "type" : "string",
+        "description" : "Canonical path of the channel or group to move, e.g. /lx/mixer/channel/1"
+      },
+      "index" : {
+        "type" : "integer",
+        "description" : "0-based destination in the mixer list after removing the moved channel/group block",
+        "minimum" : -2147483648,
+        "maximum" : 2147483647
+      }
+    },
+    "required" : [ "path", "index" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "move_clip_lane",
   "description" : "Move an automation lane to a new 0-based index within its clip. path is the canonical lane address (<clipPath>/lane/<n>, 1-indexed) from list_clip_lanes. The engine may override the request without failing: on the composition, parameter/midiNote/pattern lanes are constrained to their channel's section and section lanes (audio, textNote, globalModulation, colorPalette) snap across whole sections — the response's lane.index is the ACTUAL position read back from the engine, requestedIndex echoes the ask, and moved is false when the lane ended up where it started. Bus lanes mirror mixer order and are rejected — reorder the channel in the mixer instead. Lane paths and indices are POSITIONAL: every lane crossed by the move shifts, so re-run list_clip_lanes rather than reuse addresses from earlier responses. Undoable with Cmd-Z.",
   "readOnly" : false,

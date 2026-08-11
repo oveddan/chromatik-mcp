@@ -60,7 +60,7 @@ inspect the affected area.
 
 | tool | what it does |
 |---|---|
-| `add_channel {class?}` / `remove_channel {path}` | mixer channels, optionally seeded with a first pattern (LX moves UI focus to a new channel) |
+| `add_channel {class?}` / `remove_channel {path}` / `move_channel {path, index}` | add, remove, or reorder mixer channels and group blocks; move destinations are 0-based post-removal indices and preserve group membership |
 | `add_pattern {containerPath, class, index?}` / `remove_pattern` / `move_pattern {path, index}` | manage a channel's or PatternRack's pattern list |
 | `activate_pattern {path}` | switch the active pattern (PLAYLIST mode; BLEND-mode channels layer patterns via their `enabled` params instead) |
 | `add_effect {containerPath, class}` / `remove_effect` / `move_effect {path, index}` | effect chains — run serially in list order — on channels, the master bus, or an individual pattern |

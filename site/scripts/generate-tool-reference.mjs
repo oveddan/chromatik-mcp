@@ -37,6 +37,7 @@ const CATEGORIES = {
   structure: [
     'add_channel',
     'remove_channel',
+    'move_channel',
     'add_pattern',
     'remove_pattern',
     'move_pattern',

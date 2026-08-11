@@ -159,7 +159,7 @@ class ToolsIntegrationTest {
             "list_fixtures", "get_fixture", "get_output_map", "list_available_fixtures", "add_fixture",
             "remove_fixture", "move_fixture", "duplicate_fixture",
             "set_fixture_params", "set_fixture_tags", "reload_fixtures",
-            "add_channel", "remove_channel", "add_pattern", "remove_pattern",
+            "add_channel", "remove_channel", "move_channel", "add_pattern", "remove_pattern",
             "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
             "get_tempo",
             "list_midi_devices", "list_midi_mappings", "list_midi_surfaces", "list_midi_templates",
@@ -183,7 +183,7 @@ class ToolsIntegrationTest {
         "wire_trigger", "remove_modulation", "remove_modulator", "move_modulator", "fire_trigger",
         "add_view", "remove_view", "add_fixture", "remove_fixture", "move_fixture",
         "duplicate_fixture", "set_fixture_params", "set_fixture_tags", "reload_fixtures",
-        "add_channel", "remove_channel", "add_pattern", "remove_pattern",
+        "add_channel", "remove_channel", "move_channel", "add_pattern", "remove_pattern",
         "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
         "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
         "remove_color",
@@ -789,6 +789,99 @@ class ToolsIntegrationTest {
       structured(call("remove_channel", Map.of("path", channelPath)));
     }
     assertEquals(before, lx.engine.mixer.channels.size());
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void moveChannelUsesPostRemovalIndexAndReportsPathChanges() {
+    LXChannel[] added = engineExecutor.call(() -> new LXChannel[] {
+        lx.engine.mixer.addChannel(), lx.engine.mixer.addChannel(), lx.engine.mixer.addChannel()
+    });
+    try {
+      int destination = added[0].getIndex() + 2;
+      Map<String, Object> moved = structured(call("move_channel", Map.of(
+          "path", added[0].getCanonicalPath(), "index", destination)));
+
+      assertEquals(destination, ((Number) moved.get("index")).intValue());
+      assertSame(added[0], lx.engine.mixer.channels.get(added[0].getIndex()));
+      List<Map<String, Object>> changes =
+          (List<Map<String, Object>>) assertOscChanges(moved.get("oscChanges"));
+      assertEquals(3, changes.size(), "moved channel and two crossed siblings changed paths");
+    } finally {
+      engineExecutor.execute(() -> {
+        for (LXChannel addedChannel : added) {
+          lx.engine.mixer.removeChannel(addedChannel);
+        }
+      });
+    }
+  }
+
+  @Test
+  void moveChannelOutOfRangeIsInvalidArgumentAndDoesNotClearHistory() {
+    LXChannel[] added = engineExecutor.call(() -> new LXChannel[] {
+        lx.engine.mixer.addChannel(), lx.engine.mixer.addChannel()
+    });
+    try {
+      LXCommand undoBefore = lx.command.getUndoCommand();
+      int indexBefore = added[0].getIndex();
+
+      McpSchema.CallToolResult result = call("move_channel", Map.of(
+          "path", added[0].getCanonicalPath(), "index", lx.engine.mixer.channels.size()));
+
+      assertEquals(Boolean.TRUE, result.isError());
+      McpSchema.TextContent text =
+          assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+      assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+      assertEquals(indexBefore, added[0].getIndex());
+      assertSame(undoBefore, lx.command.getUndoCommand());
+    } finally {
+      engineExecutor.execute(() -> {
+        for (LXChannel addedChannel : added) {
+          lx.engine.mixer.removeChannel(addedChannel);
+        }
+      });
+    }
+  }
+
+  @Test
+  void moveChannelMovesGroupAsBlockAndRejectsMemberEscape() {
+    Object[] setup = engineExecutor.call(() -> {
+      LXChannel a = lx.engine.mixer.addChannel();
+      LXChannel b = lx.engine.mixer.addChannel();
+      LXChannel c = lx.engine.mixer.addChannel();
+      LXChannel d = lx.engine.mixer.addChannel();
+      LXGroup group = lx.engine.mixer.addGroup(List.of(b, c));
+      return new Object[] {a, b, c, d, group};
+    });
+    LXChannel a = (LXChannel) setup[0];
+    LXChannel b = (LXChannel) setup[1];
+    LXChannel c = (LXChannel) setup[2];
+    LXChannel d = (LXChannel) setup[3];
+    LXGroup group = (LXGroup) setup[4];
+    try {
+      Map<String, Object> moved = structured(call("move_channel", Map.of(
+          "path", group.getCanonicalPath(), "index", lx.engine.mixer.channels.size() - 3)));
+      assertEquals(lx.engine.mixer.channels.size() - 3,
+          ((Number) moved.get("index")).intValue());
+      assertEquals(List.of(group, b, c), lx.engine.mixer.channels.subList(
+          group.getIndex(), group.getIndex() + 3));
+
+      McpSchema.CallToolResult rejected = call("move_channel", Map.of(
+          "path", b.getCanonicalPath(), "index", 0));
+      assertEquals(Boolean.TRUE, rejected.isError());
+      McpSchema.TextContent text =
+          assertInstanceOf(McpSchema.TextContent.class, rejected.content().get(0));
+      assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+      assertSame(group, b.getGroup());
+    } finally {
+      engineExecutor.execute(() -> {
+        group.ungroup();
+        lx.engine.mixer.removeChannel(a);
+        lx.engine.mixer.removeChannel(b);
+        lx.engine.mixer.removeChannel(c);
+        lx.engine.mixer.removeChannel(d);
+      });
+    }
   }
 
   @Test

@@ -308,8 +308,79 @@ public final class Channels {
   /** The moved pattern plus every sibling whose canonical path changed as a result. */
   public record PatternMoveResult(LXPattern pattern, List<PathChange> oscChanges) {}
 
+  /** The moved channel/group plus every mixer component whose canonical path changed. */
+  public record ChannelMoveResult(LXAbstractChannel channel, List<PathChange> oscChanges) {}
+
   /** The moved effect plus every sibling whose canonical path changed as a result. */
   public record EffectMoveResult(LXEffect effect, List<PathChange> oscChanges) {}
+
+  /**
+   * Move a channel or group to an absolute 0-based index in the mixer list. The destination
+   * is interpreted after removing the moved channel (or the whole group block). Membership
+   * is preserved: grouped channels may only move within their group, and top-level buses may
+   * not be inserted into the middle of a group.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the destination is out of range or
+   *     would change group membership
+   */
+  public static ChannelMoveResult moveChannel(LX lx, String path, int toIndex) {
+    LXAbstractChannel channel = Resolve.component(lx, path, LXAbstractChannel.class);
+    List<LXAbstractChannel> channels = lx.engine.mixer.channels;
+    int blockSize = channel instanceof LXGroup group ? group.channels.size() + 1 : 1;
+    int remainingSize = channels.size() - blockSize;
+    if (toIndex < 0 || toIndex > remainingSize) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Channel index " + toIndex + " out of range [0," + remainingSize + "] on /lx/mixer");
+    }
+
+    LXGroup group = channel.getGroup();
+    if (group != null) {
+      int firstMemberIndex = group.getIndex() + 1;
+      int afterLastMemberIndex = group.getIndex() + group.channels.size();
+      if (toIndex < firstMemberIndex || toIndex > afterLastMemberIndex) {
+        throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+            "Grouped channel destination " + toIndex + " must stay within ["
+                + firstMemberIndex + "," + afterLastMemberIndex + "] for "
+                + group.getCanonicalPath() + "; move_channel does not change membership");
+      }
+    } else if (insertionSplitsGroup(channels, channel, toIndex)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Channel destination " + toIndex + " would split a group; group membership is "
+              + "outside move_channel's scope");
+    }
+
+    var before = snapshotPaths(channels);
+    // DropChannel's group implementation expects the old flat-list coordinate and then
+    // subtracts the member count after removing the block. Translate our consistent
+    // post-removal destination contract back to that coordinate for rightward moves.
+    int commandIndex = toIndex;
+    if (channel instanceof LXGroup movedGroup && toIndex > channel.getIndex()) {
+      commandIndex += movedGroup.channels.size();
+    }
+    Commands.perform(lx, new LXCommand.Mixer.DropChannel(channel, commandIndex, group));
+    return new ChannelMoveResult(channel, pathChanges(lx, before));
+  }
+
+  private static boolean insertionSplitsGroup(List<LXAbstractChannel> channels,
+      LXAbstractChannel moving, int toIndex) {
+    List<LXAbstractChannel> remaining = new ArrayList<>();
+    LXGroup movedGroup = moving instanceof LXGroup group ? group : null;
+    for (LXAbstractChannel candidate : channels) {
+      if (candidate == moving || (movedGroup != null && candidate.getGroup() == movedGroup)) {
+        continue;
+      }
+      remaining.add(candidate);
+    }
+    if (toIndex == 0 || toIndex == remaining.size()) {
+      return false;
+    }
+    LXAbstractChannel left = remaining.get(toIndex - 1);
+    LXAbstractChannel right = remaining.get(toIndex);
+    if (left instanceof LXGroup leftGroup) {
+      return right.getGroup() == leftGroup;
+    }
+    return left.getGroup() != null && left.getGroup() == right.getGroup();
+  }
 
   /**
    * Move a pattern to a new 0-based index within its channel.

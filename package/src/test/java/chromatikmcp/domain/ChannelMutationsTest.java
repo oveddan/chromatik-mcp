@@ -19,6 +19,7 @@ import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.effect.LXEffect;
 import heronarts.lx.mixer.LXAbstractChannel;
 import heronarts.lx.mixer.LXChannel;
+import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.pattern.color.GradientPattern;
 import heronarts.lx.pattern.color.SolidPattern;
@@ -78,6 +79,111 @@ class ChannelMutationsTest extends HeadlessLxTest {
     var ex = assertThrows(Resolve.ResolveException.class,
         () -> Channels.removeChannel(lx, "/lx/mixer/channel/999"));
     assertEquals(Resolve.Failure.NOT_FOUND, ex.failure);
+  }
+
+  // ── move channel ─────────────────────────────────────────────────────────────
+
+  @Test
+  void moveChannelUsesPostRemovalIndexAndUndo() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXChannel c = lx.engine.mixer.addChannel();
+    String aBefore = a.getCanonicalPath();
+    String bBefore = b.getCanonicalPath();
+    String cBefore = c.getCanonicalPath();
+
+    Channels.ChannelMoveResult result = Channels.moveChannel(lx, aBefore, 2);
+
+    assertEquals(List.of(b, c, a), lx.engine.mixer.channels,
+        "index is evaluated against [B, C] after A is removed");
+    assertEquals(2, result.channel().getIndex());
+    assertPathChange(result.oscChanges(), a.getId(), aBefore, a.getCanonicalPath());
+    assertPathChange(result.oscChanges(), b.getId(), bBefore, b.getCanonicalPath());
+    assertPathChange(result.oscChanges(), c.getId(), cBefore, c.getCanonicalPath());
+
+    lx.command.undo();
+    assertEquals(List.of(a, b, c), lx.engine.mixer.channels);
+  }
+
+  @Test
+  void moveChannelOutOfRangePreservesUndoHistory() {
+    LX lx = newHeadlessLx();
+    LXChannel a = Channels.addChannel(lx, null);
+    lx.engine.mixer.addChannel();
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> Channels.moveChannel(lx, a.getCanonicalPath(), 2));
+
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand(),
+        "bounds rejection happens before DropChannel can clear history");
+    assertEquals(0, a.getIndex());
+  }
+
+  @Test
+  void moveGroupUsesPostRemovalIndexAndMovesMembersAsBlock() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXChannel c = lx.engine.mixer.addChannel();
+    LXChannel d = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(b, c));
+    assertEquals(List.of(a, group, b, c, d), lx.engine.mixer.channels);
+
+    Channels.ChannelMoveResult result =
+        Channels.moveChannel(lx, group.getCanonicalPath(), 2);
+
+    assertEquals(List.of(a, d, group, b, c), lx.engine.mixer.channels,
+        "group and both members append as one block after removal");
+    assertEquals(2, result.channel().getIndex());
+    assertSame(group, b.getGroup());
+    assertSame(group, c.getGroup());
+
+    lx.command.undo();
+    assertEquals(List.of(a, group, b, c, d), lx.engine.mixer.channels);
+  }
+
+  @Test
+  void moveGroupedMemberStaysInGroupAndCannotEscape() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXChannel c = lx.engine.mixer.addChannel();
+    LXChannel d = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(b, c));
+
+    Channels.moveChannel(lx, b.getCanonicalPath(), 3);
+    assertEquals(List.of(a, group, c, b, d), lx.engine.mixer.channels);
+    assertSame(group, b.getGroup(), "move preserves membership");
+    lx.command.undo();
+    assertEquals(List.of(a, group, b, c, d), lx.engine.mixer.channels);
+
+    LXCommand undoBefore = lx.command.getUndoCommand();
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> Channels.moveChannel(lx, b.getCanonicalPath(), 4));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand());
+    assertSame(group, b.getGroup());
+  }
+
+  @Test
+  void moveTopLevelChannelCannotSplitGroup() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXChannel c = lx.engine.mixer.addChannel();
+    LXChannel d = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(b, c));
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    Resolve.ResolveException e = assertThrows(Resolve.ResolveException.class,
+        () -> Channels.moveChannel(lx, d.getCanonicalPath(), 2));
+
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
+    assertEquals(List.of(a, group, b, c, d), lx.engine.mixer.channels);
+    assertSame(undoBefore, lx.command.getUndoCommand());
   }
 
   // ── add/remove pattern ────────────────────────────────────────────────────────
