@@ -1,6 +1,6 @@
 ---
 name: driving-chromatik
-description: House rules for driving a live Chromatik (LX Studio) lighting show over the chromatik-mcp MCP server — connecting and recovering from restarts, canonical-path addressing, timeout and error-code semantics, consulting component docs before reasoning about a pattern, and the mutate/look/adjust verification loop. Use whenever calling chromatik MCP tools against a running instance.
+description: House rules for driving a live Chromatik (LX Studio) lighting show over the chromatik-mcp MCP server — connecting and recovering from restarts, canonical-path addressing, timeout and error-code semantics, the shared undo history and which mutations aren't undoable, consulting component docs before reasoning about a pattern, and the mutate/look/adjust verification loop. Use whenever calling chromatik MCP tools against a running instance.
 ---
 
 ## When this applies
@@ -123,6 +123,55 @@ full depth) to apply it immediately, or `set_parameter` on the wiring's returned
 `rangePath` afterwards. A wiring LX rejects (e.g. a circular dependency) clears
 Chromatik's entire undo history as a side effect — that's LX's own `perform()` behavior,
 not a bug in this server.
+
+## The undo history isn't yours alone
+
+`undo` and `redo` walk Chromatik's command history one step at a time — exactly one
+Cmd-Z or Cmd-Shift-Z per call, with no way to skip newer work. The history is **shared
+and linear across the whole engine**: it includes command-backed changes made in the UI
+and by other MCP clients, not just your session. So the newest step is not necessarily
+your step.
+
+- Read the response's `command` to learn what actually moved, rather than assuming it
+  was the mutation you just made. `changed: false` means the stack was empty — a benign
+  no-op, not an error.
+- Prefer an explicit inverse (`remove_*` what you added) over `undo` whenever a human or
+  another agent might be working in the same project. Reach for `undo` to unwind your own
+  immediately-preceding step, not as a general-purpose rollback.
+- Undoing or redoing a structural or move command shifts canonical paths just like the
+  original did — re-list afterward.
+- Any new command-backed mutation after an undo clears the redo stack.
+- If the underlying LX command throws, the call returns `internal`, LX clears **both**
+  stacks, and engine state may be partially changed. The error reports post-failure
+  `canUndo`/`canRedo`. Stop and inspect the affected area; don't retry.
+
+Neither tool is available inside `apply_operations`, so a batch can't quietly rewrite
+shared history.
+
+## Grouping channels is the not-undoable exception
+
+`group_channels` takes an explicit list of top-level channel paths and creates a group
+bus. It is a **direct engine edit with no Cmd-Z**, because LX has no explicit-list
+grouping command — the one structural mutation on the mixer you cannot take back with
+undo. Decide before you call, not after. Both `ungroup_channel` (pull one member out) and
+`ungroup_channels` (dissolve the bus) *are* undoable.
+
+- Grouping reorders members contiguously and reindexes paths across the mixer. Every
+  grouping tool — plus `move_channel` — returns an `oscChanges` array naming each changed
+  canonical path (`componentId`, `before`, `after`). Re-list channels before reusing any
+  held path, and re-map OSC senders that addressed the old paths.
+- The mixer list stays flat after grouping: the group bus and its members all keep
+  top-level `/lx/mixer/channel/N` paths, and each member's `group` field points at the
+  bus. There is no nesting to walk.
+- `ungroup_channel` on the last remaining member leaves an **empty group bus** behind —
+  it does not clean itself up. Follow with `ungroup_channels` on that bus.
+- Grouping moves main/aux focus and selection to the new bus; pulling out a focused
+  member follows it. Don't assume focus stayed where you left it.
+- `move_channel`'s destination index is **0-based and interpreted after removal** — the
+  one place a mixer index isn't the 1-based path number. Moving index 0 to index 2 in
+  `[A, B, C]` yields `[B, C, A]`. Groups move as a whole block, and membership is
+  preserved: a grouped channel can't leave its group this way, and a top-level channel
+  can't be inserted into one.
 
 ## Batch carefully
 

@@ -45,7 +45,21 @@ Load the project's persistent knowledge before touching code:
    validates them once PR-7b lands). This is what keeps agent-facing semantic docs from drifting:
    staleness is caught at the PR that caused it, when the diff is small, not discovered
    later by a confused agent.
-6. **Review (mandated).** Before opening the PR, run the
+6. **Regenerate what's generated.** Three artifacts drift silently and are gated in CI,
+   where a failure costs a round trip. Only the first has a check inside `build-gate.sh`:
+   - Changed a tool's name, description, schema, or `readOnly`? Run
+     `package/scripts/dump-tool-catalog.sh`, then `cd site && npm run tools-ref`
+     (`ToolCatalogDriftTest` + the `tools.md matches tools.json` CI job).
+   - Edited `agent-plugin/skills/driving-chromatik/SKILL.md`? Run
+     `cd site && npm run driving-ref` — `driving.md` is generated from it.
+   - Referenced a tool name anywhere under `agent-plugin/`? Run
+     `cd site && npm run check:plugin-tool-names`.
+
+   Also ask whether the change belongs in the agent-facing prose at all: a new mutation
+   with a hazard (not undoable, reindexes paths, an index base that differs from the
+   surrounding convention) earns a line in the driving skill, not just a tool
+   description. Full list in [`docs/development.md`](../../../docs/development.md).
+7. **Review (mandated).** Before opening the PR, run the
    [`chromatik-mcp-review`](../chromatik-mcp-review/SKILL.md) skill against the diff, which
    wraps the built-in `/code-review` with the project checklist in
    [`docs/review-criteria.md`](../../../docs/review-criteria.md). The orchestrator picks
@@ -53,9 +67,9 @@ Load the project's persistent knowledge before touching code:
    Orchestrator knobs section. Skip only for docs-only diffs or purely mechanical
    renames — and state that in the PR description when you do. Route findings to
    `pr-fixer`; re-run the gate.
-7. **Open PR.** Squash to one commit, push, `gh pr create` with base = the stack parent.
+8. **Open PR.** Squash to one commit, push, `gh pr create` with base = the stack parent.
    Body carries the gate result + review summary. The user merges.
-8. **Maintain the stack.** After a base PR is squash-merged, rebase the remaining
+9. **Maintain the stack.** After a base PR is squash-merged, rebase the remaining
    single-commit branches and retarget with `gh pr edit --base`.
 
 ## Never do

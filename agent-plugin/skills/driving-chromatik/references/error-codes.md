@@ -45,6 +45,23 @@ about when something goes wrong:
 - The failure is double-reported: Chromatik's own UI shows a `pushError` dialog *and* the
   MCP client gets the `internal` error. That's LX's behavior, not a bug in this server.
 
+Not every mutation is command-backed. `group_channels` is a direct engine edit with no
+undo entry at all (LX has no explicit-list grouping command), as are trigger fires and
+the composition transport tools — each says so in its own description. Applying a saved
+swatch has two paths that differ only in this respect: `set_swatch` is command-backed
+and undoable, while firing the same swatch's `recallPath` with `fire_trigger` is not.
+Both honor the palette's transition settings identically, so prefer `set_swatch` unless
+you specifically want the un-undoable trigger. `recall_snapshot` is command-backed but
+builds its undo entry from post-recall values, so undo won't restore the prior parameter
+values.
+
+The `undo` and `redo` tools surface the same history to the client, one command per
+call. They return `changed: false` on an empty stack (success, not an error) and
+`internal` when the replayed command itself throws — in which case LX clears both
+stacks and the error body reports post-failure `canUndo`/`canRedo`, which is the signal
+to inspect state rather than retry. The history is engine-global, so `command` in the
+response is the authority on what moved.
+
 ## `apply_operations`: the one deliberate divergence
 
 `apply_operations` validates the whole batch before applying any of it: a missing or
