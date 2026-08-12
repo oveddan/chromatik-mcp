@@ -18,7 +18,7 @@ so you don't have to paste context in yourself.
 | `chromatik-reviewer` agent | Reviews chromatik-mcp changes against the project's conventions |
 | `/chromatik-learn` | Builds a project profile from a live instance |
 | `/chromatik-review` | Runs the reviewer over a branch |
-| bundled MCP server | The `chromatik` HTTP connection, so you don't run `claude mcp add` separately |
+| bundled MCP connection | The `chromatik` HTTP endpoint declaration, so you don't run `claude mcp add` separately. The server itself lives inside Chromatik — the plugin only points at it |
 
 The skill also carries three reference files it loads on demand rather than up front —
 `addressing.md`, `error-codes.md`, and `composition.md` (the arrange timeline). Keeping

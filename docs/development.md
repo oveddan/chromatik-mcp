@@ -79,10 +79,12 @@ package/scripts/verify-load.sh     # headless plugin-load gate
 
 `verify-load.sh` boots real LX with no UI under an isolated `user.home`, and confirms it
 discovers the shaded jar from a `Packages/` dir and runs `ChromatikMcpPlugin.initialize()`.
-This exists because CI compiles with the MCP SDK on the system classpath, which hides a
-real deployment failure: the SDK resolves its JSON mapper through the thread-context
-classloader, which Chromatik's child `LXClassLoader` is never set as. Run it before
-claiming a change loads.
+It exists because the test suite runs with the MCP SDK on the system classpath, which
+hides a real deployment failure: the SDK resolves its JSON mapper through the
+thread-context classloader, which Chromatik's child `LXClassLoader` is never set as, so a
+load test built from the project's own dependency tree passes while the shipped jar
+fails. `verify-load.sh` deliberately constructs an LX-only parent classpath so the gate is
+deployment-faithful. Run it before claiming a change loads.
 
 Testing conventions — the template and the do→undo→assert pattern every mutation test
 follows — are in [qa-strategy.md](qa-strategy.md). Every domain primitive gets a unit test
@@ -102,7 +104,7 @@ committed. Run the generator and commit the result as part of your change.
 |---|---|---|
 | a tool's name, description, schema, or `readOnly` | `package/scripts/dump-tool-catalog.sh` → then `cd site && npm run tools-ref` | `ToolCatalogDriftTest` (in `build-gate.sh`) and the `tools.md matches tools.json` CI job |
 | `agent-plugin/skills/driving-chromatik/SKILL.md` | `cd site && npm run driving-ref` | the `driving.md matches SKILL.md` CI job |
-| any tool name referenced in `agent-plugin/` | `cd site && npm run check:plugin-tool-names` | the same-named CI job |
+| any tool name referenced in `agent-plugin/` | `cd site && npm run check:plugin-tool-names` | the `agent-plugin tool names match tools.json` CI job |
 
 Only the first has a check inside `build-gate.sh`; the site-side gates are CI-only, so run
 them locally before pushing docs or plugin changes. Check mode is `-- --check` (e.g.
