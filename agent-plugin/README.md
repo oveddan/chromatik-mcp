@@ -3,8 +3,8 @@
 This directory is the agent-facing packaging of chromatik-mcp: a Claude Code / Codex
 plugin that bundles the MCP server connection and the house rules for driving a live
 Chromatik well. It is **not** user-facing install documentation — that lives on the docs
-site (`site/src/content/docs/`), added in a later PR. This README is for people (and
-agents) working on the plugin itself.
+site (`site/src/content/docs/`), with contributor setup in [docs/development.md](../docs/development.md).
+This README is for people (and agents) working on the plugin itself.
 
 ## What's here
 

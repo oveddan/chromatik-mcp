@@ -79,8 +79,9 @@ LX engine thread and executed there. Consequences you can rely on:
 
 Mutations route through LX's own `LXCommand` system, so every change is one Cmd-Z
 step at the console — the operator can unwind an agent's session step by step.
-Documented exceptions, called out in the relevant tool descriptions: swatch recalls,
-trigger fires, `group_channels` (LX has no explicit-list command to invert), and
+Documented exceptions, called out in the relevant tool descriptions: trigger fires
+(including firing a swatch's `recallPath` — the `set_swatch` tool applies the same
+swatch undoably), `group_channels` (LX has no explicit-list command to invert), and
 `recall_snapshot` (an LX quirk — the undo entry captures post-recall values, so undo
 won't restore plain parameters; recall another snapshot instead).
 
