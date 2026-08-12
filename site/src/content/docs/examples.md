@@ -27,13 +27,19 @@ the response means the component's code changed since the doc was written — tr
 live parameters over the prose. `documented: false` means no entry exists; fall back
 to the class's `description` fields from `list_available_*` and the parameter tree.
 
-## 2. Build a channel with patterns
+## 2. Build a show structure
 
 ```
 add_channel {class: heronarts.lx.pattern.color.GradientPattern}
                                         → channel path (LX focuses/selects it in the UI)
 add_pattern {containerPath: <path>, class: heronarts.lx.pattern.texture.SparklePattern}
 activate_pattern {path: <pattern path>} → switch to it (PLAYLIST mode)
+move_channel {path: <channel path>, index: 0}
+                                        → reorder the mixer (0-based, post-removal index)
+group_channels {paths: [<channel 1 path>, <channel 3 path>]}
+                                        → group bus + reordered member paths + oscChanges
+add_effect {containerPath: <group path>, class: heronarts.lx.effect.color.ColorizeEffect}
+                                        → one effect over the members' composite
 ```
 
 Wrinkles:
@@ -43,6 +49,15 @@ Wrinkles:
   pattern's `enabled` parameter with `set_parameter`.
 - With a transition blend configured, the response's `active` is `false` until the
   transition lands — don't re-fire.
+- The mixer list stays flat after grouping: the group and its members all retain
+  top-level `/lx/mixer/channel/N` paths, while each member's `group` field points to
+  the bus. Grouping reorders members contiguously and is not undoable because LX has
+  no explicit-list command; `ungroup_channel` and `ungroup_channels` are undoable.
+  Every grouping mutation returns `oscChanges`; re-list before reusing channel paths.
+- `group_channels` focuses and selects the new bus. `ungroup_channel` follows a focused
+  member to its new index, but removing the final member leaves the now-empty group bus;
+  call `ungroup_channels` on that bus to remove it. Dissolving a group rehomes focus and
+  selection using LX's normal channel-removal behavior.
 
 ## 3. Chain effects
 
@@ -79,7 +94,11 @@ set_parameter {path: <bank>/macro1, value: 0.75}            → turn the knob
   (`/lx/modulation/Knobs/macro1`), not its canonical path — renaming the modulator
   moves the address. Ports are in `get_project_info`.
 - `list_modulations {scope?}` discovers existing banks and wirings when you didn't
-  create them; `remove_modulation {path}` unwires. `wire_trigger` + `fire_trigger`
+  create them. It returns at most 100 wirings by default, ordered as continuous
+  modulations then triggers; while `nextCursor` is present, pass it back as `cursor`.
+  Modulators repeat on every page, and changing the graph shifts positional cursors, so
+  finish paging before wiring or removing anything. `remove_modulation {path}` unwires.
+  `wire_trigger` + `fire_trigger`
   cover boolean pulse wiring and momentary triggers (`set_parameter` rejects those).
 
 ## 5. Verify the render
@@ -108,8 +127,15 @@ undo step. Patterns that work well:
   summaries were written for exactly this — behavior descriptions an orchestrator can
   select by.
 - **Undo as a safety net**: every command-backed mutation is one Cmd-Z step for the
-  human at the console. Agents should still clean up after themselves (`remove_*`),
+  human at the console, and agents can walk the same history themselves with the
+  `undo` / `redo` tools. Agents should still clean up after themselves (`remove_*`),
   but a human can always unwind an agent's session step by step.
+
+Caveat for `undo` / `redo` specifically: the history is **global to the engine**, not
+per-session. With several agents (or a human at the console) mutating concurrently, the
+step you undo may not be the step you made — the response names the command that moved,
+so read it rather than assuming. Prefer an explicit inverse call (`remove_*` what you
+added) over `undo` when another party might be working in the same project.
 
 Caveat for parallel sessions: mutations are in-memory until someone saves — the
 human in Chromatik, or an agent calling `save_project` (coordinate: it persists

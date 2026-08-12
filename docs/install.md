@@ -56,16 +56,11 @@ This project was renamed from **lx-mcp**. If you installed it under that name:
 The `install` profile copies the shaded jar into `~/Chromatik/Packages/`, where Chromatik
 discovers packages. (Without the profile, `mvn package` just builds it under `target/`.)
 The `install` profile also skips tests — they're the developer/PR gate, not part of the
-consumer install flow. From the `package/` directory, contributors should run
-`./scripts/build-gate.sh` for the full suite, or force tests during install with
-`mvn install -Pinstall -DskipTests=false`.
+consumer install flow.
 
-To sanity-check the jar loads inside real LX from a deployment-faithful classpath before
-touching Chromatik:
-
-```sh
-./scripts/verify-load.sh
-```
+Changing the plugin rather than just running it? **[development.md](development.md)** covers
+the build and verify gates, repo layout, the generated-artifact drift gates, and the
+conventions a change has to hold to.
 
 ## 2. Enable the plugin in Chromatik
 
