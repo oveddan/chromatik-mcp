@@ -80,9 +80,20 @@ LX engine thread and executed there. Consequences you can rely on:
 Mutations route through LX's own `LXCommand` system, so every change is one Cmd-Z
 step at the console — the operator can unwind an agent's session step by step.
 Documented exceptions, called out in the relevant tool descriptions: swatch recalls,
-trigger fires, and `recall_snapshot` (an LX quirk — the undo entry captures
-post-recall values, so undo won't restore plain parameters; recall another snapshot
-instead).
+trigger fires, `group_channels` (LX has no explicit-list command to invert), and
+`recall_snapshot` (an LX quirk — the undo entry captures post-recall values, so undo
+won't restore plain parameters; recall another snapshot instead).
+
+The `undo` and `redo` tools expose that same history to the client, one step at a
+time. Two properties matter for anything built on them:
+
+- **The history is global to the running engine**, not scoped to a session. It may
+  contain steps made in the UI or by another MCP client. Both responses name the
+  command that moved and report whether a further undo or redo is available — read
+  that rather than assuming which step you unwound.
+- **A failing upstream command clears both stacks** and can leave partially changed
+  state. The error reports post-failure availability, which is the signal to stop and
+  inspect the affected area rather than retry.
 
 ```
 tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutation with undo)

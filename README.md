@@ -167,6 +167,25 @@ tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutati
                                     ──> read lx.engine.*         (read-only)
 ```
 
+## Develop from source
+
+Java 25 and Maven (the published LX 1.2.2 jars require 25); Node 20 only if you touch the
+docs site or the agent plugin.
+
+```sh
+git clone https://github.com/oveddan/chromatik-mcp.git
+cd chromatik-mcp
+package/scripts/build-gate.sh     # compile + the full headless test suite
+cd package && mvn install -Pinstall   # drop the jar into ~/Chromatik/Packages/
+```
+
+Use `build-gate.sh` rather than raw `mvn package` — it keeps the full log on disk and
+prints a one-line summary, and carries a watchdog for a known macOS CoreMIDI deadlock.
+`package/scripts/verify-load.sh` is the headless plugin-load gate; several docs artifacts
+are generated and gated against drift. Full guide — repo layout, testing conventions,
+drift gates, catalog regeneration, and the conventions a change has to hold to:
+**[docs/development.md](docs/development.md)**.
+
 ## License
 
 [MIT](LICENSE). Note the LX framework this plugin targets is separately licensed (free for non-commercial use — see [lx.studio/license](https://lx.studio/license)); this license covers only the chromatik-mcp code.

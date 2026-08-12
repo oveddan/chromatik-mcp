@@ -40,6 +40,9 @@ add_channel {class: heronarts.lx.pattern.color.GradientPattern}
                                         → channel path (LX focuses/selects it in the UI)
 add_pattern {containerPath: <path>, class: heronarts.lx.pattern.texture.SparklePattern}
 activate_pattern {path: <pattern path>} → switch to it (PLAYLIST mode)
+move_channel {path: <channel path>, index: 0}
+                                        → reorder the mixer (0-based, post-removal index;
+                                          moves a whole group block, preserves membership)
 group_channels {paths: [<channel 1 path>, <channel 3 path>]}
                                         → group bus + reordered member paths + oscChanges
 add_effect {containerPath: <group path>, class: heronarts.lx.effect.color.ColorizeEffect}
@@ -131,8 +134,15 @@ undo step. Patterns that work well:
   summaries were written for exactly this — behavior descriptions an orchestrator can
   select by.
 - **Undo as a safety net**: every command-backed mutation is one Cmd-Z step for the
-  human at the console. Agents should still clean up after themselves
+  human at the console, and agents can walk the same history themselves with the
+  `undo` / `redo` tools. Agents should still clean up after themselves
   (`remove_*`), but a human can always unwind an agent's session step by step.
+
+Caveat for `undo` / `redo` specifically: the history is **global to the engine**, not
+per-session. With several agents (or a human at the console) mutating concurrently, the
+step you undo may not be the step you made — the response names the command that moved,
+so read it rather than assuming. Prefer an explicit inverse call (`remove_*` what you
+added) over `undo` when another party might be working in the same project.
 
 Caveat for parallel sessions: mutations are in-memory until someone saves — the
 human in Chromatik, or an agent calling `save_project` (coordinate: it persists

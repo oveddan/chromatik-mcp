@@ -22,6 +22,12 @@ jq -r .port ~/.chromatik-mcp/status.json     # port only
 jq -r .url  ~/.chromatik-mcp/status.json     # full endpoint URL
 ```
 
+:::tip[Claude Code or Codex? Consider the plugin instead]
+The [agent plugin](../plugin/) bundles this connection along with the house rules for
+driving a live show, a project-surveyor agent, and the `/chromatik-learn` and
+`/chromatik-review` commands — one symlink instead of the manual setup below.
+:::
+
 ## Claude Code
 
 One command, using `jq` to read the live port:

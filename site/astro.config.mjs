@@ -62,6 +62,7 @@ export default defineConfig({
       sidebar: [
         { label: 'Getting started', slug: 'getting-started' },
         { label: 'Connect your AI client', slug: 'connect' },
+        { label: 'Install the agent plugin', slug: 'plugin' },
         { label: 'Usage examples', slug: 'examples' },
         { label: 'Tool reference', slug: 'tools' },
         { label: 'Driving Chromatik well', slug: 'driving' },
