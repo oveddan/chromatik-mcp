@@ -64,7 +64,9 @@ echo "==> booting LX headless (isolated user.home=$FAKE_HOME)"
 # The harness constructs LX (which scans Packages, registers + initializes the
 # plugin) then exits — no engine loop to kill. The plugin jar is deliberately
 # NOT on this classpath; LX must discover it from the Packages dir.
-"$JAVA_BIN" -Duser.home="$FAKE_HOME" \
+# -Djava.awt.headless=true keeps this gate from ever registering as a macOS GUI app if a
+# boot path reaches AWT (see FrameRaster) — the gate is meant to be invisible.
+"$JAVA_BIN" -Duser.home="$FAKE_HOME" -Djava.awt.headless=true \
   -cp "target/test-classes:$LX_CP" \
   chromatikmcp.HeadlessLoadCheck >"$LOG" 2>&1 || true
 

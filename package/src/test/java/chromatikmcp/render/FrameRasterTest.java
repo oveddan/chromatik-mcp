@@ -1,7 +1,9 @@
 package chromatikmcp.render;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -26,6 +28,25 @@ class FrameRasterTest {
 
   private static BufferedImage decode(byte[] png) throws IOException {
     return ImageIO.read(new ByteArrayInputStream(png));
+  }
+
+  /**
+   * Guards the surefire {@code -Djava.awt.headless=true} argLine. Without it,
+   * {@link java.awt.image.BufferedImage#createGraphics()} below initializes the macOS
+   * CGraphicsEnvironment, which registers the test fork with LaunchServices as a foreground
+   * application and bounces a Java icon in the Dock during every build.
+   *
+   * <p>The property, not {@link GraphicsEnvironment#isHeadless()}, is what this asserts:
+   * on a display-less CI worker {@code isHeadless()} is true whether or not the argLine is
+   * set, so it would stay green there while macOS builds resumed opening a GUI app. The
+   * property is the only signal that fails everywhere the argLine goes missing.
+   */
+  @Test
+  void testJvmIsHeadless() {
+    assertEquals("true", System.getProperty("java.awt.headless"),
+        "test JVM must run with -Djava.awt.headless=true"
+            + " — see the surefire argLine in package/pom.xml");
+    assertTrue(GraphicsEnvironment.isHeadless(), "the JVM must actually honor the property");
   }
 
   @Test

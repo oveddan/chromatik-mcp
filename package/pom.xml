@@ -127,6 +127,15 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
+                    <!-- FrameRaster calls BufferedImage.createGraphics(), which initializes
+                         the local GraphicsEnvironment. On macOS that is CGraphicsEnvironment:
+                         it links AppKit and registers the fork with LaunchServices as a
+                         Foreground application (verified: `lsappinfo list` shows the
+                         ForkedBooter pid as type="Foreground", bundleID net.java.openjdk.java),
+                         so a Java icon appears in the Dock mid-build. Headless mode routes the
+                         same call through the raster-only pipeline — no window server, same
+                         pixels. FrameRasterTest asserts this stays set. -->
+                    <argLine>-Djava.awt.headless=true</argLine>
                     <!-- Each LX construction starts non-daemon javax.sound device-scan
                          threads (audio + MIDI) that contend on a JDK-global monitor
                          (com.sun.media.sound.JSSecurityManager). Across test classes these
