@@ -1245,6 +1245,65 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  void moveEffectAcrossChannelsRelocatesAndReportsDroppedWiring() {
+    Map<String, Object> src = structured(call("add_channel", Map.of()));
+    String sourcePath = (String) src.get("path");
+    Map<String, Object> dst = structured(call("add_channel", Map.of()));
+    String destinationPath = (String) dst.get("path");
+    try {
+      Map<String, Object> fx = structured(call("add_effect", Map.of(
+          "containerPath", sourcePath, "class", BlurEffect.class.getName())));
+      String effectPath = (String) fx.get("path");
+      int effectId = ((Number) fx.get("id")).intValue();
+      String channelScope = sourcePath + "/modulation";
+      Map<String, Object> lfo = structured(call("add_modulator", Map.of(
+          "class", VariableLFO.class.getName(), "scope", channelScope)));
+      structured(call("wire_modulator", Map.of(
+          "sourcePath", lfo.get("path"),
+          "targetPath", effectPath + "/level",
+          "scope", channelScope)));
+
+      Map<String, Object> moved = structured(call("move_effect", Map.of(
+          "path", effectPath, "containerPath", destinationPath, "index", 0)));
+
+      String movedPath = (String) moved.get("path");
+      assertTrue(movedPath.startsWith(destinationPath + "/"), "effect is on the new channel");
+      assertEquals(effectId, ((Number) moved.get("id")).intValue(), "a move keeps the id");
+      assertNotNull(LXPath.get(lx, movedPath));
+
+      List<Map<String, Object>> dropped =
+          (List<Map<String, Object>>) moved.get("droppedWiring");
+      assertEquals(1, dropped.size(), "cross-channel move destroys the channel-level wiring");
+      assertEquals(effectPath + "/level", dropped.get(0).get("targetPath"));
+    } finally {
+      structured(call("remove_channel", Map.of("path", destinationPath)));
+      structured(call("remove_channel", Map.of("path", sourcePath)));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void moveEffectWithinContainerReportsNoDroppedWiring() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> first = structured(call("add_effect", Map.of(
+          "containerPath", channelPath, "class", BlurEffect.class.getName())));
+      structured(call("add_effect", Map.of(
+          "containerPath", channelPath, "class", BlurEffect.class.getName())));
+
+      Map<String, Object> moved = structured(call("move_effect", Map.of(
+          "path", first.get("path"), "index", 1)));
+
+      assertEquals(1, ((Number) moved.get("index")).intValue());
+      assertTrue(((List<Map<String, Object>>) moved.get("droppedWiring")).isEmpty());
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
   void movePatternFractionalIndexIsInvalidArgumentAndDoesNotMutate() {
     // Same rationale as moveEffectFractionalIndexIsInvalidArgumentAndDoesNotMutate: the
     // SDK's schema validation would swallow the fractional value over HTTP, so this

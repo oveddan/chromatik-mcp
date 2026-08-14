@@ -996,6 +996,117 @@ class ChannelMutationsTest extends HeadlessLxTest {
     assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
   }
 
+  // ── relocate effect ───────────────────────────────────────────────────────────
+
+  @Test
+  void relocateEffectWithinChannelKeepsChannelLevelWiring() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXPattern host = Channels.addPattern(
+        lx, channel.getCanonicalPath(), SolidPattern.class, -1);
+    LXEffect effect = Channels.addEffect(lx, channel.getCanonicalPath(), BlurEffect.class);
+    LXModulator lfo = Modulators.addModulator(lx, channel.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, channel.modulation, (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) effect.getParameter("level"));
+
+    // The destination is still inside the channel, so the wiring can still reach the effect.
+    Channels.EffectRelocateResult result = Channels.relocateEffect(
+        lx, effect.getCanonicalPath(), host.getCanonicalPath(), 0);
+
+    assertEquals(0, channel.getEffects().size());
+    assertEquals(1, host.getEffects().size());
+    assertTrue(result.droppedWiring().isEmpty(),
+        "in-scope relocation drops nothing: " + result.droppedWiring());
+    assertEquals(1, channel.modulation.modulations.size());
+    assertEquals(host.getEffects().get(0).getParameter("level").getCanonicalPath(),
+        channel.modulation.modulations.get(0).target.getCanonicalPath(),
+        "wiring retargeted to the effect's new path");
+  }
+
+  @Test
+  void relocateEffectAcrossChannelsReportsTheWiringItDestroys() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    LXModulator lfo = Modulators.addModulator(lx, source.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, source.modulation, (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) effect.getParameter("level"));
+    String targetBefore = effect.getParameter("level").getCanonicalPath();
+
+    Channels.EffectRelocateResult result = Channels.relocateEffect(
+        lx, effect.getCanonicalPath(), destination.getCanonicalPath(), 0);
+
+    assertEquals(0, source.getEffects().size());
+    assertEquals(1, destination.getEffects().size());
+    // A move preserves the effect's id (and so its OSC identity), but LX reconstructs the
+    // instance, so the pre-move reference is detached afterwards.
+    assertEquals(effect.getId(), result.effect().getId());
+    assertNotSame(effect, result.effect());
+    assertSame(destination.getEffects().get(0), result.effect());
+
+    // LX drops this wiring outright — not to the destination engine, not to the global one.
+    assertEquals(0, source.modulation.modulations.size());
+    assertEquals(0, destination.modulation.modulations.size());
+    assertEquals(0, lx.engine.modulation.modulations.size());
+    assertEquals(1, result.droppedWiring().size(), "the casualty is reported, not silent");
+    assertEquals("modulation", result.droppedWiring().get(0).kind());
+    assertEquals(targetBefore, result.droppedWiring().get(0).targetPath());
+
+    lx.command.undo();
+    assertEquals(1, source.getEffects().size());
+    assertEquals(1, source.modulation.modulations.size(), "undo restores the wiring");
+  }
+
+  @Test
+  void relocateEffectToItsOwnContainerIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, channel.getCanonicalPath(), BlurEffect.class);
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    var ex = assertThrows(Resolve.ResolveException.class, () -> Channels.relocateEffect(
+        lx, effect.getCanonicalPath(), channel.getCanonicalPath(), 0));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand());
+  }
+
+  @Test
+  void relocateEffectOutOfRangeIndexIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    var ex = assertThrows(Resolve.ResolveException.class, () -> Channels.relocateEffect(
+        lx, effect.getCanonicalPath(), destination.getCanonicalPath(), 5));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand());
+  }
+
+  @Test
+  void relocateEffectReportsShiftedPaths() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect first = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    LXEffect second = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    String firstBefore = first.getCanonicalPath();
+    String secondBefore = second.getCanonicalPath();
+    int firstId = first.getId();
+
+    Channels.EffectRelocateResult result = Channels.relocateEffect(
+        lx, first.getCanonicalPath(), destination.getCanonicalPath(), 0);
+
+    // The moved effect changed channels; its former sibling shifted down to index 0. The
+    // moved entry is tracked by the reclaimed id, not by the detached original reference.
+    assertPathChange(result.oscChanges(), firstId, firstBefore,
+        result.effect().getCanonicalPath());
+    assertPathChange(result.oscChanges(), second.getId(), secondBefore,
+        second.getCanonicalPath());
+  }
+
   // ── add/remove effect ─────────────────────────────────────────────────────────
 
   @Test

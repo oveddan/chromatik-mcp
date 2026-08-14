@@ -740,6 +740,109 @@ public final class Channels {
   }
 
   /**
+   * The relocated effect, the canonical paths that shifted, and the wiring LX drops as a
+   * consequence of the move (see {@link #relocateEffect}).
+   */
+  public record EffectRelocateResult(LXEffect effect, List<PathChange> oscChanges,
+      List<ExternalReference> droppedWiring) {}
+
+  /**
+   * Move an effect to a different container, at {@code index} within it.
+   *
+   * <p>This is LX's own {@code Channel.RelocateEffect} (LXCommand.java:1530-1615) — a real
+   * move, not a copy: the effect keeps its identity, and its MIDI mappings, snapshot views
+   * and clip lanes are retargeted to the new path.
+   *
+   * <p>Modulations and triggers are retargeted only while they stay in scope.
+   * {@code LXParameterModulation.move} returns null — dropping the wiring — when the moved
+   * component is no longer a descendant of the engine's parent
+   * (LXParameterModulation.java:265-269). So moving an effect between two containers on the
+   * same channel preserves that channel's wiring, while moving it to another channel
+   * destroys it. Because the test is a pure scope check, the casualties are known before
+   * the command runs, and they are returned in
+   * {@link EffectRelocateResult#droppedWiring()} instead of vanishing silently. Undo
+   * restores them.
+   *
+   * <p>Custom remote controls referencing the effect are also dropped and restored only by
+   * undo; LX flags that as an open TODO (LXCommand.java:1607-1611) and does not report it.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the destination is not an effect
+   *     container, is the effect's own current container, or the index is out of range
+   */
+  public static EffectRelocateResult relocateEffect(LX lx, String path, String containerPath,
+      int index) {
+    LXEffect effect = Resolve.component(lx, path, LXEffect.class);
+    LXComponent component = Resolve.component(lx, containerPath);
+    if (!(component instanceof LXEffect.Container target)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Not a channel, bus, or pattern at path: " + containerPath
+              + " (found " + component.getClass().getSimpleName() + ")");
+    }
+    if (target == effect.getContainer()) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Effect " + path + " is already in " + containerPath
+              + " — use move_effect without containerPath to reorder within a container");
+    }
+    // The effect is removed from its source before being loaded into the target, so the
+    // target's list grows by one; an out-of-range index would throw inside perform(), which
+    // swallows it and wipes the undo stack.
+    int size = target.getEffects().size();
+    if (index < 0 || index > size) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Effect index " + index + " out of range [0," + size + "] on " + containerPath);
+    }
+    List<ExternalReference> dropped = outOfScopeWiring(effect, component);
+    var before = snapshotPaths(allEffects(lx));
+    Commands.perform(lx, new LXCommand.Channel.RelocateEffect(effect, target, index));
+    if (target.getEffects().size() != size + 1) {
+      throw new IllegalStateException("RelocateEffect did not move an effect to " + containerPath);
+    }
+    // RelocateEffect removes the effect and loads a fresh instance into the target
+    // (LXCommand.java:1596), so the resolved reference is now detached. The new instance
+    // reclaims the original's id — freed by the removal — which is why oscChanges can track
+    // it across the move, but the object is not the same one.
+    return new EffectRelocateResult(
+        target.getEffects().get(index), pathChanges(lx, before), dropped);
+  }
+
+  /** Every effect anywhere in the mixer, for before/after canonical-path comparison. */
+  private static List<LXEffect> allEffects(LX lx) {
+    List<LXEffect> effects = new ArrayList<>();
+    for (LXAbstractChannel channel : lx.engine.mixer.channels) {
+      effects.addAll(channel.getEffects());
+      if (channel instanceof LXChannel patternChannel) {
+        for (LXPattern pattern : patternChannel.patterns) {
+          effects.addAll(pattern.getEffects());
+        }
+      }
+    }
+    effects.addAll(lx.engine.mixer.masterBus.getEffects());
+    return effects;
+  }
+
+  /**
+   * The modulations and triggers referencing {@code component} that a move to
+   * {@code destination} would destroy: those in an engine whose parent will no longer
+   * contain the component. Mirrors the scope test in {@code LXParameterModulation.move}.
+   */
+  private static List<ExternalReference> outOfScopeWiring(LXComponent component,
+      LXComponent destination) {
+    List<ExternalReference> dropped = new ArrayList<>();
+    for (ExternalReference reference : externalReferences(component.getLX(), component)) {
+      if (!reference.kind().equals("modulation") && !reference.kind().equals("trigger")) {
+        // MIDI mappings, snapshot views and clip lanes are retargeted unconditionally.
+        continue;
+      }
+      LXPath scope = LXPath.get(component.getLX(), reference.scope());
+      if (scope instanceof LXModulationEngine engine
+          && !destination.isDescendant(engine.getParent())) {
+        dropped.add(reference);
+      }
+    }
+    return dropped;
+  }
+
+  /**
    * Add an effect of {@code effectClass} to a container. The container may be an
    * LXBus (channel or master) or an LXPattern; any other path is a TYPE_MISMATCH.
    *

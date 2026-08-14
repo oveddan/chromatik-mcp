@@ -8,9 +8,10 @@ import java.util.Map;
 import chromatikmcp.domain.Channels;
 
 /**
- * JSON shaping for the references into a component held from outside it, reported by the
- * copy tools as {@code unreplicatedWiring}: a wiring that exists now and will not exist on
- * the copy you end up with.
+ * JSON shaping for the references into a component held from outside it, shared by the copy
+ * tools (as {@code unreplicatedWiring} — what the copy does not carry) and by move_effect
+ * (as {@code droppedWiring} — what the move destroys). Same shape either way: a wiring that
+ * exists now and will not exist on the thing you end up with.
  */
 final class Wiring {
 
