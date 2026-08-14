@@ -44,6 +44,7 @@ const CATEGORIES = {
     'add_pattern',
     'remove_pattern',
     'move_pattern',
+    'copy_pattern',
     'activate_pattern',
     'add_effect',
     'remove_effect',

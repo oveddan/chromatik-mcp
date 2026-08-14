@@ -148,6 +148,7 @@ public final class Tools {
             new RemovePattern(),
             new ActivatePattern(),
             new MovePattern(),
+            new CopyPattern(),
             new AddEffect(),
             new RemoveEffect(),
             new MoveEffect(),

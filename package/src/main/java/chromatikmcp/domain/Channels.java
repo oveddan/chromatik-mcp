@@ -8,9 +8,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.gson.JsonObject;
+
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
 import heronarts.lx.LXDeviceComponent;
+import heronarts.lx.LXPath;
+import heronarts.lx.LXSerializable;
 import heronarts.lx.blend.LXBlend;
 import heronarts.lx.clip.LXClip;
 import heronarts.lx.clip.LXClipLane;
@@ -357,6 +361,128 @@ public final class Channels {
     // Inserted patterns land at their target index; new appended patterns are last.
     int resultIndex = (index >= 0 && index <= before) ? index : before;
     return engine.patterns.get(resultIndex);
+  }
+
+  /**
+   * A reference from outside a pattern's own subtree that points into it. On a copy these
+   * are the wirings the new instance does <em>not</em> carry: they address the source by
+   * canonical path or component id, and only the source keeps them.
+   *
+   * <p>{@code kind} is one of {@code modulation}, {@code trigger}, {@code midiMapping},
+   * {@code snapshotView}. {@code scope} is the canonical path of the owning modulation
+   * engine, or the MIDI/snapshot registry that holds the reference. {@code sourcePath} is
+   * null for kinds that have no driving parameter.
+   */
+  public record ExternalReference(String kind, String scope, String sourcePath,
+      String targetPath) {}
+
+  /**
+   * The pattern created by {@link #copyPattern}, plus every external reference into the
+   * source that the copy does not reproduce.
+   */
+  public record PatternCopyResult(LXPattern pattern, List<ExternalReference> unreplicatedWiring) {}
+
+  /**
+   * Copy a configured pattern into {@code containerPath}, which may be any channel or
+   * pattern-engine container including the source's own.
+   *
+   * <p>The copy is made by serializing the source with ids stripped and loading that JSON
+   * into a fresh instance ({@link LXCommand.Channel.AddPattern} with a pattern object —
+   * the round-trip LX itself documents for copy/paste). Everything inside the pattern's
+   * own subtree travels: parameter values, nested rack patterns and their effects, and the
+   * pattern's device-local modulation engine, whose wirings serialize as paths relative to
+   * their scope and so re-resolve against the copy rather than the source.
+   *
+   * <p>Nothing outside that subtree travels — channel-level and global modulations,
+   * triggers, MIDI mappings and snapshot views address the source specifically. They are
+   * returned in {@link PatternCopyResult#unreplicatedWiring()} rather than silently
+   * dropped, so a caller performing a move (copy, then {@link #removePattern}) knows
+   * exactly what it must rewire.
+   *
+   * @param index 0-based insertion index, or -1 to append
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the destination is not a container,
+   *     is the source pattern or a descendant of it, or the index is out of range
+   */
+  public static PatternCopyResult copyPattern(LX lx, String sourcePath, String containerPath,
+      int index) {
+    LXPattern source = Resolve.component(lx, sourcePath, LXPattern.class);
+    LXComponent component = Resolve.component(lx, containerPath);
+    if (!(component instanceof LXPatternEngine.Container container)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Not a channel or pattern-engine container at path: " + containerPath
+              + " (found " + component.getClass().getSimpleName() + ")");
+    }
+    // Copying into itself would nest a stale snapshot of the source inside the source.
+    for (LXComponent walk = component; walk != null; walk = walk.getParent()) {
+      if (walk == source) {
+        throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+            "Destination " + containerPath + " is inside the pattern being copied ("
+                + sourcePath + ")");
+      }
+    }
+    LXPatternEngine engine = container.getPatternEngine();
+    int before = engine.patterns.size();
+    if (index > before) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Pattern index " + index + " out of range [0," + before + "] on " + containerPath);
+    }
+    JsonObject patternObj = LXSerializable.Utils.toObject(source, true);
+    Commands.perform(lx,
+        new LXCommand.Channel.AddPattern(engine, source.getClass(), patternObj, index));
+    if (engine.patterns.size() != before + 1) {
+      throw new IllegalStateException("AddPattern did not add a pattern to " + containerPath);
+    }
+    int resultIndex = (index >= 0 && index <= before) ? index : before;
+    return new PatternCopyResult(engine.patterns.get(resultIndex), externalReferences(lx, source));
+  }
+
+  /**
+   * Every reference into {@code component} held outside its own subtree. Ancestor modulation
+   * engines are walked upward from the parent, so the component's own modulation engine —
+   * which travels with a copy — is deliberately excluded. Shared by the pattern, effect and
+   * channel copy primitives; what counts as "outside" differs entirely between them (a
+   * channel owns its channel-level engine, a pattern does not), and this walk gets that
+   * right for each without special-casing.
+   */
+  private static List<ExternalReference> externalReferences(LX lx, LXComponent component) {
+    List<ExternalReference> references = new ArrayList<>();
+    for (LXComponent parent = component.getParent(); parent != null; parent = parent.getParent()) {
+      if (parent instanceof LXModulationContainer modulationContainer) {
+        LXModulationEngine engine = modulationContainer.getModulationEngine();
+        String scope = engine.getCanonicalPath();
+        List<LXCompoundModulation> modulations =
+            engine.findModulations(component, engine.modulations);
+        if (modulations != null) {
+          for (LXCompoundModulation modulation : modulations) {
+            references.add(new ExternalReference("modulation", scope,
+                modulation.source.getCanonicalPath(), modulation.target.getCanonicalPath()));
+          }
+        }
+        List<LXTriggerModulation> triggers = engine.findModulations(component, engine.triggers);
+        if (triggers != null) {
+          for (LXTriggerModulation trigger : triggers) {
+            references.add(new ExternalReference("trigger", scope,
+                trigger.source.getCanonicalPath(), trigger.target.getCanonicalPath()));
+          }
+        }
+      }
+    }
+    var mappings = lx.engine.midi.findMappings(component);
+    if (mappings != null) {
+      for (var mapping : mappings) {
+        references.add(new ExternalReference("midiMapping",
+            lx.engine.midi.getCanonicalPath(), mapping.getDescription(),
+            mapping.parameter.getCanonicalPath()));
+      }
+    }
+    var views = lx.engine.snapshots.findSnapshotViews(component);
+    if (views != null) {
+      for (var view : views) {
+        references.add(new ExternalReference("snapshotView",
+            view.getSnapshot().getCanonicalPath(), null, view.getViewPath()));
+      }
+    }
+    return references;
   }
 
   /**

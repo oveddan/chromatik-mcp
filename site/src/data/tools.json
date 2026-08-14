@@ -692,6 +692,31 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "copy_pattern",
+  "description" : "Copy a configured pattern into any channel or PatternRack ('containerPath'), including a different channel from the source's — unlike add_pattern, which instantiates a blank one. The copy carries everything inside the source pattern: parameter values, its own effects, a PatternRack's nested patterns and their effects, and the pattern's device-local modulators/modulations/triggers, rewired to the copy. It does NOT carry wiring held outside the pattern — channel-level and global modulations and triggers, MIDI mappings, snapshot views — which address the source specifically and stay on it; every such reference is listed in the response's unreplicatedWiring array (kind, scope, sourcePath, targetPath) so you can rebuild what matters with wire_modulator/wire_trigger/add_midi_mapping. There is no cross-channel move: copy here, then remove_pattern on the source, and expect to rewire everything unreplicatedWiring reported. Pass an optional 0-based index to insert at a specific position; omit to append. Inserting shifts the 1-based paths of later sibling patterns — re-list rather than reusing cached paths. Returns invalid_argument if the destination is inside the pattern being copied or the index is out of range. Undoable in Chromatik with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "path" : {
+        "type" : "string",
+        "description" : "Canonical path of the pattern to copy, e.g. /lx/mixer/channel/1/pattern/1"
+      },
+      "containerPath" : {
+        "type" : "string",
+        "description" : "Canonical path of the destination channel or PatternRack, e.g. /lx/mixer/channel/2 or /lx/mixer/channel/2/pattern/1 when that pattern is a PatternRack; may be the source's own container to duplicate in place"
+      },
+      "index" : {
+        "type" : "integer",
+        "description" : "0-based insertion index; omit to append at the end",
+        "minimum" : -2147483648,
+        "maximum" : 2147483647
+      }
+    },
+    "required" : [ "path", "containerPath" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "describe_model",
   "description" : "The model tree: the geometry hierarchy the rig renders onto, from the whole installation down to individual points. Each node reports 'tags' (the same vocabulary get_views' selectors match against — e.g. a selector 'cube' matches every node tagged 'cube'), 'size' (point count), 'pointIndexRange' ([firstIndex, lastIndex], the bounding range of this node's point indices in the same global color buffer get_frame reads back — NOT a claim that the node owns every index in that range; check 'contiguous' before slicing the buffer), 'contiguous' (true when the node's indices form an unbroken run equal to 'size', so the range is exactly its points; false when they're interleaved with other nodes' indices, as for a grid column submodel — both fields are omitted for an empty node), 'bounds'/'center' (spatial extent), and 'childCount' (how many submodels sit below, even when 'children' itself is absent). Pass 'path' (a model node path, as emitted in this tool's own 'path' field — not a component canonical path, since LXModel isn't addressable through the component tree) to describe a submodel instead of the whole installation; omit it for the root, which also reports 'modelName', 'isStatic', 'totalPoints', 'fixtureCount', and 'tagVocabulary' (every distinct tag in the project with its occurrence count). 'depth' (default 2, max 10) bounds how many levels of children are expanded below the addressed node — real installations can have thousands of submodels, so an unbounded dump would blow a client's context. When 'childCount' is nonzero but 'children' is missing, depth ran out; re-call with 'path' set to one of the reported child paths (or a higher 'depth') to keep descending.",
   "readOnly" : true,
@@ -1541,7 +1566,7 @@
   }
 }, {
   "name" : "move_pattern",
-  "description" : "Move a pattern to a new 0-based index within its channel. Moving shifts the 1-based paths of the moved pattern, any sibling it crosses, and everything those siblings own (their effects, any nested rack patterns and effects, and any device-local modulators/modulations/triggers) — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.",
+  "description" : "Reorder a pattern to a new 0-based index within its own channel or PatternRack. This cannot move a pattern to a different container — for that, copy_pattern to the destination and remove_pattern on the source, which reports the channel-level wiring the copy leaves behind. Moving shifts the 1-based paths of the moved pattern, any sibling it crosses, and everything those siblings own (their effects, any nested rack patterns and effects, and any device-local modulators/modulations/triggers) — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.",
   "readOnly" : false,
   "inputSchema" : {
     "type" : "object",

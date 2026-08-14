@@ -40,9 +40,10 @@ import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.modulator.MacroTriggers;
-import heronarts.lx.pattern.LXPattern;
+import heronarts.lx.modulator.VariableLFO;import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.pattern.PatternRack;
 import heronarts.lx.pattern.color.GradientPattern;
+import heronarts.lx.pattern.color.SolidPattern;
 
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -161,7 +162,8 @@ class ToolsIntegrationTest {
             "set_fixture_params", "set_fixture_tags", "reload_fixtures",
             "add_channel", "remove_channel", "move_channel", "group_channels", "ungroup_channel",
             "ungroup_channels", "add_pattern", "remove_pattern",
-            "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
+            "activate_pattern", "move_pattern", "copy_pattern", "add_effect", "remove_effect",
+            "move_effect",
             "get_tempo",
             "list_midi_devices", "list_midi_mappings", "list_midi_surfaces", "list_midi_templates",
             "add_midi_template",
@@ -186,7 +188,8 @@ class ToolsIntegrationTest {
         "duplicate_fixture", "set_fixture_params", "set_fixture_tags", "reload_fixtures",
         "add_channel", "remove_channel", "move_channel", "group_channels", "ungroup_channel",
         "ungroup_channels", "add_pattern", "remove_pattern",
-        "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
+        "activate_pattern", "move_pattern", "copy_pattern", "add_effect", "remove_effect",
+        "move_effect",
         "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
         "remove_color",
         "add_snapshot", "recall_snapshot", "update_snapshot", "remove_snapshot",
@@ -1070,6 +1073,75 @@ class ToolsIntegrationTest {
 
       List<Map<String, Object>> oscChanges = (List<Map<String, Object>>) assertOscChanges(moved.get("oscChanges"));
       assertEquals(3, oscChanges.size(), "moved pattern plus the two shifted siblings");
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void copyPatternMovesConfiguredRackAcrossChannelsAndReportsStrandedWiring() {
+    Map<String, Object> src = structured(call("add_channel", Map.of()));
+    String sourcePath = (String) src.get("path");
+    Map<String, Object> dst = structured(call("add_channel", Map.of()));
+    String destinationPath = (String) dst.get("path");
+    try {
+      Map<String, Object> rack = structured(call("add_pattern", Map.of(
+          "containerPath", sourcePath, "class", PatternRack.class.getName())));
+      String rackPath = (String) rack.get("path");
+      Map<String, Object> nested = structured(call("add_pattern", Map.of(
+          "containerPath", rackPath, "class", SolidPattern.class.getName())));
+      String nestedPath = (String) nested.get("path");
+      // Channel-level wiring into the rack — the kind the copy cannot carry.
+      String channelScope = sourcePath + "/modulation";
+      Map<String, Object> lfo = structured(call("add_modulator", Map.of(
+          "class", VariableLFO.class.getName(), "scope", channelScope)));
+      structured(call("wire_modulator", Map.of(
+          "sourcePath", lfo.get("path"),
+          "targetPath", nestedPath + "/color/brightness",
+          "scope", channelScope)));
+
+      Map<String, Object> copied = structured(call("copy_pattern", Map.of(
+          "path", rackPath, "containerPath", destinationPath)));
+
+      assertEquals(PatternRack.class.getName(), copied.get("class"));
+      assertEquals(0, ((Number) copied.get("index")).intValue());
+      LXPattern copy = (LXPattern) LXPath.get(lx, (String) copied.get("path"));
+      assertTrue(copy.getCanonicalPath().startsWith(destinationPath + "/"));
+      assertEquals(1, ((PatternRack) copy).getPatternEngine().patterns.size(),
+          "nested pattern travels with the copy");
+
+      List<Map<String, Object>> wiring =
+          (List<Map<String, Object>>) copied.get("unreplicatedWiring");
+      assertEquals(1, wiring.size(), "channel-level modulation is reported, not replicated");
+      assertEquals("modulation", wiring.get(0).get("kind"));
+      assertEquals(nestedPath + "/color/brightness", wiring.get(0).get("targetPath"));
+
+      // The move the issue asked for: copy, then drop the source.
+      structured(call("remove_pattern", Map.of("path", rackPath)));
+      assertNotNull(LXPath.get(lx, copy.getCanonicalPath()), "copy survives source removal");
+    } finally {
+      structured(call("remove_channel", Map.of("path", destinationPath)));
+      structured(call("remove_channel", Map.of("path", sourcePath)));
+    }
+  }
+
+  @Test
+  void copyPatternIntoItselfIsInvalidArgument() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> rack = structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", PatternRack.class.getName())));
+      String rackPath = (String) rack.get("path");
+
+      McpSchema.CallToolResult result = call("copy_pattern",
+          Map.of("path", rackPath, "containerPath", rackPath));
+
+      assertEquals(Boolean.TRUE, result.isError());
+      McpSchema.TextContent text =
+          assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+      assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
     } finally {
       structured(call("remove_channel", Map.of("path", channelPath)));
     }

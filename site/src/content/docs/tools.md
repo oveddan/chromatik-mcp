@@ -346,12 +346,24 @@ Remove a pattern by its canonical path. Remaining sibling patterns reindex (thei
 
 _mutating_
 
-Move a pattern to a new 0-based index within its channel. Moving shifts the 1-based paths of the moved pattern, any sibling it crosses, and everything those siblings own (their effects, any nested rack patterns and effects, and any device-local modulators/modulations/triggers) — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.
+Reorder a pattern to a new 0-based index within its own channel or PatternRack. This cannot move a pattern to a different container — for that, copy_pattern to the destination and remove_pattern on the source, which reports the channel-level wiring the copy leaves behind. Moving shifts the 1-based paths of the moved pattern, any sibling it crosses, and everything those siblings own (their effects, any nested rack patterns and effects, and any device-local modulators/modulations/triggers) — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the pattern to move, e.g. /lx/mixer/channel/1/pattern/1 |
 | `index` | integer | yes | -2147483648–2147483647 | 0-based destination index within the channel's pattern list |
+
+### `copy_pattern`
+
+_mutating_
+
+Copy a configured pattern into any channel or PatternRack ('containerPath'), including a different channel from the source's — unlike add_pattern, which instantiates a blank one. The copy carries everything inside the source pattern: parameter values, its own effects, a PatternRack's nested patterns and their effects, and the pattern's device-local modulators/modulations/triggers, rewired to the copy. It does NOT carry wiring held outside the pattern — channel-level and global modulations and triggers, MIDI mappings, snapshot views — which address the source specifically and stay on it; every such reference is listed in the response's unreplicatedWiring array (kind, scope, sourcePath, targetPath) so you can rebuild what matters with wire_modulator/wire_trigger/add_midi_mapping. There is no cross-channel move: copy here, then remove_pattern on the source, and expect to rewire everything unreplicatedWiring reported. Pass an optional 0-based index to insert at a specific position; omit to append. Inserting shifts the 1-based paths of later sibling patterns — re-list rather than reusing cached paths. Returns invalid_argument if the destination is inside the pattern being copied or the index is out of range. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the pattern to copy, e.g. /lx/mixer/channel/1/pattern/1 |
+| `containerPath` | string | yes | — | Canonical path of the destination channel or PatternRack, e.g. /lx/mixer/channel/2 or /lx/mixer/channel/2/pattern/1 when that pattern is a PatternRack; may be the source's own container to duplicate in place |
+| `index` | integer | no | -2147483648–2147483647 | 0-based insertion index; omit to append at the end |
 
 ### `activate_pattern`
 
