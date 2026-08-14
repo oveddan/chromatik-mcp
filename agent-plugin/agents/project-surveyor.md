@@ -65,8 +65,23 @@ If `get_status` succeeds, you have live tool access. Proceed with your assigned 
   profile needs to know which tool payload backed which row, especially for anything that
   ends up in the profile's Confidence or Open Questions sections.
 - **Report your own coverage, not just your findings.** Note what you checked, what you
-  skipped for scope reasons, and where you ran out of time or hit a tool limit. This
-  becomes the "Not surveyed" material for your concern.
+  skipped for scope reasons, and where you ran out of time, context, or hit a tool limit.
+  Running short is a reportable finding, not a failure to hide: say which rung of the
+  degradation ladder you reached and the counts at each, and name what you dropped. This
+  becomes the "Not surveyed" material for your concern, and it is the only place that
+  information can come from — nothing downstream can tell a thin project from a truncated
+  survey by looking at your tables.
+- **Durability is yours to mark, not just the value.** A reading of a control a performer
+  rides during a set — `fader`, `enabled` on a channel or effect, `running`,
+  `compositeLevel`, active pattern, `cue`/`aux`, MIDI template control values — is a fact
+  about the moment you surveyed, not about the project. Apply that test to the control, not
+  to the field name: a MIDI port's `channelEnabled`/`controlEnabled`/`syncEnabled` and a
+  view's `enabled` are persistent configuration that happens to share a word with a live
+  toggle. Report it, with its count, flagged as momentary so the synthesis step
+  routes it to `## Momentary state` rather than promoting it to a convention. The same goes
+  for values remembered off a MIDI surface that isn't currently connected: report the
+  connected state alongside them. Don't suppress these readings and don't launder them —
+  label them.
 
 ## Concern-specific focus
 
@@ -81,7 +96,17 @@ If `get_status` succeeds, you have live tool access. Proceed with your assigned 
   not per-parameter tables — those are `pattern-modulation`'s remit, below.
 - **pattern-modulation** — the per-instance modulation table for every pattern *and
   effect* instance: one row per parameter including unmodulated ones, FQCN in the
-  heading. This is the only concern that emits per-instance target tables.
+  heading. This is the only concern that emits per-instance target tables. A large project
+  carries on the order of a hundred instances and the full set of tables may not fit in
+  your context. When it doesn't, degrade by the ladder in the `project-profile` skill's
+  `## Practice` section and no other: instances with at least one modulated parameter keep
+  their full table; instances with none collapse to a one-line roster entry (path, FQCN,
+  parameter count); anything you cannot reach at all is named by path and FQCN in your
+  coverage note. Never sample a "representative" subset, and never truncate a table
+  mid-instance — drop the whole instance to the next rung and record that you did. Report
+  the counts at each rung; the synthesis step cannot reconstruct them from your tables, and
+  a profile that can't distinguish a lightly-modulated project from a survey that ran out
+  of room is the specific failure this ladder exists to prevent.
 - **global-modulation** — every modulator by class and engine scope (`list_modulations`,
   both the global engine and per-device scopes you can reach), the wiring graph, depth
   distribution, tempo sync usage (excluding, from any tempo-synced fraction, modulator
@@ -110,4 +135,5 @@ Also list any convention candidates your concern's own data supports, each with 
 evidence count (`Linked color mode, 17 of 18 patterns`) — you already computed these
 counts deriving your tables, and the synthesis step carries them into `## Conventions`
 without recomputing them from scratch. A one-off still counts (count of 1); let the
-synthesis step decide whether it's a convention or an open question.
+synthesis step decide whether it's a convention, a momentary reading, or an open question —
+your job is to hand it the count and the durability flag, not to make that call.

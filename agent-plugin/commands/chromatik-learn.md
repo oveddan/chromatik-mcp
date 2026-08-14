@@ -49,8 +49,8 @@ symptom. You already know your own step-1 `get_status` succeeded, so:
 ## 3. Synthesize into the profile format
 
 Combine the six reports into one document, in the section order the `project-profile`
-skill specifies: Project, Conventions, Practice, External control, Confidence, Open
-questions, Not surveyed.
+skill specifies: Project, Conventions, Momentary state, Practice, External control,
+Confidence, Open questions, Not surveyed.
 
 - Merge overlapping evidence rather than concatenating reports — e.g. a class mentioned
   by both the `color` pass (its palette mode) and the `pattern-modulation` pass (its
@@ -63,6 +63,14 @@ questions, Not surveyed.
   skill's rule. Don't estimate it and don't recompute it from the raw tables — each
   surveyor reports its own concern's convention candidates with counts already attached;
   pull those through.
+- Route each of those candidates before you write it: a surveyor reports what it read, and
+  the durability test in the skill's `## Conventions` section is yours to apply. A reading
+  of a volatile control (`fader`, `enabled` on a channel or effect, `running`,
+  `compositeLevel`, active pattern, `cue`/`aux`, MIDI template control values — the
+  control, not any field sharing its name) goes to `## Momentary state` with its count
+  intact, not to `## Conventions` — and values remembered from a MIDI surface that isn't
+  connected go to `## Open questions` with that status stated. A surveyor counting
+  something cleanly is not a reason to call it a convention.
 - Populate `## Confidence` and `## Open questions` from what the surveyors flagged as
   uncertain, absent, or unanswerable — these two sections are required by the skill, not
   optional summaries you can skip if nothing came up short.
