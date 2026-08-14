@@ -320,6 +320,17 @@ Dissolve a mixer group by its canonical path, leaving all members as top-level c
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the group to dissolve, e.g. /lx/mixer/channel/1 |
 
+### `copy_channel`
+
+_mutating_
+
+Copy a whole channel into the mixer — patterns, their effects and nested racks, the channel's own effects, its clips, its mixer settings (fader, blend mode, crossfade group), and its channel-level modulators/modulations/triggers, all rewired to the copy. This carries far more than copy_pattern does: channel-level wiring lives inside the channel, so the modulations that copy_pattern has to leave behind travel with a channel copy. Only global modulations (scope /lx/modulation), MIDI mappings and snapshot views stay on the source; they are listed in the response's unreplicatedWiring array (kind, scope, sourcePath, targetPath). Groups cannot be copied — LX's add-channel only builds channels, so copying a group would produce an empty channel wearing its label; copy the member channels and regroup with group_channels, which is also how you re-group a copy: a copy of a grouped channel lands at the top level, never inside the source's group (honoring the serialized membership would break LX's rule that a group's members sit contiguously behind it), and the response sets groupMembershipDropped: true so you know to regroup. Pass an optional 0-based index to insert at a mixer position; omit to append. Inserting shifts the 1-based paths of later channels — re-list rather than reusing cached paths. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the channel to copy, e.g. /lx/mixer/channel/1 |
+| `index` | integer | no | -2147483648–2147483647 | 0-based mixer index to insert at; omit to append at the end |
+
 ### `add_pattern`
 
 _mutating_
@@ -406,6 +417,17 @@ Move an effect to a new 0-based index within its container (channel, bus, or pat
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the effect to move, e.g. /lx/mixer/channel/1/effect/1 |
 | `index` | integer | yes | -2147483648–2147483647 | 0-based destination index within the effect list |
+
+### `copy_effect`
+
+_mutating_
+
+Copy a configured effect into any channel, the master bus, or a pattern ('containerPath') — unlike add_effect, which instantiates a blank one. The copy carries the source's parameter values and its own device-local modulators/modulations/triggers, rewired to the copy. It does NOT carry wiring held outside the effect — channel-level and global modulations and triggers, MIDI mappings, snapshot views — which address the source specifically and stay on it; every such reference is listed in the response's unreplicatedWiring array (kind, scope, sourcePath, targetPath). To relocate rather than duplicate, prefer move_effect with containerPath: that is a true move and keeps MIDI mappings and snapshot views attached. The copy always lands at the end of the destination's effect chain — LX's add-effect command takes no index; follow with move_effect to position it. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the effect to copy, e.g. /lx/mixer/channel/1/effect/1 |
+| `containerPath` | string | yes | — | Canonical path of the destination channel, master bus, or pattern, e.g. /lx/mixer/channel/2, /lx/mixer/master, or /lx/mixer/channel/2/pattern/1; may be the source's own container to duplicate in place |
 
 <!-- generated:end -->
 

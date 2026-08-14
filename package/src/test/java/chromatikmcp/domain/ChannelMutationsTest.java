@@ -818,6 +818,184 @@ class ChannelMutationsTest extends HeadlessLxTest {
     assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
   }
 
+  // ── copy channel ──────────────────────────────────────────────────────────────
+
+  @Test
+  void copyChannelCarriesPatternsEffectsClipsAndChannelLevelWiring() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    source.label.setValue("Hyperspace");
+    source.fader.setValue(0.42);
+    source.addClip(0);
+    LXModulator lfo = Modulators.addModulator(lx, source.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, source.modulation, (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) pattern.getParameter("color/brightness"));
+    int before = lx.engine.mixer.channels.size();
+
+    Channels.ChannelCopyResult result = Channels.copyChannel(lx, source.getCanonicalPath(), -1);
+    LXChannel copy = result.channel();
+
+    assertNotSame(source, copy);
+    assertEquals("Hyperspace", copy.getLabel());
+    assertEquals(0.42, copy.fader.getValue(), 1e-9);
+    assertEquals(1, copy.patterns.size());
+    assertEquals(1, copy.getEffects().size());
+    assertEquals(1, copy.clips.stream().filter(c -> c != null).count());
+    assertFalse(result.groupMembershipDropped());
+
+    // The point of copy_channel: channel-level wiring lives inside the channel, so unlike
+    // copyPattern it travels — and lands pointing at the copy's own pattern.
+    assertEquals(1, copy.modulation.modulations.size());
+    LXCompoundModulation copied = copy.modulation.modulations.get(0);
+    assertTrue(copied.target.getCanonicalPath().startsWith(copy.getCanonicalPath() + "/"),
+        "copied modulation target " + copied.target.getCanonicalPath()
+            + " should live under " + copy.getCanonicalPath());
+    assertTrue(result.unreplicatedWiring().isEmpty(),
+        "channel-level wiring is internal, not external: " + result.unreplicatedWiring());
+
+    lx.command.undo();
+    assertEquals(before, lx.engine.mixer.channels.size(), "undo should remove the copy");
+  }
+
+  @Test
+  void copyChannelReportsGlobalWiringItDoesNotReplicate() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXModulator global = Modulators.addModulator(lx, lx.engine.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, lx.engine.modulation, (LXNormalizedParameter) global,
+        (LXCompoundModulation.Target) source.fader);
+
+    Channels.ChannelCopyResult result = Channels.copyChannel(lx, source.getCanonicalPath(), -1);
+
+    assertEquals(1, result.unreplicatedWiring().size());
+    Channels.ExternalReference stranded = result.unreplicatedWiring().get(0);
+    assertEquals("modulation", stranded.kind());
+    assertEquals(source.fader.getCanonicalPath(), stranded.targetPath());
+    assertEquals(source.fader.getCanonicalPath(),
+        lx.engine.modulation.modulations.get(0).target.getCanonicalPath(),
+        "the global wiring still drives the source, not the copy");
+  }
+
+  @Test
+  void copyChannelDropsGroupMembershipToKeepGroupsContiguous() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(a, b));
+    LXChannel ungrouped = lx.engine.mixer.addChannel();
+    assertEquals(List.of(group, a, b, ungrouped), lx.engine.mixer.channels);
+
+    Channels.ChannelCopyResult result = Channels.copyChannel(lx, a.getCanonicalPath(), -1);
+
+    assertTrue(result.groupMembershipDropped());
+    assertEquals(null, result.channel().getGroup(), "copy lands at the top level");
+    assertEquals(2, group.channels.size(), "the source's group is untouched");
+    // Honoring the serialized membership would have appended a group member after the
+    // ungrouped channel, leaving the group's members non-contiguous.
+    assertEquals(List.of(group, a, b, ungrouped, result.channel()), lx.engine.mixer.channels);
+  }
+
+  @Test
+  void copyChannelRejectsGroups() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(a));
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    var ex = assertThrows(Resolve.ResolveException.class,
+        () -> Channels.copyChannel(lx, group.getCanonicalPath(), -1));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand(),
+        "undo stack untouched when copy rejected");
+  }
+
+  @Test
+  void copyChannelOutOfRangeIndexIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    var ex = assertThrows(Resolve.ResolveException.class,
+        () -> Channels.copyChannel(lx, source.getCanonicalPath(), 99));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand(),
+        "LX's addChannel would throw inside perform(), wiping history — reject up front");
+  }
+
+  @Test
+  void copyChannelAtIndexInsertsThere() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+
+    LXChannel copy = Channels.copyChannel(lx, b.getCanonicalPath(), 0).channel();
+
+    assertEquals(0, copy.getIndex());
+    assertEquals(List.of(copy, a, b), lx.engine.mixer.channels);
+  }
+
+  // ── copy effect ───────────────────────────────────────────────────────────────
+
+  @Test
+  void copyEffectCarriesParametersAndDeviceLocalWiring() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    effect.getParameter("level").setValue(0.75);
+    LXModulator lfo = Modulators.addModulator(lx, effect.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, effect.modulation, (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) effect.getParameter("level"));
+
+    Channels.EffectCopyResult result = Channels.copyEffect(
+        lx, effect.getCanonicalPath(), destination.getCanonicalPath());
+    LXEffect copy = result.effect();
+
+    assertNotSame(effect, copy);
+    assertEquals(0.75, copy.getParameter("level").getValue(), 1e-9);
+    assertEquals(1, copy.modulation.modulations.size());
+    assertTrue(copy.modulation.modulations.get(0).target.getCanonicalPath()
+        .startsWith(copy.getCanonicalPath() + "/"), "wiring rewired to the copy");
+    assertEquals(1, source.getEffects().size(), "source keeps its effect");
+
+    lx.command.undo();
+    assertEquals(0, destination.getEffects().size(), "undo should remove the copy");
+  }
+
+  @Test
+  void copyEffectReportsChannelLevelWiringItDoesNotReplicate() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    LXModulator lfo = Modulators.addModulator(lx, source.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, source.modulation, (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) effect.getParameter("level"));
+
+    Channels.EffectCopyResult result = Channels.copyEffect(
+        lx, effect.getCanonicalPath(), destination.getCanonicalPath());
+
+    assertEquals(1, result.unreplicatedWiring().size());
+    assertEquals("modulation", result.unreplicatedWiring().get(0).kind());
+    assertEquals(effect.getParameter("level").getCanonicalPath(),
+        result.unreplicatedWiring().get(0).targetPath());
+  }
+
+  @Test
+  void copyEffectToNonContainerIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    LXModulator lfo = Modulators.addModulator(lx, source.modulation, VariableLFO.class);
+
+    var ex = assertThrows(Resolve.ResolveException.class, () -> Channels.copyEffect(
+        lx, effect.getCanonicalPath(), lfo.getCanonicalPath()));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+  }
+
   // ── add/remove effect ─────────────────────────────────────────────────────────
 
   @Test

@@ -486,6 +486,75 @@ public final class Channels {
   }
 
   /**
+   * The channel created by {@link #copyChannel}, the external references the copy does not
+   * reproduce, and whether the source's group membership was dropped.
+   */
+  public record ChannelCopyResult(LXChannel channel, List<ExternalReference> unreplicatedWiring,
+      boolean groupMembershipDropped) {}
+
+  /** LXChannel serializes its group by component id under this key (LXChannel.java:497). */
+  private static final String KEY_CHANNEL_GROUP = "group";
+
+  /**
+   * Copy a whole channel — patterns, effects, clips, and its own channel-level modulation
+   * engine — into the mixer at {@code index}.
+   *
+   * <p>A channel carries far more than a pattern does, because channel-level wiring lives
+   * <em>inside</em> a channel's subtree: the modulators and modulations that
+   * {@link #copyPattern} has to strand are exactly what a channel copy takes with it,
+   * rewired to the copy. Only global modulations, MIDI mappings and snapshot views stay
+   * behind, and those are reported in
+   * {@link ChannelCopyResult#unreplicatedWiring()}.
+   *
+   * <p>Two hazards in LX's own behaviour are handled here rather than passed through:
+   *
+   * <ul>
+   * <li><b>Groups cannot be copied.</b> {@code Mixer.AddChannel} always constructs an
+   * {@code LXChannel} (LXMixerEngine.java:524), so handing it a serialized {@code LXGroup}
+   * yields a plain channel wearing the group's label and none of its members. Rejected.
+   * <li><b>Group membership is stripped from the copy.</b> The serialized channel keeps a
+   * {@code group} id, and honouring it while inserting anywhere in the mixer breaks LX's
+   * invariant that a group's members are contiguous behind it — verified to produce a group
+   * reporting 3 members with an outsider wedged between them. The copy therefore lands as a
+   * top-level channel; {@code groupMembershipDropped} says so, and callers who want it
+   * grouped call {@link #groupChannels} afterward.
+   * </ul>
+   *
+   * @param index 0-based mixer index, or -1 to append
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the source is a group or the index is
+   *     out of range
+   */
+  public static ChannelCopyResult copyChannel(LX lx, String sourcePath, int index) {
+    LXAbstractChannel source = Resolve.component(lx, sourcePath, LXAbstractChannel.class);
+    if (!(source instanceof LXChannel channel)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Cannot copy a group at " + sourcePath
+              + " — LX's AddChannel only builds channels, so a group copy would lose every "
+              + "member; copy the member channels individually and regroup them");
+    }
+    List<LXAbstractChannel> channels = lx.engine.mixer.channels;
+    int before = channels.size();
+    // addChannel throws on index > size inside perform(), which swallows it and wipes the
+    // undo stack — reject up front like the other index-taking primitives.
+    if (index > before) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Channel index " + index + " out of range [0," + before + "]");
+    }
+    JsonObject channelObj = LXSerializable.Utils.toObject(channel, true);
+    boolean groupMembershipDropped = channelObj.has(KEY_CHANNEL_GROUP);
+    channelObj.remove(KEY_CHANNEL_GROUP);
+    Commands.perform(lx, new LXCommand.Mixer.AddChannel(channelObj, index));
+    if (channels.size() != before + 1) {
+      throw new IllegalStateException("AddChannel did not add a channel");
+    }
+    int resultIndex = (index >= 0 && index <= before) ? index : before;
+    if (!(channels.get(resultIndex) instanceof LXChannel copy)) {
+      throw new IllegalStateException("AddChannel did not add an LXChannel");
+    }
+    return new ChannelCopyResult(copy, externalReferences(lx, channel), groupMembershipDropped);
+  }
+
+  /**
    * Remove a pattern by path.
    *
    * @throws Resolve.ResolveException NOT_FOUND / TYPE_MISMATCH
@@ -628,6 +697,46 @@ public final class Channels {
     var before = snapshotPaths(engine.patterns);
     Commands.perform(lx, new LXCommand.Channel.MovePattern(engine, pattern, toIndex));
     return new PatternMoveResult(pattern, pathChanges(lx, before));
+  }
+
+  /**
+   * The effect created by {@link #copyEffect}, plus every external reference into the
+   * source that the copy does not reproduce.
+   */
+  public record EffectCopyResult(LXEffect effect, List<ExternalReference> unreplicatedWiring) {}
+
+  /**
+   * Copy a configured effect into {@code containerPath} (a channel, the master bus, or a
+   * pattern), which may be the source's own container.
+   *
+   * <p>Same round-trip as {@link #copyPattern}: the effect's parameter values and its own
+   * device-local modulation engine travel with the copy; wiring held outside the effect
+   * does not, and is returned in {@link EffectCopyResult#unreplicatedWiring()}.
+   *
+   * <p>Unlike {@link #copyPattern} there is no insertion index — {@code AddEffect.perform}
+   * calls {@code addEffect(instance)} with no index and always appends (LXCommand.java:1387).
+   * Callers wanting a position follow with {@link #moveEffect}.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the destination is not an effect
+   *     container
+   */
+  public static EffectCopyResult copyEffect(LX lx, String sourcePath, String containerPath) {
+    LXEffect source = Resolve.component(lx, sourcePath, LXEffect.class);
+    LXComponent component = Resolve.component(lx, containerPath);
+    if (!(component instanceof LXEffect.Container container)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Not a channel, bus, or pattern at path: " + containerPath
+              + " (found " + component.getClass().getSimpleName() + ")");
+    }
+    List<LXEffect> effects = container.getEffects();
+    int before = effects.size();
+    JsonObject effectObj = LXSerializable.Utils.toObject(source, true);
+    Commands.perform(lx,
+        new LXCommand.Channel.AddEffect(component, source.getClass(), effectObj));
+    if (effects.size() != before + 1) {
+      throw new IllegalStateException("AddEffect did not add an effect to " + containerPath);
+    }
+    return new EffectCopyResult(effects.get(before), externalReferences(lx, source));
   }
 
   /**

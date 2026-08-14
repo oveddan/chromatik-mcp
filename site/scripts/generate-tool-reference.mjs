@@ -41,6 +41,7 @@ const CATEGORIES = {
     'group_channels',
     'ungroup_channel',
     'ungroup_channels',
+    'copy_channel',
     'add_pattern',
     'remove_pattern',
     'move_pattern',
@@ -49,6 +50,7 @@ const CATEGORIES = {
     'add_effect',
     'remove_effect',
     'move_effect',
+    'copy_effect',
   ],
   modulation: [
     'add_modulator',
