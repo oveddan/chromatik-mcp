@@ -30,8 +30,11 @@ public final class ListModulations implements LxTool {
         + "modulations and triggers: path/sourcePath/targetPath) — the right choice for surveying a "
         + "project; a real project can carry dozens of modulators and hundreds of wirings, and "
         + "the full shape blows past client response limits. Pass 'detail: full' for today's "
-        + "complete shape (modulator OSC addresses/running state, and per-modulation "
-        + "range/polarity/rangePath to adjust depth via set_parameter). Wirings are paged in "
+        + "complete shape (per-modulator OSC address/running state/tempoSync, and per-modulation "
+        + "range/polarity/rangePath to adjust depth via set_parameter). A modulator's tempoSync "
+        + "is true when it is synced to the tempo and false when it is free-running; the key is "
+        + "omitted for classes carrying no sync parameter, so absent means the question does not "
+        + "apply — read it as not-applicable, never as free-running. Wirings are paged in "
         + "continuous-then-trigger order (100 by default, 250 maximum); pass nextCursor back as "
         + "cursor until it is omitted. Modulators repeat on every page. Defaults to the global "
         + "engine; pass scope (a device path) for a pattern/effect's own chain. Knob paths "
@@ -46,7 +49,8 @@ public final class ListModulations implements LxTool {
             + "omit for the global engine"));
     properties.put("detail", Schemas.enumString(
         "'summary' (default) for the wiring graph only, or 'full' for today's complete "
-            + "payload (OSC addresses, running state, range/polarity/rangePath)",
+            + "payload (OSC addresses, running state, tempoSync where the modulator has a "
+            + "sync parameter, range/polarity/rangePath)",
         List.of("summary", "full")));
     properties.put("cursor", Schemas.string(
         "Opaque cursor from the preceding page's nextCursor; omit for the first page"));
@@ -144,6 +148,9 @@ public final class ListModulations implements LxTool {
     entry.put("label", m.label());
     entry.put("class", m.className());
     entry.put("running", m.running());
+    if (m.tempoSync() != null) {
+      entry.put("tempoSync", m.tempoSync());
+    }
     if (m.oscAddress() != null) {
       entry.put("oscAddress", m.oscAddress());
     }

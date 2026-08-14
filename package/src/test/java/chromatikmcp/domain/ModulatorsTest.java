@@ -23,6 +23,7 @@ import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.modulation.LXCompoundModulation;
 import heronarts.lx.modulation.LXModulationEngine;
 import heronarts.lx.modulation.LXTriggerModulation;
+import heronarts.lx.modulator.Damper;
 import heronarts.lx.modulator.LXModulator;
 import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.modulator.MacroTriggers;
@@ -521,6 +522,43 @@ class ModulatorsTest extends HeadlessLxTest {
     Modulators.EngineInfo info = Modulators.listEngine(lx, pattern.modulation);
     assertEquals(1, info.modulators().size(), "the global bank is not in the device engine");
     assertEquals(device.getCanonicalPath(), info.modulators().get(0).path());
+  }
+
+  @Test
+  void tempoSyncStateDistinguishesFreeRunningFromNoSyncParameter() {
+    LX lx = newHeadlessLx();
+    MacroKnobs knobs = (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    VariableLFO lfo = (VariableLFO) Modulators.addModulator(lx, lx.engine.modulation, VariableLFO.class);
+    Damper damper = (Damper) Modulators.addModulator(lx, lx.engine.modulation, Damper.class);
+
+    assertNull(Modulators.tempoSyncState(knobs), "a knob bank has no sync parameter — n/a, not free");
+    assertEquals(Boolean.FALSE, Modulators.tempoSyncState(lfo), "a sync parameter that is off reads free");
+    lfo.tempoSync.setValue(true);
+    assertEquals(Boolean.TRUE, Modulators.tempoSyncState(lfo));
+    // Damper carries tempoSync without extending LXPeriodicModulator; an instanceof test
+    // would report it as n/a.
+    assertEquals(Boolean.FALSE, Modulators.tempoSyncState(damper));
+    damper.tempoSync.setValue(true);
+    assertEquals(Boolean.TRUE, Modulators.tempoSyncState(damper));
+  }
+
+  @Test
+  void listEngineCarriesEachModulatorsTempoSyncState() {
+    LX lx = newHeadlessLx();
+    MacroKnobs knobs = (MacroKnobs) Modulators.addModulator(lx, lx.engine.modulation, MacroKnobs.class);
+    VariableLFO synced = (VariableLFO) Modulators.addModulator(lx, lx.engine.modulation, VariableLFO.class);
+    VariableLFO free = (VariableLFO) Modulators.addModulator(lx, lx.engine.modulation, VariableLFO.class);
+    synced.tempoSync.setValue(true);
+
+    Modulators.EngineInfo info = Modulators.listEngine(lx, lx.engine.modulation);
+    assertNull(byPath(info, knobs.getCanonicalPath()).tempoSync());
+    assertEquals(Boolean.TRUE, byPath(info, synced.getCanonicalPath()).tempoSync());
+    assertEquals(Boolean.FALSE, byPath(info, free.getCanonicalPath()).tempoSync());
+  }
+
+  private static Modulators.ModulatorInfo byPath(Modulators.EngineInfo info, String path) {
+    return info.modulators().stream()
+        .filter(m -> path.equals(m.path())).findFirst().orElseThrow();
   }
 
   // ---- removes: do -> undo -> assert restored (undo reconstructs a fresh instance) ----
