@@ -2,164 +2,234 @@
 
 A drop-in LX/Chromatik package that lets an agent read, explain, compose into, and debug a running Chromatik show over MCP.
 
-**Status**: the tool surface works end-to-end — discovery, parameters, tempo, modulation wiring, channels/groups/patterns/effect chains, mixer performance controls (crossfader, cue/aux), MIDI mapping and templates, palette (read-write), snapshots, model views, fixtures & output wiring, render previews, OSC addressing, project/model save, arrange-timeline composition authoring (markers, locators, lanes, automation), and a generated semantic catalog of what each component does. See the generated [tool reference](https://oveddan.github.io/chromatik-mcp/tools/) for the authoritative current inventory, [docs/build-plan.md](docs/build-plan.md) for the roadmap, and [docs/tool-conventions.md](docs/tool-conventions.md) for the tool-surface conventions.
+The jar embeds an MCP server inside the LX runtime, so any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, your own orchestrator — connects straight into the running engine. Every call reads or mutates the same live object graph your console renders, and the human and the agent share one undo stack. No separate server process, no `.lxp` file editing, no reload cycle.
 
-**Docs**: [oveddan.github.io/chromatik-mcp](https://oveddan.github.io/chromatik-mcp/) — for AI agents, the full docs are available as plain markdown at [llms-full.txt](https://oveddan.github.io/chromatik-mcp/llms-full.txt) ([llms.txt](https://oveddan.github.io/chromatik-mcp/llms.txt) index).
+<!-- landing:start -->
 
-## Quick start
+## Requirements
+
+- [Chromatik](https://chromatik.co/download/) with LX **1.2.2** (the pinned framework version in `lx.package`)
+- To build from source (optional): Java **25** and Maven — required by the published GLX/GLXStudio jars
+
+## 1. Install the jar
+
+**Download** — no build tools needed. This URL always resolves to the newest tagged release; older ones are on the [releases page](https://github.com/oveddan/chromatik-mcp/releases):
 
 ```sh
-# download the latest release (or: cd package && mvn install -Pinstall)
 curl -L --create-dirs -o ~/Chromatik/Packages/chromatik-mcp.jar \
   https://github.com/oveddan/chromatik-mcp/releases/latest/download/chromatik-mcp.jar
-# then: enable Chromatik-MCP in Chromatik Preferences → Plugins, restart, and connect:
+```
+
+To track main instead, use the rolling `latest` prerelease — republished on every main-branch push that touches `package/` and passes the full test suite: `https://github.com/oveddan/chromatik-mcp/releases/download/latest/chromatik-mcp.jar`
+
+**Or build from source:**
+
+```sh
+git clone https://github.com/oveddan/chromatik-mcp.git
+cd chromatik-mcp/package
+mvn install -Pinstall
+```
+
+The `install` profile copies the shaded jar into `~/Chromatik/Packages/`, where Chromatik discovers packages. (Without the profile, `mvn package` just builds it under `target/`.) It also skips tests — those are the developer gate, not part of the consumer install flow.
+
+> [!WARNING]
+> **Use one install method, not both.** The download is named `chromatik-mcp.jar`; the Maven install produces `chromatik-mcp-<version>.jar`. If both sit in `~/Chromatik/Packages/`, Chromatik loads the plugin twice — and one copy is stale. That's the classic "I installed the new jar but nothing changed" trap; `get_status`'s `buildTime` exposes it. Remove the other jar when switching methods.
+
+> [!CAUTION]
+> **Never reinstall while Chromatik is running.** Overwriting the jar triggers LX's package hot-reload watcher, which orphans the live MCP server instead of restarting it — the **old** server keeps answering on the same port, still running pre-reinstall code. Compare `get_status`'s `buildTime` against the freshly built jar to spot it. **Quit Chromatik → install → relaunch.**
+
+Upgrading from **lx-mcp**, the pre-rename name? Old jars and the old `~/.lx-mcp/` config directory both need cleaning up, or two plugins load at once and clients silently drive the old one: [docs/migrating-from-lx-mcp.md](docs/migrating-from-lx-mcp.md).
+
+## 2. Enable the plugin in Chromatik
+
+Start (or restart) Chromatik, open **Preferences → Plugins**, and enable **Chromatik-MCP**. Restart once more if Chromatik asks. On startup the plugin:
+
+- starts the MCP server on an ephemeral port, bound to **127.0.0.1 only** — MCP clients must run on the same machine; there is no authentication layer
+- writes the discovery file `~/.chromatik-mcp/status.json`
+
+**Chromatik-MCP** is the only checkbox you need. It automatically enables its bundled **Chromatik-MCP UI** companion, which adds a live status section — connected state, server URL, time since last activity — to the left pane's **Global** tab. The companion stays a separate internal plugin because its Chromatik UI dependencies are unavailable in headless LX; the core MCP server still loads in CI and other UI-free runtimes.
+
+## 3. Configure the port and host (optional)
+
+By default the server binds an **ephemeral port** on **127.0.0.1** — loopback-only, safe, zero-config. To pin a fixed port or change the bind host, create `~/.chromatik-mcp/config.json`:
+
+```json
+{
+  "port": 7000,
+  "host": "127.0.0.1"
+}
+```
+
+- `port` — `0` (the default) picks an ephemeral port each startup; any other value pins a fixed port. **If that port is already in use the plugin fails at startup** (LX marks it errored and surfaces the failure in its error dialog) rather than silently falling back to another port.
+- `host` — defaults to `127.0.0.1`. A malformed or missing `config.json` silently falls back to the defaults; a config that fails to parse never takes the server down.
+
+Restart Chromatik after saving — a config change only takes effect on the next plugin startup.
+
+Pinning a port is worth it if your client's config is static JSON (Cursor, VS Code, Codex) or if you use the agent plugin, which defaults to **3232** — chosen to echo Chromatik's default OSC ports 3030/4040:
+
+```json
+{ "port": 3232 }
+```
+
+> [!CAUTION]
+> **Setting `host` to anything other than `localhost`, `::1`, or a `127.0.0.0/8` address binds the MCP server to a network-reachable interface.** This server is **unauthenticated** — anyone who can reach that address has full control of a live show: arbitrary parameter mutation, project load/save, everything. Only do this on a trusted network, and only if you understand the exposure. The plugin logs a loud warning on startup whenever a non-loopback host is configured.
+
+## 4. Discover the port
+
+`~/.chromatik-mcp/status.json` is the discovery handshake:
+
+```json
+{
+  "pid": 12345,
+  "port": 51234,
+  "host": "127.0.0.1",
+  "url": "http://127.0.0.1:51234/mcp",
+  "projectPath": "/Users/you/Chromatik/Projects/MyShow.lxp",
+  "lxVersion": "1.2.2",
+  "serverVersion": "0.1.0",
+  "buildTime": "2026-07-20T18:04:33Z",
+  "connected": false,
+  "lastActivityAt": null
+}
+```
+
+Read it any time with:
+
+```sh
+jq -r .port ~/.chromatik-mcp/status.json     # port only
+jq -r .url  ~/.chromatik-mcp/status.json     # full endpoint URL
+```
+
+- The MCP endpoint is `url`, equivalently `http://<host>:<port>/mcp`, streamable HTTP.
+- **Check `pid` liveness before trusting the file.** A clean exit — quitting Chromatik, disabling the plugin — rewrites it with `connected: false` first, but a crashed or force-killed session leaves whatever was last written, which can point at a dead port. If two Chromatik instances run at once, the last one wins the file.
+- `projectPath` is the project seen at the most recent status-file rewrite (`null` if none). Project changes don't trigger a rewrite by themselves, so query `get_project_info` when the live project path matters.
+- `connected` and `lastActivityAt` track live client activity, rewritten whenever the connection state flips. `lastActivityAt` is ISO-8601, or `null` if no client has ever been active. The `get_status` tool reports the same state live, without re-reading the file.
+
+## 5. Connect your AI client
+
+Any MCP client that speaks streamable HTTP works. The endpoint is `http://127.0.0.1:<port>/mcp` and nothing else — no authentication, no SSE-only legacy endpoint.
+
+**Claude Code** — one command, reading the live port with `jq`:
+
+```sh
 claude mcp add --transport http chromatik "http://127.0.0.1:$(jq -r .port ~/.chromatik-mcp/status.json)/mcp"
 ```
 
-The plugin publishes its endpoint in `~/.chromatik-mcp/status.json` (`{pid, port, host, url, projectPath, lxVersion, serverVersion, buildTime, connected, lastActivityAt}`); the endpoint works with any streamable-HTTP MCP client. Enabling the **Chromatik-MCP** plugin is the only checkbox — the UI status section (left pane, GLOBAL tab) enables itself. By default the server binds an ephemeral port on `127.0.0.1`; a fixed port or non-loopback bind (remote clients) can be configured in `~/.chromatik-mcp/config.json` (`{"port": 7770, "host": "0.0.0.0"}`) — **there is no authentication layer, so a non-loopback bind gives anyone on the network full control of the show**. The repo also ships a project-scope [`.mcp.json`](.mcp.json) for Claude Code (pin the port to `3232` per [docs/install.md](docs/install.md#4-connect-an-mcp-client) and it just works). Full walkthrough and troubleshooting: **[docs/install.md](docs/install.md)**. Concrete agent flows — building show structure, chaining effects, macro mapping, multi-agent patterns: **[docs/usage-examples.md](docs/usage-examples.md)**.
+Add `--scope user` to make it available in every project. Verify with `/mcp` — the `chromatik` server should list its tools.
 
-## Capabilities
+**Claude Desktop** — **Settings → Connectors → Add custom connector**, name it `chromatik`, paste the endpoint URL from `status.json`. Note that `claude_desktop_config.json` only accepts stdio (`command`/`args`) servers, so an HTTP entry pasted there is silently ignored.
 
-Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`), as returned by the discovery tools. Mutations are undoable in Chromatik with Cmd-Z unless noted. This is the highlight reel — the complete generated surface (including model & fixture editing, project/model save, and batched operations) is on the [tool reference](https://oveddan.github.io/chromatik-mcp/tools/).
+<details>
+<summary><b>Cursor, VS Code, Codex, and stdio-only clients</b></summary>
 
-### Discover
+These all take static JSON or TOML, so [pin a port](#3-configure-the-port-and-host-optional) first.
 
-| tool | what it returns |
-|---|---|
-| `get_status` | server identity + liveness: `serverVersion`, `buildTime` (detect a stale process after installing a new jar), uptime, connection state |
-| `get_project_info` | LX version, project file, channel count, OSC engine state, the **output** object (`/lx/output/enabled` — the "Live" toggle pixels won't reach fixtures without — plus brightness and gamma), and **engine globals** (`speed` playback-rate multiplier, `framesPerSecond`) |
-| `get_tempo` | the engine clock: bpm, clock source (internal / MIDI-synced / OSC-driven), beats-per-bar, launch quantization (why `fire_trigger` sometimes answers `pending: true`), tap/nudge paths, live beat position, and a beat-pulse path usable as a `wire_trigger` source |
-| `list_channels` | the mixer: channels (with `patternMode` playlist/blend and per-pattern `contributing`), master, and every effect chain — including **pattern-hosted effects**. Each channel carries a `controls` block (crossfade group, blend mode, auto-mute, cue/aux, pattern auto-cycle + transition settings) and the top-level `mixer` object holds the **crossfader** (0 = full A, 1 = full B) and cue/aux preview buses — all with settable paths. Defaults to a compact `detail: summary` shape sized for surveying a whole project; pass `detail: full` for the complete payload |
-| `list_parameters` | every parameter on a component **plus its child components** (a pattern's effects, the palette's swatches) — walk the tree instead of guessing paths |
-| `list_available_patterns` / `_effects` / `_modulators` | instantiable classes from the LX registry (modulators carry `global`/`device` flags — where they may be added) |
-| `list_modulations` | one modulation engine's live modulators and wirings — global side panel by default, or a device's own chain via `scope`. Defaults to a compact `detail: summary` and 100 wirings per page; pass `nextCursor` back as `cursor` for the next page, or `detail: full` for OSC addresses, running state, and per-modulation range/polarity |
-| `get_parameter` | one parameter: value, type, range, options, units, and its **OSC address**. Parameters with live modulations report the effective `value` plus the knob's `baseValue` and `modulated: true` |
-| `get_palette` | the global color system: active swatch colors (mode + effective color), saved swatches with `recallPath` (fire to recall, honors the transition time), auto-cycle state. Mutations: see the palette & snapshots section |
-| `list_snapshots` | saved snapshots (whole-look captures) plus the snapshot engine's recall-scoping and transition settings, all with settable paths |
-| `get_views` | model views (see below) |
-| `get_frame` | a PNG render of the current output (`include_image`/`grid`/`width` control token cost) — visual feedback without screen access |
-| `get_component_doc` | what a pattern/effect/modulator *does* — generated behavior docs from the [semantic catalog](docs/catalog-format.md), with a bytecode-hash `stale` flag so the answer is honest when code has changed. `list_available_*` entries carry `documented` flags |
+**Cursor** — `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project), then enable it under **Settings → MCP**:
 
-### Read & set parameters
-
-`set_parameter {path, value}` dispatches on the parameter's runtime type (number / integer / boolean / string) and rejects what can't be set sanely: aggregate parameters (set a color's `.../hue`, `.../saturation`, `.../brightness` components instead), computed read-only parameters, out-of-range enum indices (LX would silently wrap), and momentary triggers (see `fire_trigger`). Discrete/selector parameters also accept an **option name string** — `{"value": "Cylinder"}` maps a device to a view by label, no index lookup needed. The response echoes the **base** value, so set-then-verify works even while modulation rides on top.
-
-`class` arguments everywhere (`add_pattern`, `add_effect`, `add_modulator`, `add_channel`, `get_component_doc`) accept either the full class name or the short `name` the `list_available_*` tools return; an ambiguous short name errors listing the candidates.
-
-### Undo and redo
-
-`undo` and `redo` expose Chromatik's shared linear command history one step at a time.
-Their responses name the command that moved and report whether another undo or redo is
-available. The history is global to the running engine — it may include changes from the
-UI or another MCP client, not only the current agent session. If an upstream command fails
-while undoing or redoing, LX clears both history stacks and may leave partially changed
-state; the MCP error reports the post-failure availability so callers know to stop and
-inspect the affected area.
-
-### Build structure: channels, patterns, effect chains
-
-| tool | what it does |
-|---|---|
-| `add_channel {class?}` / `remove_channel {path}` / `move_channel {path, index}` | add, remove, or reorder mixer channels and group blocks; move destinations are 0-based post-removal indices and preserve group membership |
-| `group_channels {paths}` / `ungroup_channel {path}` / `ungroup_channels {path}` | create a group bus over an explicit channel set, pull out one member, or dissolve the group. Group creation is the exception: LX has no explicit-list command, so it is not undoable; both ungroup operations are undoable |
-| `add_pattern {containerPath, class, index?}` / `remove_pattern` / `move_pattern {path, index}` | manage a channel's or PatternRack's pattern list |
-| `activate_pattern {path}` | switch the active pattern (PLAYLIST mode; BLEND-mode channels layer patterns via their `enabled` params instead) |
-| `add_effect {containerPath, class}` / `remove_effect` / `move_effect {path, index}` | effect chains — run serially in list order — on channels, the master bus, or an individual pattern |
-
-Structural paths are 1-based and reindex on remove/insert/group/ungroup — re-list rather than reusing cached paths. Group members remain flat top-level channel paths; their `group` field in `list_channels` identifies membership.
-Grouping moves main/aux focus and selection to the new group. Pulling out a focused member
-moves focus with it; pulling out the final member leaves an empty group bus, which must be
-dissolved separately with `ungroup_channels`.
-
-### Map macro knobs (and any modulation)
-
-| tool | what it does |
-|---|---|
-| `add_modulator {class, scope?}` | add e.g. a `MacroKnobs` bank or a `VariableLFO` — to the global side panel, or inside a pattern/effect's own chain via `scope`. Response lists every parameter with its path and OSC address |
-| `remove_modulator {path}` / `move_modulator {path, index}` | delete or reorder a modulator in its global/device-local engine; moving uses a 0-based destination index and shifts canonical paths |
-| `wire_modulator {sourcePath, targetPath, scope?, range?}` | undoable continuous mapping, e.g. `macro1 → fader` or `LFO → twist`. Pass `range` (-1..1) to give the wiring depth immediately — **a wiring without range is inert**. Engine inferred from the source; adjust later via the returned `rangePath`/`polarityPath` |
-| `wire_trigger {sourcePath, targetPath, scope?}` | boolean pulse wiring (e.g. a `MacroTriggers` macro → a toggle) |
-| `remove_modulation {path}` | unwire either kind by the path the wire call returned |
-| `fire_trigger {path}` | pulse a momentary trigger (not undoable — it's an action, and the value auto-resets). Under launch quantization the response says `pending: true`; don't re-fire |
-
-The typical macro-mapping flow:
-
-```
-add_modulator {class: heronarts.lx.modulator.MacroKnobs}      → knob bank + 8 OSC addresses
-wire_modulator {sourcePath: <bank>/macro1, targetPath: <fader path>} → undoable mapping
-set_parameter {path: <bank>/macro1, value: 0.75}             → turn the knob
+```json
+{
+  "mcpServers": {
+    "chromatik": { "url": "http://127.0.0.1:3232/mcp" }
+  }
+}
 ```
 
-### MIDI mapping
+**VS Code (GitHub Copilot)** — `.vscode/mcp.json` in your workspace. VS Code prompts to start the connection; tools appear in Copilot Chat's agent-mode tool picker:
 
-| tool | what it does |
-|---|---|
-| `list_midi_devices` | discovered MIDI input/output ports — each input's three independent routing flags (`channelEnabled` forwards notes/CCs to channel and modulator devices, `controlEnabled` feeds the mapping layer below, `syncEnabled` drives the engine tempo when `get_tempo` reports `clockSource: MIDI`) plus `connected` state. Ports are addressed by 0-based index (no canonical path) — indices shift as devices connect/disconnect, so re-list before reusing one |
-| `list_midi_mappings` | parameter mappings driven by incoming MIDI (`type` note/cc, channel, number → `targetPath`). Only inputs with `controlEnabled` actually apply them. Addressed by 0-based index — indices shift when a mapping is removed, so re-list before reusing one |
-| `list_midi_surfaces` | instantiated control surfaces (e.g. an APC40, a MidiFighterTwister) — two-way hardware LX drives with a dedicated protocol, distinct from the ad-hoc mappings above. Addressed by 0-based index |
-| `list_midi_templates` | instantiated per-project MIDI templates (e.g. an Akai MPD218) whose named knob/pad parameters can be discovered at the returned canonical path and used as modulation/trigger sources |
-| `add_midi_template {class}` | add a registered MIDI template by full/simple class, template name, or expected device name (e.g. `AkaiMPD218`, `Akai MPD218`, or `MPD218`); LX selects matching connected I/O automatically. Undoable |
-| `add_midi_mapping {type, number, channel, targetPath}` | map an incoming note-on or CC to a parameter by its canonical path; fires on channel+pitch/cc identity, not a specific velocity/value. Most numeric/bounded/toggle/discrete parameters can be targeted — aggregate parameters (color, MIDI filter) are rejected, map their component paths instead. Undoable |
-| `remove_midi_mapping {index}` | delete a mapping by its `list_midi_mappings` index; remaining mappings reindex afterward — re-list before reusing one. Undoable |
-| `set_midi_input {index, ...flags}` | set one or more of an input's routing flags by its `list_midi_devices` index; unset flags are left unchanged. **Not undoable** — LX has no undo command for these flags |
-| `set_midi_surface_enabled {index, enabled}` | enable/disable a control surface by its `list_midi_surfaces` index. **Not undoable** — LX has no undo command for surface enablement |
-
-### Palette & snapshots: colors and whole looks
-
-The palette is read-write: beyond setting an individual color's `.../hue` / `.../saturation` / `.../brightness` via `set_parameter`, swatches themselves can be managed. Snapshots capture the *entire* current state — mixer, patterns, effects, modulation — as a recallable look.
-
-| tool | what it does |
-|---|---|
-| `save_swatch` | capture the active swatch's current colors as a new saved swatch (returns its path) |
-| `set_swatch {path}` | apply a saved swatch onto the active colors — same effect as firing its `recallPath` (including the transition fade), but undoable |
-| `remove_swatch {path}` / `move_swatch {path, index}` | manage the saved-swatch list |
-| `add_color` / `remove_color` | add/remove a color slot on a swatch (active swatch by default); a swatch always keeps at least one color |
-| `add_snapshot {label?}` | capture the current mixer/pattern/effect/modulation state as a snapshot |
-| `recall_snapshot {path, immediate?}` | restore a snapshot — fades over the engine's transition time unless `immediate`. What a recall touches is governed by the engine's recall-scoping toggles (see `list_snapshots`). Caution (LX behavior): Cmd-Z after a recall does not restore the previous parameter values |
-| `update_snapshot {path}` | recapture the current state into an existing snapshot |
-| `remove_snapshot {path}` | delete a snapshot |
-
-### Model views: spatial composition
-
-Views are named subsets of the model ("Cube Interior", "Faces Exterior"), defined by a tag selector; every channel, pattern, and effect has a `view` parameter that clips its rendering to one — `Default` inherits from the parent (effect → pattern → channel → whole model). This is how one project paints different geometry with different content — or applies an effect to only part of the model.
-
-| tool | what it does |
-|---|---|
-| `get_views` | every view definition (selector, enabled/priority, normalization/orientation, **live match counts**), which devices currently use each view, and the model's **tag vocabulary** selectors compose from |
-| `add_view {label, selector, normalization?, orientation?}` | create a view; the response's `numGroups`/`numFixtures` immediately show what the selector matched (a `warning` flags zero matches) |
-| `remove_view {path}` | delete a view. Caution (LX behavior, undo does not fix it): devices mapped to the removed view silently reassign to whatever view takes over that index — remap them to `Default` first |
-
-Selectors are a small CSS-like language over model tags — space for descendant, `,` union, `&` intersect, `;` separate groups, `*` group-by, `tag[n-m]` index ranges (full grammar in the `get_views` description). Map a device with `set_parameter` on its `view` path using the view's label:
-
-```
-add_view {label: "Front+Back", selector: "cubeFrontExterior ; cubeBackExterior", orientation: "group"}
-set_parameter {path: /lx/mixer/channel/1/pattern/1/view, value: "Front+Back"}
+```json
+{
+  "servers": {
+    "chromatik": { "type": "http", "url": "http://127.0.0.1:3232/mcp" }
+  }
+}
 ```
 
-### Author the arrange timeline
+**Codex** — `~/.codex/config.toml`:
 
-The LX 1.2.2 arrange composition (`/lx/timeline/composition`; most tools also accept a grid clip `/lx/mixer/channel/N/clip/M`) is fully authorable — 26 tools:
+```toml
+[mcp_servers.chromatik]
+url = "http://127.0.0.1:3232/mcp"
+```
 
-| tool | what it does |
+**Clients that only support stdio** can bridge with [`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+
+```json
+{
+  "mcpServers": {
+    "chromatik": {
+      "command": "npx",
+      "args": ["mcp-remote", "http://127.0.0.1:3232/mcp"]
+    }
+  }
+}
+```
+
+</details>
+
+Verify the connection by asking your agent to call `get_project_info` — it should report the LX version, channel count, and OSC ports of the running instance. Then try:
+
+- *"List the channels and describe the current show structure."*
+- *"Add a channel with a gradient pattern and make it slowly breathe using an LFO on its fader."*
+- *"Grab a frame render and describe what the output looks like right now."*
+
+## 6. Install the agent plugin (recommended)
+
+The steps above get you the raw tools, which is enough. The [agent plugin](agent-plugin/) adds everything around them — the house rules for driving a live show, a project-surveyor agent, a code reviewer, and the `/chromatik-learn` and `/chromatik-review` commands — so you don't have to paste context in yourself. For Claude Code it's one symlink:
+
+```sh
+git clone https://github.com/oveddan/chromatik-mcp.git
+ln -s "$(pwd)/chromatik-mcp/agent-plugin" ~/.claude/skills/chromatik
+```
+
+Restart Claude Code, and pin the port to `3232` so the bundled connection lands correctly. Full instructions, including Codex: [agent-plugin/README.md](agent-plugin/README.md).
+
+## Troubleshooting
+
+- **No `status.json`** — the plugin isn't enabled, or Chromatik hasn't restarted since install. Check Preferences → Plugins for Chromatik-MCP.
+- **Connection refused on the recorded port** — stale `status.json` (check the `pid`); restart Chromatik and re-read the file.
+- **Worked yesterday, refused today** — Chromatik restarted and the ephemeral port moved. Re-read `status.json`, or pin a port.
+- **Tools listed but calls fail**, or a tool errors with `internal` unexpectedly — check Chromatik's log for `[Chromatik-MCP]` entries; failures LX swallows internally are logged there.
+- **A non-fatal `ClassNotFoundException: jakarta.mail.Authenticator` at load** is a known cosmetic artifact of the shaded jar (slimming is a tracked follow-up).
+
+[`scripts/mcp-client.sh`](scripts/mcp-client.sh) is a dependency-light (`curl` + `python3`) client for exercising the endpoint without a full MCP client — the quickest way to confirm the server is reachable:
+
+```sh
+scripts/mcp-client.sh init                    # handshake, prints server instructions
+scripts/mcp-client.sh tools                   # list available tool names
+scripts/mcp-client.sh call get_status '{}'    # call a tool, print structuredContent
+```
+
+It resolves the port from `$CHROMATIK_MCP_PORT`, then `~/.chromatik-mcp/status.json`, and transparently re-initializes its session if Chromatik has restarted since the last call.
+
+<!-- landing:end -->
+
+## What it can do
+
+The tool surface works end-to-end: discovery, parameters, tempo, modulation wiring, channels/groups/patterns/effect chains, mixer performance controls (crossfader, cue/aux), MIDI mapping and templates, palette read-write, snapshots, model views, fixtures and output wiring, render previews, OSC addressing, project/model save, arrange-timeline composition authoring, and a generated semantic catalog of what each component does.
+
+Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`) as returned by the discovery tools, and mutations are undoable in Chromatik with Cmd-Z unless a tool says otherwise.
+
+**[docs/tools.md](docs/tools.md)** is the generated inventory of all tools, regenerated from the running server — the authoritative list of what exists today.
+
+## Documentation
+
+Everything lives as markdown in this repo, readable by humans and agents alike.
+
+| | |
 |---|---|
-| `get_composition` / `get_clip` / `list_clip_lanes` / `get_clip_lane` | read the timeline: markers, transport state, lanes, and a paged event window |
-| `set_clip_marker` | move `insertMarker` (this IS timeline scrubbing), the loop/play markers, or `truncate` the length — setters clamp silently and echo the cursor read back |
-| `add_locator` / `list_locators` / `move_locator` / `remove_locator` / `go_locator` | named position markers (1-indexed, re-sorted by position) plus transport jump |
-| `add_clip_lane` / `remove_clip_lane` / `move_clip_lane` / `set_clip_lane_visible` | automation-lane lifecycle: `parameter` lanes record one parameter, `pattern` lanes a channel's pattern changes |
-| `add_automation_point` / `set_automation_point` / `remove_automation_point` | insert/edit/delete automation points — normalized value, cursor, interpolation `curve`, `shape`, with an `atCursor` guard on edits |
-| `remove_clip_range` / `collapse_clip_range` | delete every event in a cursor range on one lane, or flatten it to its boundary points |
-| `add_audio_lane` / `add_notes_lane` / `add_clip_note` / `set_clip_note` | an audio backing track (WAV/AIFF) and annotation lanes |
-| `launch_clip` / `stop_clip` / `set_composition_arm` | transport and record-arm (transport is not an `LXCommand` upstream — not undoable) |
-
-Timeline positions are **cursor objects** — exactly one of `{millis}`, `{beatCount[, beatBasis]}`, `{bars, beats, sixteenths}`, or `{at: <origin>, offsetBeats/offsetMillis}` — and every mutation echoes the cursor **read back from the engine** after silent clamping (`{millis, beatCount, beatBasis, formatted}`): trust the echo, never your request. Lane paths (`<clipPath>/lane/<n>`) and event indices are positional — re-list after mutations. Worked flow: [docs/usage-examples.md](docs/usage-examples.md).
-
-### OSC
-
-Parameter payloads carry the address an OSC controller must send to. For most parameters it equals the canonical path, but **modulator knobs answer at label-based addresses** (`/lx/modulation/Knobs/macro1`, not `.../modulator/1/macro1`) — renaming a modulator moves its OSC address. Details and hazards: [docs/osc-addressing.md](docs/osc-addressing.md). Ports are in `get_project_info` (defaults: 3030 receive / 4040 transmit).
+| [docs/tools.md](docs/tools.md) | generated inventory of every tool |
+| [docs/architecture.md](docs/architecture.md) | the contract an integrator builds against: wire shape, addressing, threading, undo, state lifecycle |
+| [agent-plugin/](agent-plugin/) | the Claude Code / Codex plugin — driving rules, recipes, agents, commands |
+| [agent-plugin/skills/driving-chromatik/SKILL.md](agent-plugin/skills/driving-chromatik/SKILL.md) | house rules for driving a live show well — **point your agent here** |
+| [.../references/recipes.md](agent-plugin/skills/driving-chromatik/references/recipes.md) | task recipes: survey a project, build structure, chain effects, map macros, author the timeline |
+| [docs/development.md](docs/development.md) | build from source, test, drift gates, repo layout, conventions |
+| [docs/tool-conventions.md](docs/tool-conventions.md) | tool naming, canonical paths, wire shapes, threading, mutation contracts |
+| [docs/osc-addressing.md](docs/osc-addressing.md) | canonical paths vs OSC addresses, and the label-based modulator exception |
+| [docs/](docs/) | everything else — catalog format, build plan, QA strategy, releasing |
 
 ## Architecture
 
-The jar embeds an HTTP MCP server (official Java MCP SDK, streamable-HTTP on embedded Tomcat) inside the LX runtime as an `LXPlugin`. Any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, custom orchestrators — connects to it directly and calls tools that mutate LX state in-process. No separate Node server, no `.lxp` file editing, no file watcher. Mutations route through `LXCommand`, so every change gets undo for free (exceptions — trigger fires, including firing a swatch's `recallPath` (`set_swatch` applies the same swatch undoably); `group_channels`, which LX has no explicit-list command to invert; and snapshot recall (an LX quirk: the undo entry captures post-recall values) — are called out in their tool descriptions), and are serialized onto the LX engine thread. The filesystem touchpoints are `~/.chromatik-mcp/status.json` (written on startup for endpoint discovery) and the optional `~/.chromatik-mcp/config.json` (fixed port / bind host). Default bind is `127.0.0.1` only; there is no authentication layer, so non-loopback binds are at your own risk (a startup warning says as much).
+The jar embeds an HTTP MCP server (official Java MCP SDK, streamable-HTTP on embedded Tomcat) inside the LX runtime as an `LXPlugin`. Mutations route through `LXCommand`, so every change gets undo for free, and are serialized onto the LX engine thread. The filesystem touchpoints are `~/.chromatik-mcp/status.json` (written on startup for endpoint discovery) and the optional `~/.chromatik-mcp/config.json`.
 
 ```
 tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutation with undo)
@@ -167,10 +237,11 @@ tool handler  ──> domain primitive  ──> LXCommand.perform(...)   (mutati
                                     ──> read lx.engine.*         (read-only)
 ```
 
+Full contract — connection lifecycle, `Result` wire shape, addressing rules, threading guarantees, and the undo exceptions: **[docs/architecture.md](docs/architecture.md)**.
+
 ## Develop from source
 
-Java 25 and Maven (the published LX 1.2.2 jars require 25); Node 20 only if you touch the
-docs site or the agent plugin.
+Java 25 and Maven (the published LX jars require 25); Node 20 only if you touch the generated docs artifacts or the landing page.
 
 ```sh
 git clone https://github.com/oveddan/chromatik-mcp.git
@@ -179,12 +250,7 @@ package/scripts/build-gate.sh     # compile + the full headless test suite
 cd package && mvn install -Pinstall   # drop the jar into ~/Chromatik/Packages/
 ```
 
-Use `build-gate.sh` rather than raw `mvn package` — it keeps the full log on disk and
-prints a one-line summary, and carries a watchdog for a known macOS CoreMIDI deadlock.
-`package/scripts/verify-load.sh` is the headless plugin-load gate; several docs artifacts
-are generated and gated against drift. Full guide — repo layout, testing conventions,
-drift gates, catalog regeneration, and the conventions a change has to hold to:
-**[docs/development.md](docs/development.md)**.
+Use `build-gate.sh` rather than raw `mvn package` — it keeps the full log on disk and prints a one-line summary, and carries a watchdog for a known macOS CoreMIDI deadlock. `package/scripts/verify-load.sh` is the headless plugin-load gate; several docs artifacts are generated and gated against drift. Full guide — repo layout, testing conventions, drift gates, catalog regeneration, and the conventions a change has to hold to: **[docs/development.md](docs/development.md)**.
 
 ## License
 

@@ -1,6 +1,6 @@
 # chromatik-mcp — Docs
 
-- [install.md](install.md) — install the jar, enable the plugin, discover its endpoint, and connect a client.
+- Installing and connecting a client lives in the [README](../README.md); [migrating-from-lx-mcp.md](migrating-from-lx-mcp.md) covers upgrades from the pre-rename name.
 - [development.md](development.md) — develop from source: build, test, the drift gates, repo layout, and the conventions a change has to hold to.
 - [usage-examples.md](usage-examples.md) — concrete agent flows for discovery, structure, modulation, snapshots/views, and arrange-timeline authoring.
 - [tool-conventions.md](tool-conventions.md) — tool naming, canonical paths, wire shapes, threading, pagination, and mutation contracts.

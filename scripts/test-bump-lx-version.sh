@@ -6,13 +6,12 @@ FIXTURE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/bump-lx-version-test.XXXXXX")"
 trap 'rm -rf "$FIXTURE_ROOT"' EXIT
 
 for dir in package .claude/skills/chromatik-mcp-catalog docs \
-    site/src/content/docs .github/workflows; do
+    .github/workflows; do
   mkdir -p "$FIXTURE_ROOT/$dir"
 done
 for file in package/pom.xml package/README.md \
-    .claude/skills/chromatik-mcp-catalog/sources.json docs/install.md \
-    docs/catalog-format.md site/src/content/docs/getting-started.md \
-    .github/workflows/build.yml; do
+    .claude/skills/chromatik-mcp-catalog/sources.json README.md \
+    docs/catalog-format.md .github/workflows/build.yml; do
   cp "$REPO_ROOT/$file" "$FIXTURE_ROOT/$file"
 done
 

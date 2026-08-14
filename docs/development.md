@@ -1,7 +1,7 @@
 # Developing chromatik-mcp from source
 
-How to build, test, run, and change the plugin. If you only want to *install* it, use
-[install.md](install.md) — this page is for contributors.
+How to build, test, run, and change the plugin. If you only want to *install* it, see
+the [README](../README.md) — this page is for contributors.
 
 ## Requirements
 
@@ -180,7 +180,7 @@ review). Review criteria: [review-criteria.md](review-criteria.md).
 Install the jar, launch Chromatik, enable the plugin, and connect a client — the port is in
 `~/.chromatik-mcp/status.json`. `scripts/mcp-client.sh` is a minimal shell client for
 poking at the endpoint without an agent in the loop. Full connection setup per client:
-[install.md](install.md#4-connect-an-mcp-client).
+[README](../README.md#5-connect-your-ai-client).
 
 Gaps found while live-driving belong in [live-findings.md](live-findings.md), not in a
 session transcript.
