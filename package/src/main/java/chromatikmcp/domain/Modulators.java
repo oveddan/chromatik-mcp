@@ -30,8 +30,12 @@ public final class Modulators {
 
   private Modulators() {}
 
+  /**
+   * {@code tempoSync} is three-state: TRUE synced, FALSE free-running, null when the
+   * class carries no sync parameter at all.
+   */
   public record ModulatorInfo(String path, int id, String label, String className,
-      boolean running, String oscAddress) {}
+      boolean running, String oscAddress, Boolean tempoSync) {}
 
   public record ModulationInfo(String path, int id, String sourcePath, String targetPath,
       double range, String polarity, String rangePath) {}
@@ -99,7 +103,8 @@ public final class Modulators {
           modulator.getLabel(),
           modulator.getClass().getName(),
           modulator.isRunning(),
-          modulator.getOscAddress()));
+          modulator.getOscAddress(),
+          tempoSyncState(modulator)));
     }
     List<ModulationInfo> modulations = new ArrayList<>();
     int end = (int) Math.min((long) wiringCount, (long) offset + limit);
@@ -129,6 +134,20 @@ public final class Modulators {
     }
     return new EngineInfo(Resolve.canonicalPathOrNull(engine), modulators, modulations, triggers,
         modulationCount, triggerCount, wiringFingerprint, (end < wiringCount) ? end : null);
+  }
+
+  /**
+   * Whether {@code modulator} is currently tempo-synced — TRUE synced, FALSE free-running,
+   * null when the class has no sync parameter and the question does not apply.
+   *
+   * <p>Detected by parameter key rather than by type: {@code LXPeriodicModulator} registers
+   * {@code tempoSync}, but so does {@code Damper}, which extends {@code LXModulator}
+   * directly. An {@code instanceof} test would report a synced Damper as having no sync at
+   * all, which is the collapse this three-state result exists to prevent.
+   */
+  public static Boolean tempoSyncState(LXModulator modulator) {
+    LXParameter parameter = modulator.getParameter("tempoSync");
+    return (parameter instanceof BooleanParameter sync) ? sync.isOn() : null;
   }
 
   /** Identity/order fingerprint for cursor invalidation; deliberately resolves no paths. */

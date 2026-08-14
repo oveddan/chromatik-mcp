@@ -40,6 +40,7 @@ import heronarts.lx.mixer.LXGroup;
 import heronarts.lx.model.GridModel;
 import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.modulator.MacroTriggers;
+import heronarts.lx.modulator.VariableLFO;
 import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.pattern.PatternRack;
 import heronarts.lx.pattern.color.GradientPattern;
@@ -438,6 +439,45 @@ class ToolsIntegrationTest {
 
     structured(call("remove_modulation", Map.of("path", wiredTrigger.get("path"))));
     structured(call("remove_modulation", Map.of("path", wired.get("path"))));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void listModulationsReportsTempoSyncAsThreeStateUnderFullDetail() {
+    Map<String, Object> knobs = structured(
+        call("add_modulator", Map.of("class", MacroKnobs.class.getName())));
+    Map<String, Object> synced = structured(
+        call("add_modulator", Map.of("class", VariableLFO.class.getName())));
+    Map<String, Object> free = structured(
+        call("add_modulator", Map.of("class", VariableLFO.class.getName())));
+    try {
+      structured(call("set_parameter", Map.of(
+          "path", synced.get("path") + "/tempoSync", "value", true)));
+
+      Map<String, Object> payload = structured(call("list_modulations", Map.of("detail", "full")));
+      List<Map<String, Object>> modulators = (List<Map<String, Object>>) payload.get("modulators");
+      assertEquals(Boolean.TRUE, entryByPath(modulators, synced.get("path")).get("tempoSync"));
+      assertEquals(Boolean.FALSE, entryByPath(modulators, free.get("path")).get("tempoSync"));
+      Map<String, Object> knobsEntry = entryByPath(modulators, knobs.get("path"));
+      assertFalse(knobsEntry.containsKey("tempoSync"),
+          "a class with no sync parameter omits the key entirely — n/a, not free-running");
+
+      List<Map<String, Object>> summary =
+          (List<Map<String, Object>>) structured(call("list_modulations", Map.of()))
+              .get("modulators");
+      assertFalse(entryByPath(summary, synced.get("path")).containsKey("tempoSync"),
+          "the summary payload stays unchanged");
+    } finally {
+      structured(call("remove_modulator", Map.of("path", free.get("path"))));
+      structured(call("remove_modulator", Map.of("path", synced.get("path"))));
+      structured(call("remove_modulator", Map.of("path", knobs.get("path"))));
+    }
+  }
+
+  private static Map<String, Object> entryByPath(
+      List<Map<String, Object>> entries, Object path) {
+    return entries.stream()
+        .filter(e -> path.equals(e.get("path"))).findFirst().orElseThrow();
   }
 
   @Test
