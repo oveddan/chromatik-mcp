@@ -131,10 +131,6 @@ npm run build    # what deploy-docs.yml runs
 `site/src/data/tools.json`'s sources (the tool handlers themselves) or the driving SKILL.md
 and regenerate. Every other page is hand-written. `npm run og` regenerates the share image.
 
-Note that `docs/usage-examples.md` and `site/src/content/docs/examples.md` are parallel,
-hand-maintained variants of the same recipes — the site version drops repo-internal links
-and cross-references the driving page instead. Update both when a recipe changes.
-
 ## Regenerating the component catalog
 
 `get_component_doc` serves entries under `package/src/main/resources/catalog/`, keyed by

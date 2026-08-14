@@ -225,4 +225,6 @@ clamping and undo behavior each of those carries.
 
 Read these on demand rather than up front — `references/addressing.md` for
 canonical-vs-OSC path details, `references/error-codes.md` for the full `Result` wire
-shape, and `references/composition.md` for the arrange timeline.
+shape, `references/composition.md` for the arrange timeline, and `references/recipes.md`
+for worked task flows (survey a project, build structure, chain effects, map macros,
+capture looks, author a composition).
