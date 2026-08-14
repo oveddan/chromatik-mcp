@@ -1,18 +1,189 @@
----
-title: Tool reference
-description: The full MCP tool surface — discovery, parameters, history, project persistence, structure, modulation, palette, snapshots, views, rendering, composition authoring, and batching.
----
+# Tool reference
+
+Every MCP tool the server exposes, generated from the same JSON-Schema `inputSchema` each
+tool advertises over the wire — never hand-transcribed, so it can't drift from what a
+client actually sees. A connected client gets the authoritative version from `tools/list`;
+[tools.json](tools.json) is the same data as machine-readable JSON.
 
 Everything is addressed by canonical LX path (e.g. `/lx/mixer/channel/1/fader`), as
 returned by the discovery tools. Mutations are undoable in Chromatik with Cmd-Z unless
 noted.
 
+House rules for actually driving a live instance well — discovery etiquette, restart
+handling, verifying your own work — are in
+[the driving skill](../agent-plugin/skills/driving-chromatik/SKILL.md).
+
+## Index
+
+**Discover**
+
+| tool | | what it does |
+|---|---|---|
+| [`get_status`](#get_status) | read | The embedded MCP server's own state: bind host/port/url, when it started, uptime, live connection info (whether a client is currently connected, open… |
+| [`get_project_info`](#get_project_info) | read | The open LX project: LX version, project file path (absent if never saved), channel count, OSC engine state (receive/transmit ports and whether… |
+| [`get_tempo`](#get_tempo) | read | The engine tempo: bpm (settable via set_parameter on bpm.path), clockSource (INTERNAL = free-running clock driven by bpm, MIDI = synced to an… |
+| [`list_channels`](#list_channels) | read | List the mixer's channels with their patterns and effects, plus the master bus. Defaults to 'detail: summary' — a compact per-channel shape (path… |
+| [`get_channel`](#get_channel) | read | One channel's (or the master bus's) full detail — exactly the shape list_channels reports per entry at 'detail: full', for just this bus. Use this… |
+| [`list_parameters`](#list_parameters) | read | List every parameter on the component at a canonical LX path (channel, pattern, effect, modulator, or engine component like the output engine) … |
+| [`list_available_patterns`](#list_available_patterns) | read | List every pattern class registered with LX and available to instantiate, with display name, category, and tags. |
+| [`list_available_effects`](#list_available_effects) | read | List every effect class registered with LX and available to instantiate, with display name, category, and tags. |
+| [`list_available_modulators`](#list_available_modulators) | read | List every modulator class registered with LX and available to instantiate, with display name, category, and tags. |
+| [`list_modulations`](#list_modulations) | read | List one modulation engine's live modulators and wirings. Defaults to 'detail: summary' — the wiring graph only (modulators: path/label/class… |
+| [`get_parameter`](#get_parameter) | read | Read one parameter by its canonical LX path (e.g. /lx/mixer/channel/1/fader): value, type, range, options, and units. For a parameter with live… |
+| [`get_palette`](#get_palette) | read | The global color palette: the active swatch's colors (with current effective color, mode, and the primary/secondary component paths — set… |
+| [`list_snapshots`](#list_snapshots) | read | List saved snapshots — whole-look captures of mixer/pattern/effect/modulation state, in recall order — plus the snapshot engine's settings. The… |
+| [`get_frame`](#get_frame) | read | See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame … |
+| [`get_component_doc`](#get_component_doc) | read | Return the semantic catalog entry for an LX pattern, effect, or modulator class: visual summary, parameter interactions, usage tips, and staleness… |
+
+**Save the project & model**
+
+| tool | | what it does |
+|---|---|---|
+| [`save_project`](#save_project) | write | Persist the running session to a .lxp project file — the only way structure/mixer/modulation changes made over this API survive a restart; until this… |
+| [`save_model`](#save_model) | write | "Save Model As": export the project's structure (fixtures, normalization, label config) to an external .lxm file and re-point the project's model… |
+
+**Read & set parameters**
+
+| tool | | what it does |
+|---|---|---|
+| [`set_parameter`](#set_parameter) | write | Set a parameter by its canonical LX path (e.g. /lx/mixer/channel/1/fader). The value's type must match the parameter: a number for numeric/bounded, a… |
+
+**Undo and redo**
+
+| tool | | what it does |
+|---|---|---|
+| [`undo`](#undo) | write | Undo the newest command in Chromatik's shared linear history, exactly like one Cmd-Z. History includes command-backed changes from the UI and other… |
+| [`redo`](#redo) | write | Redo the newest command in Chromatik's shared linear history, exactly like one Cmd-Shift-Z. History includes command-backed changes from the UI and… |
+
+**Build structure: channels, patterns, effect chains**
+
+| tool | | what it does |
+|---|---|---|
+| [`add_channel`](#add_channel) | write | Add a new channel to the mixer. Optionally seed it with a first pattern by passing 'class' (from list_available_patterns). Returns the new channel's… |
+| [`remove_channel`](#remove_channel) | write | Remove a channel (or group) from the mixer by its canonical path. Undoable in Chromatik with Cmd-Z. |
+| [`move_channel`](#move_channel) | write | Move a channel or group to a 0-based destination index in the mixer's flat channel list. The index is interpreted after removing the moved channel or… |
+| [`group_channels`](#group_channels) | write | Create a mixer group from a non-empty list of top-level channel paths. The leftmost selected channel determines where the group bus is inserted… |
+| [`ungroup_channel`](#ungroup_channel) | write | Pull one member channel out of its mixer group and place it immediately after the remaining group span. Removing the last member leaves an empty… |
+| [`ungroup_channels`](#ungroup_channels) | write | Dissolve a mixer group by its canonical path, leaving all members as top-level channels. Returns the removed group's id and former path plus each… |
+| [`add_pattern`](#add_pattern) | write | Add a pattern ('class', from list_available_patterns — either the full class name or the short name it lists) to a channel or PatternRack… |
+| [`remove_pattern`](#remove_pattern) | write | Remove a pattern by its canonical path. Remaining sibling patterns reindex (their 1-based paths shift), so cached paths go stale — re-list after… |
+| [`move_pattern`](#move_pattern) | write | Move a pattern to a new 0-based index within its channel. Moving shifts the 1-based paths of the moved pattern, any sibling it crosses, and… |
+| [`activate_pattern`](#activate_pattern) | write | Activate (go to) a pattern on its channel. Only valid when the channel is in PLAYLIST composite mode — callers on BLEND channels receive… |
+| [`add_effect`](#add_effect) | write | Add an effect ('class', from list_available_effects — either the full class name or the short name it lists) to a channel, master bus, or pattern.… |
+| [`remove_effect`](#remove_effect) | write | Remove an effect from its container by canonical path. Returns invalid_argument if the effect is locked. Undoable in Chromatik with Cmd-Z. |
+| [`move_effect`](#move_effect) | write | Move an effect to a new 0-based index within its container (channel, bus, or pattern). Moving shifts the 1-based paths of the moved effect, any… |
+
+**Map macro knobs (and any modulation)**
+
+| tool | | what it does |
+|---|---|---|
+| [`add_modulator`](#add_modulator) | write | Add a modulator by class name (from list_available_modulators) — e.g. heronarts.lx.modulator.MacroKnobs for a bank of eight mappable knobs, or the… |
+| [`remove_modulator`](#remove_modulator) | write | Remove a modulator added by add_modulator, by the canonical path returned when it was added (or by list_modulations). Any wirings (modulations or… |
+| [`move_modulator`](#move_modulator) | write | Move a modulator to a new 0-based index within its global or device-local modulation engine. Index 0 is the first (top) entry. Moving shifts the… |
+| [`wire_modulator`](#wire_modulator) | write | Wire a continuous modulation from a source parameter (e.g. a macro knob's macro1) onto a target parameter. To use an oscillator/envelope modulator's… |
+| [`wire_trigger`](#wire_trigger) | write | Wire a trigger modulation: when the boolean source fires (e.g. a MacroTriggers macro1), the boolean target is pulsed. Both ends must be boolean… |
+| [`remove_modulation`](#remove_modulation) | write | Remove a modulation (continuous or trigger) by the canonical path returned when it was wired (e.g. /lx/modulation/modulation/1). Remaining… |
+| [`fire_trigger`](#fire_trigger) | write | Fire a momentary trigger by its canonical path — a TriggerParameter, or a momentary boolean like a MacroTriggers macro (the pulse's rising edge fires… |
+
+**Palette & snapshots**
+
+| tool | | what it does |
+|---|---|---|
+| [`save_swatch`](#save_swatch) | write | Capture the active swatch's current colors as a new saved swatch, appended to the end of get_palette's swatches list. Returns the new swatch's… |
+| [`set_swatch`](#set_swatch) | write | Apply a saved swatch's colors onto the active swatch, by its canonical path (as returned by save_swatch or listed in get_palette's swatches). Same… |
+| [`remove_swatch`](#remove_swatch) | write | Remove a saved swatch by its canonical path (as returned by save_swatch, or listed in get_palette's swatches). The active swatch's current colors are… |
+| [`move_swatch`](#move_swatch) | write | Move a saved swatch to a new 0-based index within get_palette's swatches list. Returns invalid_argument if the index is out of range. Other swatches… |
+| [`add_color`](#add_color) | write | Add a color slot to a swatch, appended at the end — targets the active swatch (get_palette's activeSwatch) by default, or a saved swatch if swatch is… |
+| [`remove_color`](#remove_color) | write | Remove the last color slot from a swatch — targets the active swatch (get_palette's activeSwatch) by default, or a saved swatch if swatch is given. A… |
+| [`add_snapshot`](#add_snapshot) | write | Capture the current mixer/pattern/effect/modulation state as a new snapshot, appended to the end of the list. The optional label overrides LX's… |
+| [`recall_snapshot`](#recall_snapshot) | write | Recall a snapshot's captured state, restoring the mixer/pattern/effect/modulation values it holds. By default the recall follows the snapshot… |
+| [`update_snapshot`](#update_snapshot) | write | Recapture the current mixer/pattern/effect/modulation state into an existing snapshot, overwriting its previously saved values. Undoable in Chromatik… |
+| [`remove_snapshot`](#remove_snapshot) | write | Remove a snapshot by canonical path (as returned by add_snapshot/list_snapshots). Snapshots are addressed by a 1-based structural path (e.g.… |
+
+**Model views: spatial composition**
+
+| tool | | what it does |
+|---|---|---|
+| [`get_views`](#get_views) | read | Named model subsets ('views', at /lx/structure/views/view/<n>) that a device's 'view' selector can clip its rendering to. A device left on 'Default'… |
+| [`add_view`](#add_view) | write | Compose a new named model subset ('view', at /lx/structure/views/view/<n>), matched by a tag selector — see get_views for the selector grammar and… |
+| [`remove_view`](#remove_view) | write | Remove a view by its canonical path (as returned by add_view/get_views). Devices selecting a different, surviving view are unaffected. But a device… |
+
+**Model & fixtures**
+
+| tool | | what it does |
+|---|---|---|
+| [`describe_model`](#describe_model) | read | The model tree: the geometry hierarchy the rig renders onto, from the whole installation down to individual points. Each node reports 'tags' (the… |
+| [`get_fixture_format`](#get_fixture_format) | read | Return the .lxf fixture-file JSON schema reference: top-level keys, component types (point/points/strip/arc/class/file-reference), the parameter +… |
+| [`list_available_fixtures`](#list_available_fixtures) | read | What add_fixture can instantiate: 'classes' (built-in fixture types — pass the simple name, e.g. 'GridFixture', or the full class name, as… |
+| [`list_fixtures`](#list_fixtures) | read | The fixture layer: the physical wiring beneath the model tree describe_model reports — each fixture's geometry transform, output protocol wiring, and… |
+| [`get_fixture`](#get_fixture) | read | One fixture's full detail: everything list_fixtures reports for it, plus 'parameters' (every parameter it owns — including type-specific ones like a… |
+| [`get_output_map`](#get_output_map) | read | The output wiring beneath the fixture tree: for each fixture, its declared protocol/host/port/universe/channel/byteOrder plus a DERIVED channel… |
+| [`add_fixture`](#add_fixture) | write | Instantiate a fixture (see list_available_fixtures for what's addable) — exactly one of 'class' (a built-in fixture type, e.g. GridFixture) or 'type'… |
+| [`remove_fixture`](#remove_fixture) | write | Remove a fixture by its canonical path (as returned by list_fixtures/add_fixture). Undoable with Cmd-Z. Every remaining fixture's path is POSITIONAL… |
+| [`move_fixture`](#move_fixture) | write | Reposition a fixture within lx.structure.fixtures using a 0-based 'index'. Returns invalid_argument if the index is out of range. Undoable with… |
+| [`duplicate_fixture`](#duplicate_fixture) | write | Clone a fixture — geometry, output protocol wiring, and (for a JsonFixture) its .lxf-declared parameter values all copy over — in one call, matching… |
+| [`set_fixture_params`](#set_fixture_params) | write | Set several of a fixture's parameters in one call — both its registered parameters (x/y/z/yaw/pitch/roll/scale, enabled, brightness, numPoints… |
+| [`set_fixture_tags`](#set_fixture_tags) | write | Set a fixture's model tags — the vocabulary get_views' selectors match against (see get_views). Replaces the fixture's whole tag list. Every token is… |
+| [`reload_fixtures`](#reload_fixtures) | write | Pick up .lxf fixture files edited on disk with your own file tools — nothing watches the Fixtures folder, so a .lxf edit is otherwise invisible until… |
+
+**MIDI**
+
+| tool | | what it does |
+|---|---|---|
+| [`list_midi_devices`](#list_midi_devices) | read | List the MIDI input and output ports LX has discovered. Each input carries three independent routing flags: channelEnabled (notes/CCs forwarded to… |
+| [`list_midi_mappings`](#list_midi_mappings) | read | List the parameter mappings driven by incoming MIDI. Each entry gives type ('note' or 'cc'), the 0-based MIDI channel (0-15), number (note pitch or… |
+| [`list_midi_surfaces`](#list_midi_surfaces) | read | List the instantiated MIDI control surfaces (e.g. an APC40, a MidiFighterTwister) — a surface is a two-way hardware controller LX drives with a… |
+| [`list_midi_templates`](#list_midi_templates) | read | List the MIDI templates instantiated in this project. Templates expose named hardware controls as ordinary parameters at paths such as… |
+| [`add_midi_template`](#add_midi_template) | write | Add a registered MIDI template to the project. Pass its full or simple class name, template name, or expected MIDI device name as 'class' — for… |
+| [`add_midi_mapping`](#add_midi_mapping) | write | Add a MIDI mapping: incoming note-on or control-change messages on a channel drive a parameter, resolved by its canonical LX path (see… |
+| [`remove_midi_mapping`](#remove_midi_mapping) | write | Remove a MIDI mapping by its 0-based index into list_midi_mappings. Returns the removed mapping's summary. Remaining mappings reindex afterwards, so… |
+| [`set_midi_input`](#set_midi_input) | write | Set one or more of a MIDI input's routing flags by its 0-based index into list_midi_devices' inputs list: channelEnabled (forward notes/CCs to… |
+| [`set_midi_surface_enabled`](#set_midi_surface_enabled) | write | Enable or disable a control surface by its 0-based index into list_midi_surfaces. Returns the updated surface in list_midi_surfaces' shape. Not… |
+
+**Composition: the arrange timeline**
+
+| tool | | what it does |
+|---|---|---|
+| [`get_composition`](#get_composition) | read | The arrange-timeline composition at /lx/timeline/composition: timeBase (ABSOLUTE or TEMPO — decides which cursor fields are authoritative)… |
+| [`get_clip`](#get_clip) | read | One clip's timeline envelope: timeBase (ABSOLUTE or TEMPO — decides which cursor fields are authoritative), referenceBpm (the fixed bpm cursor millis… |
+| [`list_clip_lanes`](#list_clip_lanes) | read | Every automation lane on a clip: canonical path (always <clipPath>/lane/<n>, 1-indexed — the address every lane tool takes), 0-based index, type… |
+| [`launch_clip`](#launch_clip) | write | Start clip playback. mode 'play' (the default) is immediate and unquantized, from the 'from' cursor or the current playhead — it requires the clip to… |
+| [`stop_clip`](#stop_clip) | write | Stop clip playback immediately, bypassing any launch-quantization delay; also cancels a pending quantized launch. Safe to call on a stopped clip… |
+| [`set_clip_marker`](#set_clip_marker) | write | Set or nudge one timeline marker on a clip: insertMarker (the scrub/insert position — this IS how you scrub the arrange timeline), loopStart… |
+| [`list_locators`](#list_locators) | read | Every locator (named position marker) on the arrange-timeline composition, in timeline order: canonical path (/lx/timeline/composition/locator/<n>)… |
+| [`add_locator`](#add_locator) | write | Adds a locator (named position marker) to the arrange-timeline composition at the given cursor, optionally labeled. Returns the new locator's summary… |
+| [`remove_locator`](#remove_locator) | write | Removes a locator from the arrange-timeline composition, addressed by exactly one of 1-indexed index or exact label (which must be unambiguous … |
+| [`move_locator`](#move_locator) | write | Moves a locator on the arrange-timeline composition to a new cursor position. Address by exactly one of 1-indexed index or exact label (which must be… |
+| [`go_locator`](#go_locator) | write | Transport jump to a locator on the arrange-timeline composition, addressed by exactly one of 1-indexed index or exact label (which must be… |
+| [`add_clip_lane`](#add_clip_lane) | write | Add an automation lane to a clip. kind 'parameter': targetPath is a normalized parameter (e.g. /lx/mixer/channel/1/fader) and the lane records that… |
+| [`remove_clip_lane`](#remove_clip_lane) | write | Remove an automation lane from its clip. path is the canonical lane address (<clipPath>/lane/<n>, 1-indexed) from list_clip_lanes. Only lanes… |
+| [`move_clip_lane`](#move_clip_lane) | write | Move an automation lane to a new 0-based index within its clip. path is the canonical lane address (<clipPath>/lane/<n>, 1-indexed) from… |
+| [`set_clip_lane_visible`](#set_clip_lane_visible) | write | Show or hide an automation lane in the arrange/clip editor UI. Editor-only: a hidden lane still plays back. path is the canonical lane address… |
+| [`add_audio_lane`](#add_audio_lane) | write | Add an audio lane to the arrange composition (/lx/timeline/composition), loading an audio file from an absolute path on the Chromatik machine… |
+| [`add_notes_lane`](#add_notes_lane) | write | Add a text-notes lane to the arrange composition (/lx/timeline/composition): a lane of timestamped annotation events (section names, cues, TODOs)… |
+| [`set_composition_arm`](#set_composition_arm) | write | Set the arrange timeline's record-arm. The arm flag is a bare engine field with no canonical path (/lx/timeline/arm deliberately does not resolve)… |
+
+**Composition events: automation points & ranges**
+
+| tool | | what it does |
+|---|---|---|
+| [`get_clip_lane`](#get_clip_lane) | read | One automation lane in full: the lane summary (as in list_clip_lanes) plus a paged read of its events. path is the lane address from list_clip_lanes… |
+| [`add_automation_point`](#add_automation_point) | write | Insert an automation point on a parameter clip lane (undoable). lanePath is the lane address from list_clip_lanes (<clipPath>/lane/<n>) and must be a… |
+| [`set_automation_point`](#set_automation_point) | write | Edit one existing automation point on a parameter clip lane, addressed by {lanePath, index} (lanePath from list_clip_lanes, type 'parameter'; index… |
+| [`remove_automation_point`](#remove_automation_point) | write | Remove one event from a clip lane by {lanePath, index}: an automation point on a parameter lane, or any other lane type's event — except MIDI note… |
+| [`remove_clip_range`](#remove_clip_range) | write | Delete every event in the cursor range [from, to] (inclusive at both ends) on one clip lane. Lane-scoped by design — LX has no clip-wide range… |
+| [`collapse_clip_range`](#collapse_clip_range) | write | Collapse the automation envelope inside [from, to] on one clip lane: removes the interior events, keeping the first and last events in the range as… |
+| [`add_clip_note`](#add_clip_note) | write | Insert a text-note event on a textNote lane (lanePath from list_clip_lanes, form <clipPath>/lane/<n>) at a cursor position, with optional length… |
+| [`set_clip_note`](#set_clip_note) | write | Edit the text-note event at {lanePath, index}: set its text (note), move it (cursor — clamped between the neighboring events and the clip length)… |
+
+**Batch**
+
+| tool | | what it does |
+|---|---|---|
+| [`apply_operations`](#apply_operations) | write | Apply up to 50 mutation-tool calls in one MCP round-trip. Every handler already runs on the LX engine thread, so a batch schedules onto it once and… |
+
+
 ## Discover
-
-Full per-tool parameter tables (source-generated from the actual schemas — see
-[Keeping this page honest](#keeping-this-page-honest)):
-
-<!-- generated:start:discover -->
 
 ### `get_status`
 
@@ -157,8 +328,6 @@ Return the semantic catalog entry for an LX pattern, effect, or modulator class:
 | `class` | string | no | — | Class name, as returned by list_available_* tools — full class name (e.g. heronarts.lx.pattern.color.GradientPattern) or short name (e.g. GradientPattern). Exactly one of 'class' or 'path' is required. |
 | `path` | string | no | — | Canonical path of a live component instance (e.g. /lx/mixer/channel/1/pattern/1) whose class is documented. Exactly one of 'class' or 'path' is required. |
 
-<!-- generated:end -->
-
 ## Save the project & model
 
 Everything built over this API lives only in the running engine until `save_project`
@@ -168,8 +337,6 @@ appears in Chromatik's undo history. `save_project` writes through to a linked e
 model file whenever `get_project_info`'s `model.syncModelFile` is on — `save_model` to a
 new path first if that file is shared with other projects on the rig and shouldn't be
 touched.
-
-<!-- generated:start:project -->
 
 ### `save_project`
 
@@ -193,8 +360,6 @@ _mutating_
 | `path` | string | no | — | Target .lxm path. Omit to re-export to the currently linked model file. Relative paths resolve under LX's Models media folder; absolute paths are used as-is. |
 | `overwrite` | boolean | no | — | Required (true) to replace an existing file other than the currently linked model file (default false) |
 
-<!-- generated:end -->
-
 ## Read & set parameters
 
 `set_parameter {path, value}` dispatches on the parameter's runtime type (number /
@@ -210,8 +375,6 @@ even while modulation rides on top.
 `get_component_doc`) accept either the full class name or the short `name` the
 `list_available_*` tools return; an ambiguous short name errors listing the candidates.
 
-<!-- generated:start:parameters -->
-
 ### `set_parameter`
 
 _mutating_
@@ -223,15 +386,11 @@ Set a parameter by its canonical LX path (e.g. /lx/mixer/channel/1/fader). The v
 | `path` | string | yes | — | Canonical LX path of the parameter, as returned by the list/get tools |
 | `value` | number \| boolean \| string | yes | — | New value; its type must match the parameter (number, boolean, or string) |
 
-<!-- generated:end -->
-
 ## Undo and redo
 
 Chromatik and every connected MCP client share one linear command history. Each call
 moves exactly one command between the undo and redo stacks; it cannot recover an older
 change without also undoing every newer command first.
-
-<!-- generated:start:history -->
 
 ### `undo`
 
@@ -249,15 +408,11 @@ Redo the newest command in Chromatik's shared linear history, exactly like one C
 
 No parameters.
 
-<!-- generated:end -->
-
 ## Build structure: channels, patterns, effect chains
 
 Effect chains run serially in list order, on channels, the master bus, or an individual
 pattern. Structural paths are 1-based and reindex on remove/insert — re-list rather than
 reusing cached paths.
-
-<!-- generated:start:structure -->
 
 ### `add_channel`
 
@@ -395,11 +550,7 @@ Move an effect to a new 0-based index within its container (channel, bus, or pat
 | `path` | string | yes | — | Canonical path of the effect to move, e.g. /lx/mixer/channel/1/effect/1 |
 | `index` | integer | yes | -2147483648–2147483647 | 0-based destination index within the effect list |
 
-<!-- generated:end -->
-
 ## Map macro knobs (and any modulation)
-
-<!-- generated:start:modulation -->
 
 ### `add_modulator`
 
@@ -478,11 +629,7 @@ Fire a momentary trigger by its canonical path — a TriggerParameter, or a mome
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical LX path of the trigger parameter |
 
-<!-- generated:end -->
-
 ## Palette & snapshots
-
-<!-- generated:start:palette -->
 
 ### `save_swatch`
 
@@ -584,8 +731,6 @@ Remove a snapshot by canonical path (as returned by add_snapshot/list_snapshots)
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the snapshot, as returned by add_snapshot/list_snapshots |
 
-<!-- generated:end -->
-
 ## Model views: spatial composition
 
 Views are named subsets of the model ("Cube Interior", "Faces Exterior"), defined by a
@@ -601,8 +746,6 @@ grammar in the `get_views` tool description).
 add_view {label: "Front+Back", selector: "cubeFrontExterior ; cubeBackExterior", orientation: "group"}
 set_parameter {path: /lx/mixer/channel/1/pattern/1/view, value: "Front+Back"}
 ```
-
-<!-- generated:start:views -->
 
 ### `get_views`
 
@@ -635,8 +778,6 @@ Remove a view by its canonical path (as returned by add_view/get_views). Devices
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the view to remove, e.g. /lx/structure/views/view/1 |
 
-<!-- generated:end -->
-
 ## Model & fixtures
 
 `describe_model` walks the model tree those view selectors match against (depth-limited;
@@ -649,8 +790,6 @@ once, and the only way to reach a JSON fixture's `.lxf`-declared `jsonParameters
 controller IP strings), which have no canonical path. `set_fixture_tags` sets a fixture's
 model tags (the `get_views` selector vocabulary) with pre-write validation. `reload_fixtures`
 picks up `.lxf` edits made on disk — nothing does so automatically.
-
-<!-- generated:start:fixtures -->
 
 ### `describe_model`
 
@@ -784,16 +923,12 @@ Pick up .lxf fixture files edited on disk with your own file tools — nothing w
 
 No parameters.
 
-<!-- generated:end -->
-
 ## MIDI
 
 Read-side only for now: devices (inputs/outputs), the parameter mappings incoming
 MIDI drives, and connected control surfaces. Ports/mappings/surfaces carry no
 canonical path, so each is addressed by its 0-based list index — re-list before
 reusing one, since indices shift when the underlying list changes.
-
-<!-- generated:start:midi -->
 
 ### `list_midi_devices`
 
@@ -884,8 +1019,6 @@ Enable or disable a control surface by its 0-based index into list_midi_surfaces
 | `index` | integer | yes | -2147483648–2147483647 | 0-based index of the surface, as returned by list_midi_surfaces |
 | `enabled` | boolean | yes | — | Whether the surface should be enabled |
 
-<!-- generated:end -->
-
 ## Composition: the arrange timeline
 
 The arrange-window composition at `/lx/timeline/composition` — transport, markers,
@@ -900,8 +1033,6 @@ fields are authoritative — under `TEMPO`, millis are derived from the clip's f
 positional and shift under edits: re-list rather than reuse them. Clip behavior
 parameters (`timeBase`, `loop`, `referenceBpm`, `/lx/timeline/sync`) are ordinary
 registered parameters for `set_parameter`; marker positions are not.
-
-<!-- generated:start:composition -->
 
 ### `get_composition`
 
@@ -1094,8 +1225,6 @@ Set the arrange timeline's record-arm. The arm flag is a bare engine field with 
 |---|---|---|---|---|
 | `armed` | boolean | yes | — | true to arm the timeline for recording (may start the composition — see tool description), false to disarm |
 
-<!-- generated:end -->
-
 ## Composition events: automation points & ranges
 
 Automation events have no canonical path — an event's address is the pair
@@ -1108,8 +1237,6 @@ and re-insert to leapfrog), so always trust the echoed `cursor`/`value` in a pay
 over what you sent. Range tools are lane-scoped — LX has no clip-wide range command —
 and an empty range is a benign success with `removedCount: 0` that puts nothing on
 the undo stack.
-
-<!-- generated:start:composition-events -->
 
 ### `get_clip_lane`
 
@@ -1218,16 +1345,12 @@ Edit the text-note event at {lanePath, index}: set its text (note), move it (cur
 | `cursor` | object | no | — | New timeline position (omit to keep); clamped between the neighboring events and the clip length. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
 | `length` | object | no | — | New duration (omit to keep); floored at the minimum event length. Exactly one form: {millis} \| {beatCount[, beatBasis]} \| {bars[, beats, sixteenths]} \| {at[, offsetBeats \| offsetMillis]}. |
 
-<!-- generated:end -->
-
 ## Batch
 
 Run several mutation-tool calls in one round-trip, all inside a single engine frame.
 Undo is **not** batched: each operation still produces its own undo entry, and per the
 tool's own description, one failing operation in a batch can wipe undo history for
 earlier operations in that same batch even though they still report success.
-
-<!-- generated:start:batch -->
 
 ### `apply_operations`
 
@@ -1239,8 +1362,6 @@ Apply up to 50 mutation-tool calls in one MCP round-trip. Every handler already 
 |---|---|---|---|---|
 | `operations` | array<object> | yes | — | Operations to apply, in order |
 
-<!-- generated:end -->
-
 ## OSC
 
 Parameter payloads carry the address an OSC controller must send to. For most
@@ -1248,10 +1369,3 @@ parameters it equals the canonical path, but **modulator knobs answer at label-b
 addresses** (`/lx/modulation/Knobs/macro1`, not `.../modulator/1/macro1`) — renaming a
 modulator moves its OSC address. Ports are in `get_project_info` (defaults: 3030
 receive / 4040 transmit).
-
-## Keeping this page honest
-
-The tables above are generated from the same JSON-Schema `inputSchema` every tool
-advertises over MCP (`site/src/data/tools.json`, produced by
-`package/scripts/dump-tool-catalog.sh`) — never hand-transcribed, so they can't drift from
-what a client actually sees.
