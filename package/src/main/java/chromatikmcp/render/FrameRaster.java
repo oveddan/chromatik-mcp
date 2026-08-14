@@ -16,8 +16,12 @@ import chromatikmcp.domain.Frames;
  * Rasterizes a frame snapshot to a PNG: orthographic projection of the point cloud onto
  * the selected view plane, each point splatted as a filled disc on a dark background.
  *
- * <p>Pure JDK 2D — never touches the AWT Toolkit (no window, no headless-mode concern),
- * so it is safe both in CI and inside the live Chromatik process. Runs on the HTTP worker
+ * <p>Pure JDK 2D — no window is ever opened. It is not, however, free of the AWT
+ * environment: {@link BufferedImage#createGraphics()} initializes the local
+ * {@link java.awt.GraphicsEnvironment}, and on macOS that links AppKit and registers the
+ * JVM with LaunchServices as a foreground app (a Dock icon). Inside Chromatik that is
+ * already true and harmless; batch JVMs that call this must set
+ * {@code -Djava.awt.headless=true}, as the surefire config does. Runs on the HTTP worker
  * thread over a detached {@link Frames.FrameSnapshot}; no LX types, no MCP types.
  */
 public final class FrameRaster {
