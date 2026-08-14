@@ -14,4 +14,4 @@
 - [demo-script.md](demo-script.md) — live-demo beat sheet and dry-run checklist.
 - [releasing.md](releasing.md) — how a release is cut (bump the pom version, merge; CI tags and publishes).
 - [sdk-feasibility.md](sdk-feasibility.md), [lxcommand-mapping.md](lxcommand-mapping.md), [qa-strategy.md](qa-strategy.md) — spike-phase deliverables (PR-1a SDK feasibility, PR-1b LXCommand mapping, PR-1c QA strategy).
-- Per-client connection setup (Claude Code, Claude Desktop, Cursor, VS Code, Codex, generic HTTP) lives on the docs site: [Connect your AI client](../site/src/content/docs/connect.mdx) (published at https://oveddan.github.io/chromatik-mcp/connect/). This supersedes the `install/` snippets dir planned in PR-6.
+- [tools.md](tools.md) — the generated tool reference (from [tools.json](tools.json)); per-client connection setup lives in the [README](../README.md#5-connect-your-ai-client).

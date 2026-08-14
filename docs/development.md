@@ -8,7 +8,7 @@ the [README](../README.md) — this page is for contributors.
 - **Java 25** and **Maven**. Java 25 is not optional: the published
   `com.heronarts:{lx,glx,glxstudio}:1.2.2` jars this project compiles against are built
   for it, and `<maven.compiler.release>` is pinned to 25 in `package/pom.xml`.
-- **Node 20** — only if you touch the docs site (`site/`) or the agent plugin
+- **Node 20** — only if you touch the generated docs artifacts or the landing page
   (`agent-plugin/`), whose drift gates are Node scripts.
 - **Chromatik** with LX 1.2.2, for live testing against a real show. Not needed to build
   or to run the test suite — everything is headless.
@@ -35,7 +35,8 @@ under the isolated-`user.home` boot that `verify-load.sh` performs).
 | `package/src/main/resources/catalog/` | the generated semantic component catalog served by `get_component_doc` |
 | `package/src/test/java/` | 65 test classes — domain unit tests + tool-handler integration tests, all headless |
 | `package/scripts/` | build/verify gates (see below) |
-| `site/` | the Astro/Starlight docs site published to GitHub Pages |
+| `landing/` | the single-page site published to GitHub Pages (setup section generated from the README) |
+| `scripts/` | repo-level helpers: doc generators, drift gates, the LX version bump |
 | `agent-plugin/` | the Claude Code plugin (driving skill, reviewer agent, project surveyor) |
 | `docs/` | this directory — contributor and reference docs |
 
@@ -102,13 +103,13 @@ committed. Run the generator and commit the result as part of your change.
 
 | when you change | run | gated by |
 |---|---|---|
-| a tool's name, description, schema, or `readOnly` | `package/scripts/dump-tool-catalog.sh` → then `cd site && npm run tools-ref` | `ToolCatalogDriftTest` (in `build-gate.sh`) and the `tools.md matches tools.json` CI job |
-| `agent-plugin/skills/driving-chromatik/SKILL.md` | `cd site && npm run driving-ref` | the `driving.md matches SKILL.md` CI job |
-| any tool name referenced in `agent-plugin/` | `cd site && npm run check:plugin-tool-names` | the `agent-plugin tool names match tools.json` CI job |
+| a tool's name, description, schema, or `readOnly` | `package/scripts/dump-tool-catalog.sh` → then `node scripts/generate-tool-reference.mjs` | `ToolCatalogDriftTest` (in `build-gate.sh`) and the `tools.md matches tools.json` CI job |
+| any tool name referenced in `agent-plugin/` | `node scripts/check-plugin-tool-names.mjs` | the `agent-plugin tool names match tools.json` CI job |
 
-Only the first has a check inside `build-gate.sh`; the site-side gates are CI-only, so run
-them locally before pushing docs or plugin changes. Check mode is `-- --check` (e.g.
-`npm run tools-ref -- --check`) — it verifies without writing.
+Only the first has a check inside `build-gate.sh`; the rest are CI-only (the `docs-checks`
+job), so run them locally before pushing docs or plugin changes. Both scripts take
+`--check` to verify without writing, and neither needs `npm install` — they use only node
+builtins.
 
 CI (`.github/workflows/build.yml`) additionally runs
 `scripts/verify-heronarts-bytecode.sh` (published Heron Arts bytecode baseline) and
@@ -118,18 +119,22 @@ runs this one too).
 The `build` job flakes occasionally — re-run it before investigating a failure you can't
 reproduce locally.
 
-## Docs site
+## The landing page
+
+`landing/` is a single HTML page published to GitHub Pages. The setup instructions on it
+are **not** authored there — `scripts/build-landing.mjs` renders them from the section of
+the repo README between the `landing:start` / `landing:end` markers, so the page and the
+README cannot drift.
 
 ```sh
-cd site
-npm ci
-npm run dev      # local preview
-npm run build    # what deploy-docs.yml runs
+node scripts/build-landing.mjs          # writes landing/dist/ (gitignored)
+open landing/dist/index.html            # local preview
 ```
 
-`src/content/docs/tools.md` and `src/content/docs/driving.md` are **generated** — edit
-`site/src/data/tools.json`'s sources (the tool handlers themselves) or the driving SKILL.md
-and regenerate. Every other page is hand-written. `npm run og` regenerates the share image.
+Edit setup instructions in `README.md`; edit the hero, the links-out section, and the
+styling in `landing/template.html` and `landing/public/style.css`. `deploy-docs.yml`
+rebuilds and publishes on every push to main that touches the README, `landing/`, or the
+builder. `landing/public/og.png` is the committed social-share card.
 
 ## Regenerating the component catalog
 

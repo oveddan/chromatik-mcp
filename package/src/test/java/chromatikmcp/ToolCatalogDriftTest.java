@@ -27,7 +27,7 @@ class ToolCatalogDriftTest {
     String current = ToolCatalogJson.catalogJson();
     assertEquals(current, committed,
         "Tool schemas changed — run package/scripts/dump-tool-catalog.sh then "
-            + "`npm run tools-ref` in site/ and commit.");
+            + "`node scripts/generate-tool-reference.mjs` and commit.");
   }
 
   /**

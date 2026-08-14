@@ -8,9 +8,6 @@ server/dist/
 server/*.tsbuildinfo
 
 # Docs site (Astro Starlight)
-site/node_modules/
-site/dist/
-site/.astro/
 
 # Editors
 .idea/
@@ -29,3 +26,4 @@ drafts/
 
 # chromatik-mcp-catalog machine-local checkout paths
 .claude/skills/chromatik-mcp-catalog/sources.local.json
+landing/dist/
