@@ -1,6 +1,7 @@
 # chromatik-mcp — Docs
 
 - Installing and connecting a client lives in the [README](../README.md); [migrating-from-lx-mcp.md](migrating-from-lx-mcp.md) covers upgrades from the pre-rename name.
+- [architecture.md](architecture.md) — the contract an integrator builds against: connection, wire shape, addressing, threading, undo, state lifecycle.
 - [development.md](development.md) — develop from source: build, test, the drift gates, repo layout, and the conventions a change has to hold to.
 - Task recipes (discovery, structure, modulation, snapshots/views, arrange-timeline authoring) live with the driving skill: [agent-plugin/skills/driving-chromatik/references/recipes.md](../agent-plugin/skills/driving-chromatik/references/recipes.md).
 - [tool-conventions.md](tool-conventions.md) — tool naming, canonical paths, wire shapes, threading, pagination, and mutation contracts.
