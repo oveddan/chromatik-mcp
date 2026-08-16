@@ -45,15 +45,13 @@ Load the project's persistent knowledge before touching code:
    validates them once PR-7b lands). This is what keeps agent-facing semantic docs from drifting:
    staleness is caught at the PR that caused it, when the diff is small, not discovered
    later by a confused agent.
-6. **Regenerate what's generated.** Three artifacts drift silently and are gated in CI,
+6. **Regenerate what's generated.** Two artifacts drift silently and are gated in CI,
    where a failure costs a round trip. Only the first has a check inside `build-gate.sh`:
    - Changed a tool's name, description, schema, or `readOnly`? Run
-     `package/scripts/dump-tool-catalog.sh`, then `cd site && npm run tools-ref`
+     `package/scripts/dump-tool-catalog.sh`, then `node scripts/generate-tool-reference.mjs`
      (`ToolCatalogDriftTest` + the `tools.md matches tools.json` CI job).
-   - Edited `agent-plugin/skills/driving-chromatik/SKILL.md`? Run
-     `cd site && npm run driving-ref` — `driving.md` is generated from it.
    - Referenced a tool name anywhere under `agent-plugin/`? Run
-     `cd site && npm run check:plugin-tool-names`.
+     `node scripts/check-plugin-tool-names.mjs`.
 
    Also ask whether the change belongs in the agent-facing prose at all: a new mutation
    with a hazard (not undoable, reindexes paths, an index base that differs from the

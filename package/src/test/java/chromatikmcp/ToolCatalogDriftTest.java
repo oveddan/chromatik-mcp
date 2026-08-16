@@ -11,23 +11,23 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Fails the build gate when a tool's schema changes without regenerating the docs-site
- * catalog. The committed {@code site/src/data/tools.json} must always match what {@link
+ * catalog. The committed {@code docs/tools.json} must always match what {@link
  * ToolCatalogDump} would emit right now.
  */
 class ToolCatalogDriftTest {
 
   @Test
   void catalogMatchesCommittedSiteData() throws IOException {
-    Path catalogPath = findRepoFile("site/src/data/tools.json");
+    Path catalogPath = findRepoFile("docs/tools.json");
     assumeTrue(catalogPath != null,
-        "site/src/data/tools.json not found from cwd " + Path.of("").toAbsolutePath()
+        "docs/tools.json not found from cwd " + Path.of("").toAbsolutePath()
             + " — skipping drift check outside the full repo checkout");
 
     String committed = Files.readString(catalogPath);
     String current = ToolCatalogJson.catalogJson();
     assertEquals(current, committed,
         "Tool schemas changed — run package/scripts/dump-tool-catalog.sh then "
-            + "`npm run tools-ref` in site/ and commit.");
+            + "`node scripts/generate-tool-reference.mjs` and commit.");
   }
 
   /**

@@ -15,7 +15,7 @@ import tools.jackson.databind.ObjectMapper;
  * Shared serialization for the tool catalog dump (used by {@link ToolCatalogDump}, the
  * generator invoked from {@code package/scripts/dump-tool-catalog.sh}, and
  * {@link ToolCatalogDriftTest}, which compares this same JSON against the committed
- * {@code site/src/data/tools.json}) — the two must never diverge on how a tool is
+ * {@code docs/tools.json}) — the two must never diverge on how a tool is
  * serialized, or the drift check is meaningless.
  *
  * <p>Every {@link LxTool} is constructible with no live {@link heronarts.lx.LX}; {@code

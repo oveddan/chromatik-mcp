@@ -32,12 +32,10 @@ TARGET="$1"
 POM="$ROOT/package/pom.xml"
 SOURCES="$ROOT/.claude/skills/chromatik-mcp-catalog/sources.json"
 PACKAGE_README="$ROOT/package/README.md"
-INSTALL_DOC="$ROOT/docs/install.md"
-GETTING_STARTED="$ROOT/site/src/content/docs/getting-started.md"
+README="$ROOT/README.md"
 CATALOG_FORMAT="$ROOT/docs/catalog-format.md"
 
-for file in "$POM" "$SOURCES" "$PACKAGE_README" "$INSTALL_DOC" \
-    "$GETTING_STARTED" "$CATALOG_FORMAT"; do
+for file in "$POM" "$SOURCES" "$PACKAGE_README" "$README" "$CATALOG_FORMAT"; do
   [[ -f "$file" ]] || { echo "FAIL: managed file missing: $file" >&2; exit 3; }
 done
 
@@ -71,11 +69,9 @@ require_once "$SOURCES" "$LX_SOURCE_PAIR" \
   "adjacent catalog LX coordinate and source version"
 require_once "$PACKAGE_README" "com.heronarts:{lx,glx,glxstudio}:$CURRENT" \
   "package build requirement"
-require_once "$INSTALL_DOC" "Chromatik with LX **$CURRENT**" "install requirement"
-require_once "$INSTALL_DOC" "\"lxVersion\": \"$CURRENT\"" "install status example"
-require_once "$GETTING_STARTED" "Chromatik](https://chromatik.co/download/) with LX **$CURRENT**" \
-  "site requirement"
-require_once "$GETTING_STARTED" "\"lxVersion\": \"$CURRENT\"" "site status example"
+require_once "$README" "Chromatik](https://chromatik.co/download/) with LX **$CURRENT**" \
+  "readme requirement"
+require_once "$README" "\"lxVersion\": \"$CURRENT\"" "readme status example"
 require_once "$CATALOG_FORMAT" "com/heronarts/lx/$CURRENT/lx-$CURRENT.jar" \
   "catalog origin example"
 require_once "$CATALOG_FORMAT" "lxVersion: $CURRENT" "catalog version example"
@@ -95,8 +91,7 @@ printf '  %s\n' \
   "package/pom.xml" \
   ".claude/skills/chromatik-mcp-catalog/sources.json" \
   "package/README.md" \
-  "docs/install.md" \
-  "site/src/content/docs/getting-started.md" \
+  "README.md" \
   "docs/catalog-format.md"
 
 if [[ "$MODE" == dry-run ]]; then
@@ -114,12 +109,10 @@ OLD="$CURRENT" NEW="$TARGET" perl -0pi -e '
 OLD="$CURRENT" NEW="$TARGET" perl -0pi -e '
   s{(com\.heronarts:\{lx,glx,glxstudio\}:)\Q$ENV{OLD}\E}{$1$ENV{NEW}}g
 ' "$PACKAGE_README"
-for file in "$INSTALL_DOC" "$GETTING_STARTED"; do
-  OLD="$CURRENT" NEW="$TARGET" perl -0pi -e '
-    s{(with LX \*\*)\Q$ENV{OLD}\E(\*\*)}{$1$ENV{NEW}$2}g;
-    s{("lxVersion": ")\Q$ENV{OLD}\E(")}{$1$ENV{NEW}$2}g
-  ' "$file"
-done
+OLD="$CURRENT" NEW="$TARGET" perl -0pi -e '
+  s{(with LX \*\*)\Q$ENV{OLD}\E(\*\*)}{$1$ENV{NEW}$2}g;
+  s{("lxVersion": ")\Q$ENV{OLD}\E(")}{$1$ENV{NEW}$2}g
+' "$README"
 OLD="$CURRENT" NEW="$TARGET" perl -0pi -e '
   s{(com/heronarts/lx/)\Q$ENV{OLD}\E(/lx-)\Q$ENV{OLD}\E(\.jar)}{$1$ENV{NEW}$2$ENV{NEW}$3}g;
   s{(lxVersion: )\Q$ENV{OLD}\E}{$1$ENV{NEW}}g

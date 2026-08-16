@@ -1,8 +1,9 @@
 # chromatik-mcp — Docs
 
-- [install.md](install.md) — install the jar, enable the plugin, discover its endpoint, and connect a client.
+- Installing and connecting a client lives in the [README](../README.md); [migrating-from-lx-mcp.md](migrating-from-lx-mcp.md) covers upgrades from the pre-rename name.
+- [architecture.md](architecture.md) — the contract an integrator builds against: connection, wire shape, addressing, threading, undo, state lifecycle.
 - [development.md](development.md) — develop from source: build, test, the drift gates, repo layout, and the conventions a change has to hold to.
-- [usage-examples.md](usage-examples.md) — concrete agent flows for discovery, structure, modulation, snapshots/views, and arrange-timeline authoring.
+- Task recipes (discovery, structure, modulation, snapshots/views, arrange-timeline authoring) live with the driving skill: [agent-plugin/skills/driving-chromatik/references/recipes.md](../agent-plugin/skills/driving-chromatik/references/recipes.md).
 - [tool-conventions.md](tool-conventions.md) — tool naming, canonical paths, wire shapes, threading, pagination, and mutation contracts.
 - [catalog-format.md](catalog-format.md) — semantic component-documentation format and runtime lookup behavior.
 - [osc-addressing.md](osc-addressing.md) — canonical paths versus OSC addresses and the label-based modulator exception.
@@ -13,4 +14,4 @@
 - [demo-script.md](demo-script.md) — live-demo beat sheet and dry-run checklist.
 - [releasing.md](releasing.md) — how a release is cut (bump the pom version, merge; CI tags and publishes).
 - [sdk-feasibility.md](sdk-feasibility.md), [lxcommand-mapping.md](lxcommand-mapping.md), [qa-strategy.md](qa-strategy.md) — spike-phase deliverables (PR-1a SDK feasibility, PR-1b LXCommand mapping, PR-1c QA strategy).
-- Per-client connection setup (Claude Code, Claude Desktop, Cursor, VS Code, Codex, generic HTTP) lives on the docs site: [Connect your AI client](../site/src/content/docs/connect.mdx) (published at https://oveddan.github.io/chromatik-mcp/connect/). This supersedes the `install/` snippets dir planned in PR-6.
+- [tools.md](tools.md) — the generated tool reference (from [tools.json](tools.json)); per-client connection setup lives in the [README](../README.md#5-connect-your-ai-client).

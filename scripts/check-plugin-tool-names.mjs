@@ -1,6 +1,6 @@
 // Drift gate: every chromatik MCP tool name referenced anywhere under agent-plugin/**
 // (the SKILL.md prose, its references/, the bundled manifests) must actually exist in
-// src/data/tools.json — the authoritative, source-generated tool catalog. This is what
+// docs/tools.json — the authoritative, source-generated tool catalog. This is what
 // stops a tool rename in the Java server from silently invalidating the plugin's docs:
 // a rename shows up here as a failure instead of a stale skill nobody notices.
 //
@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
-const pluginDir = here('../../agent-plugin');
+const pluginDir = here('../agent-plugin');
 
 // Non-tool snake_case tokens that legitimately appear backticked, or on a `tools:`
 // line, in the plugin's prose today. Keep this list small and evidence-based — add an
@@ -72,7 +72,7 @@ async function readTextOrNull(file) {
   return buf.toString('utf8');
 }
 
-const catalog = JSON.parse(await readFile(here('../src/data/tools.json'), 'utf8'));
+const catalog = JSON.parse(await readFile(here('../docs/tools.json'), 'utf8'));
 const toolNames = new Set(catalog.map((t) => t.name));
 const readOnlyToolNames = new Set(catalog.filter((t) => t.readOnly === true).map((t) => t.name));
 
@@ -164,7 +164,7 @@ for (const file of files) {
       if (IGNORE.has(token)) continue;
       const ok = wildcard ? [...toolNames].some((name) => name.startsWith(`${token}_`)) : toolNames.has(token);
       if (!ok) {
-        violations.push({ file: path.relative(here('../..'), file), token: token + (wildcard ?? '') });
+        violations.push({ file: path.relative(here('..'), file), token: token + (wildcard ?? '') });
       }
     }
   }
@@ -200,7 +200,7 @@ for (const file of agentFiles) {
 
   const grantedTokens = toolsLines.flatMap((line) => tokensIn(line)).map(([token]) => token);
   const grantedSet = new Set(grantedTokens);
-  const relFile = path.relative(here('../..'), file);
+  const relFile = path.relative(here('..'), file);
 
   // (a) Never grant a mutating tool — this applies to every agent, unconditionally: an
   // agent's `tools:` line should never contain a name whose tools.json entry isn't

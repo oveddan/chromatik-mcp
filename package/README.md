@@ -9,7 +9,7 @@ Java MCP SDK on embedded Tomcat) from `initialize()` and exposes the generated d
 surface spanning project/model reads and saves, channels, patterns/effects, parameters,
 modulators, MIDI mapping and templates, snapshots, views/fixtures, render previews,
 arrange-timeline authoring, batched operations, and a component-doc catalog. The authoritative
-current inventory is the generated [tool reference](../site/src/content/docs/tools.md). It
+current inventory is the generated [tool reference](../docs/tools.md). It
 writes `~/.chromatik-mcp/status.json` for client discovery on startup, rewrites connection
 state while running, and records a final disconnected state on clean shutdown. It reads the
 optional `~/.chromatik-mcp/config.json` for a fixed port / bind host. See

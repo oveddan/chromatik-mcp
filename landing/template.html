@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chromatik-mcp</title>
+<meta name="description" content="An MCP server inside Chromatik, the digital lighting workstation. An agent parses your scene, composes into it, maps it to your controller, and debugs it.">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="chromatik-mcp">
+<meta property="og:description" content="An MCP server inside Chromatik, the digital lighting workstation. An agent parses your scene, composes into it, maps it to your controller, and debugs it.">
+<meta property="og:url" content="https://oveddan.github.io/chromatik-mcp/">
+<meta property="og:image" content="https://oveddan.github.io/chromatik-mcp/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://oveddan.github.io/chromatik-mcp/og.png">
+
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+  <h1>chromatik-mcp</h1>
+
+  <!--
+    HERO COPY — hand-written, deliberately left for a human.
+
+    This is the only prose on the page that isn't generated from the README, and it's
+    the first thing a visitor reads. Write it in your own voice: what this is, who it's
+    for, why you built it. Two or three sentences is plenty.
+  -->
+  <p class="tagline">
+    An MCP server inside <a href="https://chromatik.co/">Chromatik</a>, the digital
+    lighting workstation. Your agent connects to the running engine and works on the
+    same show you're looking at.
+  </p>
+
+  <p class="actions">
+    <a class="btn" href="#1-install-the-jar">Install</a>
+    <a class="btn btn-quiet" href="https://github.com/oveddan/chromatik-mcp">GitHub</a>
+  </p>
+</header>
+
+<main>
+  <section class="setup">
+{{setup}}
+  </section>
+
+  <section class="further">
+    <h2 id="documentation">Documentation</h2>
+    <p>
+      Everything else lives as markdown in the repository, readable by humans and agents
+      alike.
+    </p>
+    <ul class="links">
+      <li>
+        <a href="https://github.com/oveddan/chromatik-mcp/blob/main/docs/tools.md">Tool reference</a>
+        — every tool, generated from the running server
+      </li>
+      <li>
+        <a href="https://github.com/oveddan/chromatik-mcp/blob/main/docs/architecture.md">Architecture</a>
+        — the contract an integrator builds against
+      </li>
+      <li>
+        <a href="https://github.com/oveddan/chromatik-mcp/tree/main/agent-plugin">Agent plugin</a>
+        — driving rules, recipes, agents, and slash commands
+      </li>
+      <li>
+        <a href="https://github.com/oveddan/chromatik-mcp/blob/main/agent-plugin/skills/driving-chromatik/SKILL.md">Driving Chromatik</a>
+        — house rules for the agent in the loop; point yours here
+      </li>
+      <li>
+        <a href="https://github.com/oveddan/chromatik-mcp/blob/main/docs/development.md">Development</a>
+        — build from source, tests, conventions
+      </li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <p>
+    <a href="https://github.com/oveddan/chromatik-mcp">github.com/oveddan/chromatik-mcp</a>
+    · MIT licensed · <a href="https://lx.studio/license">LX is separately licensed</a>
+  </p>
+  <p class="generated-note">
+    The setup instructions above are generated from the repository's README, so they
+    can't drift from it.
+  </p>
+</footer>
+
+</body>
+</html>

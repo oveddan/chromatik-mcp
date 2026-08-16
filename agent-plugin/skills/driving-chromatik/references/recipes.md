@@ -1,15 +1,14 @@
----
-title: Usage examples
-description: Task recipes — understanding a project, building show structure, chaining effects, macro mapping, multi-agent patterns, arrange-composition authoring.
----
+# Task recipes
 
-Task recipes for chromatik-mcp: a goal, the tool-call sequence, and the wrinkles the
-tool descriptions warn about. Everything mutating is undoable in Chromatik with Cmd-Z
-unless noted. Discovery etiquette (canonical paths, re-listing after structural
-changes, batching) is covered once on [Driving Chromatik well](../driving/) — read that
-first if you're the agent executing these.
+Concrete tool-call flows for chromatik-mcp: each recipe is a goal, the call sequence, and
+the wrinkles the tool descriptions warn about. Everything mutating is undoable in
+Chromatik with Cmd-Z unless noted.
 
-## 1. Understand an inherited project
+The discovery etiquette these assume — canonical-path addressing, re-listing after
+structural changes, batching, verifying your own work — is in [the skill](../SKILL.md).
+Read that first; this file is the worked examples.
+
+## 1. Understand the project
 
 ```
 get_project_info                        → LX version, channels, OSC ports
@@ -22,10 +21,11 @@ get_parameter {path: /lx/mixer/channel/1/fader}
                                         → value, range, oscAddress
 ```
 
-`get_component_doc` serves the generated semantic catalog; `catalog.stale: true` in
-the response means the component's code changed since the doc was written — trust the
-live parameters over the prose. `documented: false` means no entry exists; fall back
-to the class's `description` fields from `list_available_*` and the parameter tree.
+`get_component_doc` serves the generated semantic catalog (see
+[catalog-format.md](../../../../docs/catalog-format.md)); `catalog.stale: true` in the response means the
+component's code changed since the doc was written — trust the live parameters over
+the prose. `documented: false` means no entry exists; fall back to the class's
+`description` fields from `list_available_*` and the parameter tree.
 
 ## 2. Build a show structure
 
@@ -35,7 +35,8 @@ add_channel {class: heronarts.lx.pattern.color.GradientPattern}
 add_pattern {containerPath: <path>, class: heronarts.lx.pattern.texture.SparklePattern}
 activate_pattern {path: <pattern path>} → switch to it (PLAYLIST mode)
 move_channel {path: <channel path>, index: 0}
-                                        → reorder the mixer (0-based, post-removal index)
+                                        → reorder the mixer (0-based, post-removal index;
+                                          moves a whole group block, preserves membership)
 group_channels {paths: [<channel 1 path>, <channel 3 path>]}
                                         → group bus + reordered member paths + oscChanges
 add_effect {containerPath: <group path>, class: heronarts.lx.effect.color.ColorizeEffect}
@@ -43,7 +44,6 @@ add_effect {containerPath: <group path>, class: heronarts.lx.effect.color.Colori
 ```
 
 Wrinkles:
-
 - `activate_pattern` is only valid in PLAYLIST composite mode. On a BLEND-mode channel
   it returns `invalid_argument` — there, patterns layer instead of switching; toggle a
   pattern's `enabled` parameter with `set_parameter`.
@@ -92,7 +92,8 @@ set_parameter {path: <bank>/macro1, value: 0.75}            → turn the knob
   (`scope: /lx/modulation` hosts a device-sourced wiring globally).
 - OSC: a modulator knob answers at its **label-based** address
   (`/lx/modulation/Knobs/macro1`), not its canonical path — renaming the modulator
-  moves the address. Ports are in `get_project_info`.
+  moves the address. Ports are in `get_project_info`. See
+  [osc-addressing.md](../../../../docs/osc-addressing.md).
 - `list_modulations {scope?}` discovers existing banks and wirings when you didn't
   create them. It returns at most 100 wirings by default, ordered as continuous
   modulations then triggers; while `nextCursor` is present, pass it back as `cursor`.
@@ -101,7 +102,7 @@ set_parameter {path: <bank>/macro1, value: 0.75}            → turn the knob
   `wire_trigger` + `fire_trigger`
   cover boolean pulse wiring and momentary triggers (`set_parameter` rejects those).
 
-## 5. Verify the render
+## 5. See what you made
 
 ```
 get_frame                               → non-black fraction, lit fraction, mean
@@ -110,8 +111,8 @@ get_frame {include_image: true}         → plus a PNG the model literally looks
 ```
 
 The summary is cheap; the PNG is token-expensive — use it at checkpoints, not in
-tight loops (`grid` / `width` tune the cost). For the mutate → look → adjust
-verification loop, see [Driving Chromatik well](../driving/).
+tight loops (`grid` / `width` tune the cost). This closes the loop: mutate → look →
+adjust, against the actual render instead of a mental model.
 
 ## 6. Multi-agent patterns
 
@@ -128,8 +129,8 @@ undo step. Patterns that work well:
   select by.
 - **Undo as a safety net**: every command-backed mutation is one Cmd-Z step for the
   human at the console, and agents can walk the same history themselves with the
-  `undo` / `redo` tools. Agents should still clean up after themselves (`remove_*`),
-  but a human can always unwind an agent's session step by step.
+  `undo` / `redo` tools. Agents should still clean up after themselves
+  (`remove_*`), but a human can always unwind an agent's session step by step.
 
 Caveat for `undo` / `redo` specifically: the history is **global to the engine**, not
 per-session. With several agents (or a human at the console) mutating concurrently, the

@@ -1,7 +1,8 @@
----
-title: Architecture
-description: The contract an integrator builds against — connection, wire shape, addressing, threading, undo, and state lifecycle of the embedded MCP server.
----
+# Architecture
+
+The contract an integrator builds against: connection, wire shape, addressing, threading,
+undo, and the state lifecycle of the embedded MCP server. For installing and connecting,
+see the [README](../README.md).
 
 The jar embeds an HTTP MCP server (official Java MCP SDK, streamable-HTTP on embedded
 Tomcat) inside the LX runtime as an `LXPlugin`. Any MCP-speaking client — Claude Code,
@@ -21,7 +22,7 @@ This page is the contract you build against, guarantee by guarantee.
 - Discovery: the plugin writes `~/.chromatik-mcp/status.json` on startup — `{pid,
   port, host, url, projectPath, lxVersion, serverVersion, buildTime, connected,
   lastActivityAt}`. Pin a fixed port instead with `{"port": 3232}` in
-  `~/.chromatik-mcp/config.json` (see [Connect](../connect/)).
+  `~/.chromatik-mcp/config.json` (see [the README](../README.md#3-configure-the-port-and-host-optional)).
 - The `initialize` result carries server-level `instructions` — mixer semantics,
   addressing rules, quantization behavior. Surface them to your model; they exist to
   prevent the standard first-session mistakes.
@@ -121,3 +122,38 @@ keyed to **bytecode hashes**, so the response honestly flags `stale: true` when 
 changed after the doc was written, and `list_available_*` responses carry
 `documented` flags. Consult it before reasoning about a component's behavior; the
 parameter tree tells you what knobs exist, not what the algorithm does with them.
+
+## What the server tells every client
+
+The `initialize` result carries a server-level `instructions` string. Your client may or
+may not surface it to the model, so it's reproduced here in full — this is the one thing
+the server says unprompted, and it exists to prevent the standard first-session mistakes:
+
+> LX mixer semantics: a channel's patternMode is 'playlist' (one active pattern shows)
+> or 'blend' (all enabled patterns composite simultaneously, each scaled by its
+> compositeLevel parameter, 0-1). For pixels to reach fixtures, the whole chain must
+> be on: pattern contributing → channel enabled and fader > 0 → master
+> fader > 0 → engine output enabled (see get_project_info's output object).
+> Every component and parameter is addressed by its canonical LX path (e.g.
+> /lx/mixer/channel/1/fader); use list_parameters on any component path to discover
+> its parameters instead of guessing names. Scene colors flow from the global
+> palette (get_palette) to palette-linked patterns and effects; recall a saved
+> swatch via fire_trigger on its recallPath. A parameter with live modulations
+> reports its effective value plus baseValue; set_parameter moves the base. A new
+> wire_modulator wiring needs depth: pass its range argument or set rangePath
+> afterwards. Views are named model subsets (see get_views), created via add_view; a
+> device's view selector clips its rendering to that subset — map a device by
+> set_parameter on its 'view' path to the view's label (discrete/selector
+> parameters accept an option name string as well as an integer index) — and
+> 'Default' inherits the view from the parent device/channel instead. get_tempo
+> reports the engine tempo (bpm, clock source, beat position) and its
+> launchQuantization: with quantization set, a fire_trigger on a quantized
+> trigger (pattern/clip launch) may report pending:true instead of firing
+> immediately, deferring to the next tempo boundary. Snapshots (list_snapshots,
+> add_snapshot, recall_snapshot) capture and recall whole-look state — mixer,
+> pattern, effect, and modulation values together — with an optional fade
+> controlled by the engine's transition settings.
+
+Source: `Tools.INSTRUCTIONS` in the server. The house rules an agent should follow on top
+of this live in the driving skill:
+[agent-plugin/skills/driving-chromatik/SKILL.md](../agent-plugin/skills/driving-chromatik/SKILL.md).
