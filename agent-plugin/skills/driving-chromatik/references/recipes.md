@@ -129,6 +129,44 @@ list_cameras / recall_camera / remove_camera
 Only the grid depends on the viewpoint — the fractions and dominant colors describe the
 whole buffer, so a point the camera cannot see still counts toward them.
 
+### Capture a camera move as a GIF
+
+Start from a saved angle so every take begins identically and successive GIFs are
+comparable. On one MCP session, recall that start and begin the move:
+
+```
+recall_camera {name: "stage-looking-up"}
+animate_camera {to: "balcony", durationMs: 6000}
+```
+
+`animate_camera` blocks that session's HTTP worker until arrival, but the LX engine keeps
+ticking. Use a second MCP session to poll this concurrently in a loop:
+
+```
+get_frame {camera: "current", include_image: true, width: 240}
+```
+
+Decode the base64 PNG from each response's image content block and write it into the
+zero-padded `frame_%03d.png` sequence. `camera.midMove: true` confirms a frame was caught
+between the endpoints. In a live Apotheneum test, a 6000 ms move blocked for 6.01 s while
+the second session captured 263 frames (about 44/sec); 262 were marked mid-move.
+
+Assemble the sequence with ffmpeg. This exact command turned those 263 frames into a
+1.3 MB, 6 s, 240 px looping GIF:
+
+```
+ffmpeg -y -framerate 43.7 -i frame_%03d.png \
+  -vf "fps=15,scale=240:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer" \
+  -loop 0 camera-move.gif
+```
+
+Keep the capture width small: frame count times width drives the final file size. Hold the
+pattern static if the GIF is meant to demonstrate the camera path; otherwise it records
+both camera motion and pattern motion. And be honest about what the artifact proves:
+`get_frame` rasterizes flat discs, not Chromatik's actual bulb rendering. The GIF shows
+the move clearly, but undersells how the piece really looks — attach it to a PR as motion
+evidence, not a visual-fidelity reference.
+
 ## 6. Multi-agent patterns
 
 The server serializes every tool call onto the LX engine thread, so **concurrent

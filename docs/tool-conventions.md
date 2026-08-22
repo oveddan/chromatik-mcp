@@ -301,6 +301,19 @@ large (`list_parameters` on a big project is the known next candidate):
   the engine-thread rule below.
 - A supplier that throws maps to `internal` at the seam, like any handler exception.
 
+## Await-capable results
+
+- A handler that starts engine-loop work which must finish before the client gets its
+  response uses `Result.okAwait(valueSupplier)`. The handler starts the work and returns
+  from `EngineExecutor.call(...)` immediately; the seam then invokes the supplier on the
+  HTTP worker thread. This preserves client-visible blocking without blocking the engine
+  thread that must tick the work to completion.
+- Like an image supplier, the await supplier never reads live LX state off-thread. It
+  closes only over immutable snapshots and thread-safe completion state populated by the
+  engine loop.
+- An await-capable mutation is non-batchable. `apply_operations` itself runs on the engine
+  thread, so awaiting a nested result there would deadlock the loop.
+
 ## Mutations
 
 - Mutations route through `LXCommand` via a domain primitive (CLAUDE.md layering).

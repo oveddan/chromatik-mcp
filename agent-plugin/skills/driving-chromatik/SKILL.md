@@ -121,16 +121,38 @@ save_camera {name: "stage-looking-up"}
 get_frame {camera: "stage-looking-up", include_image: true}
 ```
 
+`set_camera` and `recall_camera` cut straight to the destination. Use
+`animate_camera` when the move itself should be visible: it tweens smoothly from the
+viewpoint now to either `to` (a saved name from `list_cameras`, or `current`) or the same
+explicit camera fields `set_camera` accepts. Those are two spellings of one destination,
+so never combine them.
+
+```
+animate_camera {to: "stage-looking-up", durationMs: 6000}
+animate_camera {theta: 180, phi: -20, durationMs: 8000, ease: "cubic"}
+```
+
+The call blocks until the camera arrives — success means arrival, not merely that a move
+started. `ease` is `sinusoidal` (the default), `quadratic`, or `cubic`. `durationMs` tops
+out at 29,000 because the tool call itself times out at 30,000; a longer request is
+rejected before it starts, so divide it into shorter legs instead of retrying the same
+duration. While a move is in flight, another session can shoot the current interpolated
+viewpoint with `get_frame {camera: "current"}`. Its `camera.midMove` says whether the shot
+was caught between endpoints. A mid-move frame is not a settled viewpoint — do not use it
+as a tuning-comparison shot.
+
 Name the angle once you have it. Comparing two renders shot from different angles is
 worse than useless — it invites conclusions about the change that are really about the
 camera — so re-shoot from one saved name across tuning passes. Saved angles live in the
 project file (`save_project` to persist them) and give a PR shared vocabulary.
 
 When Chromatik's UI is running, this is the same 3D preview a person is watching, not a
-private copy: `recall_camera` puts you both on one viewpoint. `get_camera`'s
-`livePreview` says which case you are in. Values out of LX's range are clamped (`phi` to
-±89°, `fovDegrees` to 15-150) and `theta` wraps, so read the response rather than
-assuming your request landed verbatim. Camera moves are not undoable with Cmd-Z.
+private copy: `recall_camera` puts you both on one viewpoint, and a long
+`animate_camera` move is visible to them as it happens. Headless, the server still moves
+its own camera for `get_frame`; `get_camera`'s `livePreview` says which case you are in.
+Values out of LX's range are clamped (`phi` to ±89°, `fovDegrees` to 15-150) and `theta`
+wraps, so read the response rather than assuming your request landed verbatim. Cuts and
+tweens are both camera moves, and neither is undoable with Cmd-Z.
 
 **Don't guess "the center" from the whole model's bounding box.** `describe_model`'s
 top-level `center` averages every point, including anything off to one side — a

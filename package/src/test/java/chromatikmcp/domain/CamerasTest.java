@@ -141,6 +141,56 @@ class CamerasTest extends HeadlessLxTest {
   }
 
   @Test
+  void interpolationTakesTheShortWayAcrossThetaZero() {
+    Cameras.CameraAngle midpoint = Cameras.interpolate(
+        angle(350, 0, 10), angle(10, 0, 10), .5,
+        Cameras.AnimationEase.SINUSOIDAL);
+
+    assertEquals(0, midpoint.theta(), EPSILON,
+        "350→10 crosses zero instead of orbiting the long way through 180");
+  }
+
+  @Test
+  void everyEaseLandsExactlyOnBothEndpoints() {
+    Cameras.CameraAngle from = new Cameras.CameraAngle(
+        350, -20, 10, new Cameras.Vec3(1, 2, 3),
+        Cameras.Projection.ORTHOGRAPHIC, 30);
+    Cameras.CameraAngle to = new Cameras.CameraAngle(
+        10, 40, 90, new Cameras.Vec3(9, 8, 7),
+        Cameras.Projection.PERSPECTIVE, 120);
+
+    for (Cameras.AnimationEase ease : Cameras.AnimationEase.values()) {
+      assertEquals(from, Cameras.interpolate(from, to, 0, ease), ease + " start");
+      assertEquals(to, Cameras.interpolate(from, to, 1, ease), ease + " end");
+    }
+  }
+
+  @Test
+  void animationRunsHeadlessAndCompletesOnEngineTicks() {
+    LX lx = newHeadlessLx();
+    lx.engine.setFixedDeltaMs(10);
+    Cameras cameras = new Cameras();
+    cameras.apply(lx, angle(350, 0, 10));
+
+    Cameras.CameraAnimation move = cameras.animate(
+        lx, angle(10, 20, 30), 20, Cameras.AnimationEase.CUBIC);
+    assertTrue(cameras.isAnimating());
+
+    lx.engine.run();
+    assertTrue(cameras.isAnimating(), "one tick leaves the move in flight");
+    assertEquals(0, cameras.current(lx).angle().theta(), EPSILON,
+        "the headless detached camera receives intermediate steps");
+    lx.engine.run();
+
+    Cameras.CameraView arrived = move.await();
+    assertFalse(arrived.livePreview(), "no UI binding is required");
+    assertEquals(10, arrived.angle().theta(), EPSILON);
+    assertEquals(20, arrived.angle().phi(), EPSILON);
+    assertEquals(30, arrived.angle().radius(), EPSILON);
+    assertFalse(cameras.isAnimating());
+  }
+
+  @Test
   void savedAnglesRecallRemoveAndReportReplacement() {
     LX lx = newHeadlessLx();
     Cameras cameras = new Cameras();

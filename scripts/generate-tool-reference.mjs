@@ -52,12 +52,13 @@ Named angles are saved in the project file, which makes successive renders compa
 set_camera {eye: {x: 0, y: 0, z: 0}, target: {x: 0, y: 400, z: 0}, fovDegrees: 110}
 save_camera {name: "stage-looking-up"}
 recall_camera {name: "stage-looking-up"}
+animate_camera {to: "stage-looking-up", durationMs: 4000}
 \`\`\`
 
 Camera moves are not \`LXCommand\`-backed, so none of these appear in Chromatik's undo
 history.`,
     tools: [
-      'get_camera', 'set_camera', 'save_camera', 'list_cameras', 'recall_camera',
+      'get_camera', 'set_camera', 'animate_camera', 'save_camera', 'list_cameras', 'recall_camera',
       'remove_camera',
     ],
   },

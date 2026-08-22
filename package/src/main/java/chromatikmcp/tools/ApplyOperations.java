@@ -187,6 +187,13 @@ public final class ApplyOperations implements LxTool {
         entry.put("ok", true);
         entry.put("result", ok.value());
       }
+      case Result.OkAwait<Map<String, Object>> ignored -> {
+        // Await-capable tools must be non-batchable: this method runs on the engine thread,
+        // where waiting would deadlock the loop that completes them.
+        entry.put("ok", false);
+        entry.put("code", Result.INTERNAL);
+        entry.put("message", "await-capable tools cannot run inside apply_operations");
+      }
       case Result.Error<Map<String, Object>> error -> {
         entry.put("ok", false);
         entry.put("code", error.code());
