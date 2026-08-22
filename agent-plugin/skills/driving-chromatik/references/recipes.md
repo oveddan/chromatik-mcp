@@ -108,11 +108,26 @@ set_parameter {path: <bank>/macro1, value: 0.75}            → turn the knob
 get_frame                               → non-black fraction, lit fraction, mean
                                           brightness, dominant colors, NxN mean-color grid
 get_frame {include_image: true}         → plus a PNG the model literally looks at
+get_frame {camera: "current"}           → shot from the live viewpoint, not a flat
+                                          front/top/side elevation
+get_frame {camera: "stage-looking-up"}  → shot from a saved angle (list_cameras)
 ```
 
 The summary is cheap; the PNG is token-expensive — use it at checkpoints, not in
 tight loops (`grid` / `width` tune the cost). This closes the loop: mutate → look →
 adjust, against the actual render instead of a mental model.
+
+```
+get_camera                              → the viewpoint now, as both an orbit
+                                          (theta/phi/radius about a target) and an eye
+set_camera {phi: -80}                   → nudge one axis; the rest stay put
+set_camera {eye: {...}, target: {...}}  → place the eye by absolute position
+save_camera {name: "stage-looking-up"}  → name it; persists with the project
+list_cameras / recall_camera / remove_camera
+```
+
+Only the grid depends on the viewpoint — the fractions and dominant colors describe the
+whole buffer, so a point the camera cannot see still counts toward them.
 
 ## 6. Multi-agent patterns
 

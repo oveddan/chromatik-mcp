@@ -117,7 +117,7 @@ class FramesTest extends HeadlessLxTest {
     float[] xn = {0f, 0.33f, 0.66f, 1f};
     float[] yn = {0f, 0.33f, 0.66f, 1f};
     float[] zn = {0.5f, 0.5f, 0.5f, 0.5f};
-    Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, size, 1f, 1f, 1f, "main");
+    Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, xn, yn, zn, size, 1f, 1f, 1f, "main");
 
     Frames.FrameSummary summary =
         Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
@@ -137,7 +137,7 @@ class FramesTest extends HeadlessLxTest {
     float[] xn = {0f, 0.33f, 0.66f, 1f};
     float[] yn = {0f, 0.33f, 0.66f, 1f};
     float[] zn = {0.5f, 0.5f, 0.5f, 0.5f};
-    Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, size, 1f, 1f, 1f, "main");
+    Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, xn, yn, zn, size, 1f, 1f, 1f, "main");
 
     Frames.FrameSummary defaultSummary =
         Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);
@@ -160,7 +160,7 @@ class FramesTest extends HeadlessLxTest {
     float[] xn = {0f, 0.2f, 0.4f, 0.6f, 1f};
     float[] yn = {0f, 0.2f, 0.4f, 0.6f, 1f};
     float[] zn = {0.5f, 0.5f, 0.5f, 0.5f, 0.5f};
-    Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, size, 1f, 1f, 1f, "main");
+    Frames.FrameSnapshot snap = new Frames.FrameSnapshot(colors, xn, yn, zn, xn, yn, zn, size, 1f, 1f, 1f, "main");
 
     Frames.FrameSummary summary =
         Frames.summarize(snap, Frames.View.FRONT, 3, Frames.LIT_THRESHOLD);

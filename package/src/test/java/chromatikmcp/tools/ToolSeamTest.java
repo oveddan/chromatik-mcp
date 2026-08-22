@@ -18,6 +18,7 @@ import heronarts.lx.modulator.MacroKnobs;
 import heronarts.lx.pattern.color.GradientPattern;
 
 import chromatikmcp.HeadlessLxTest;
+import chromatikmcp.domain.Cameras;
 import chromatikmcp.domain.Modulators;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
@@ -196,7 +197,7 @@ class ToolSeamTest extends HeadlessLxTest {
     // The SDK's inputSchema enum rejects bad values over the wire; this pins the
     // handler's own valueOf fallback directly (belt and suspenders for schema drift).
     Result<Map<String, Object>> result =
-        new GetFrame().handle(this.lx, Map.of("view", "diagonal"));
+        new GetFrame(new Cameras()).handle(this.lx, Map.of("view", "diagonal"));
     Result.Error<Map<String, Object>> error =
         assertInstanceOf(Result.Error.class, result);
     assertEquals(Result.INVALID_ARGUMENT, error.code());

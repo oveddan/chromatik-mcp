@@ -745,6 +745,15 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "get_camera",
+  "description" : "Read the current 3D viewpoint — where the model is being looked at from, in both orbit form (theta/phi/radius about a target) and absolute eye position. Read this before set_camera to nudge the view from where it already is instead of guessing absolute coordinates. The camera orbits a look-at point: 'target' is that point, 'radius' the distance out to the eye, 'theta' the azimuth in degrees (0 looks from -Z toward +Z, the same viewpoint as get_frame's 'front' plane; increasing theta swings right) and 'phi' the elevation in degrees (positive looks down from above, negative looks up from below). Up is always +Y. Give 'eye' instead to place the camera by absolute position — mutually exclusive with theta/phi/radius, and converted to the same orbit angle, which the response reports back. Values out of LX's range are clamped (phi to ±89°, fovDegrees to 15-150) and theta wraps, so read the response rather than assuming the request landed verbatim. 'livePreview' says whether this is the camera a person is actually watching: true when Chromatik's UI is up, so set_camera moves what they see; false in a headless runtime, where the viewpoint is held by this server for get_frame alone. When livePreview is true this reads the preview back live, so it also reports a camera the user just moved by hand.",
+  "readOnly" : true,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : { },
+    "additionalProperties" : false
+  }
+}, {
   "name" : "get_channel",
   "description" : "One channel's (or the master bus's) full detail — exactly the shape list_channels reports per entry at 'detail: full', for just this bus. Use this instead of scanning list_channels when you already know the path (e.g. from a prior list_channels/get_project_info call): O(1) against this one channel rather than assembling every channel's patterns/effects/controls to discard the rest. Accepts a channel, group, or the master bus's canonical path (e.g. /lx/mixer/channel/1, /lx/mixer/master).",
   "readOnly" : true,
@@ -961,7 +970,7 @@
   }
 }, {
   "name" : "get_frame",
-  "description" : "See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, lit fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. nonBlackFraction counts any pixel with a nonzero channel, so near-black residuals (e.g. a #101010 blur tail) inflate it even though they read as dark. litFraction excludes those residuals: it counts only pixels whose max channel exceeds litThreshold (default 26, ~10% of full scale — a documented heuristic, not perceptual luminance; raise it to make litFraction stricter) and is the field to use when judging negative space or whether an area actually reads as dark. litThreshold=0 makes litFraction equal to nonBlackFraction (max > 0 is the nonBlack condition); litThreshold=255 makes litFraction always 0.0, since no channel can exceed the maximum. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Supports orthographic front/top/side views and main/cue/aux output buses.",
+  "description" : "See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, lit fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. nonBlackFraction counts any pixel with a nonzero channel, so near-black residuals (e.g. a #101010 blur tail) inflate it even though they read as dark. litFraction excludes those residuals: it counts only pixels whose max channel exceeds litThreshold (default 26, ~10% of full scale — a documented heuristic, not perceptual luminance; raise it to make litFraction stricter) and is the field to use when judging negative space or whether an area actually reads as dark. litThreshold=0 makes litFraction equal to nonBlackFraction (max > 0 is the nonBlack condition); litThreshold=255 makes litFraction always 0.0, since no channel can exceed the maximum. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Renders either a fixed orthographic plane (the 'view' argument's front/top/side, good for a structural read) or an actual camera ('camera': a name from list_cameras, or 'current' for the live viewpoint get_camera reports and Chromatik's preview shows) — a walk-in piece can only be judged from a viewpoint a visitor would occupy, and no orthographic elevation shows that. The two are mutually exclusive; the response echoes whichever it used. Reads main/cue/aux output buses. Only the grid depends on the viewpoint: the fractions and dominant colors describe the whole buffer, so a point the camera cannot see still counts toward them.",
   "readOnly" : true,
   "inputSchema" : {
     "type" : "object",
@@ -976,6 +985,10 @@
         "description" : "Image width in pixels (default 256); height follows the model's aspect ratio",
         "minimum" : 64,
         "maximum" : 1024
+      },
+      "camera" : {
+        "type" : "string",
+        "description" : "Render from a camera instead of an orthographic plane: the name of a saved angle (list_cameras) or 'current' for the live viewpoint (get_camera). Rejected together with 'view'."
       },
       "bus" : {
         "type" : "string",
@@ -1219,6 +1232,15 @@
 }, {
   "name" : "list_available_patterns",
   "description" : "List every pattern class registered with LX and available to instantiate, with display name, category, and tags.",
+  "readOnly" : true,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : { },
+    "additionalProperties" : false
+  }
+}, {
+  "name" : "list_cameras",
+  "description" : "The viewpoints saved in this project by save_camera, in the order they were first named, each with the same angle fields get_camera reports. Check here before framing an interior angle by hand — someone may already have named the one you want. Empty on a project that has never saved one.",
   "readOnly" : true,
   "inputSchema" : {
     "type" : "object",
@@ -1582,6 +1604,21 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "recall_camera",
+  "description" : "Move the viewpoint to a saved angle (list_cameras reports the names). Shoot successive renders of the same pattern from one recalled angle so the differences between them are the pattern's, not the camera's. When Chromatik's UI is running this also moves the preview a person is watching, putting them and the render on the same viewpoint. Unknown name returns not_found. Not undoable with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "name" : {
+        "type" : "string",
+        "description" : "Name of a saved angle, matched exactly (case-sensitive) — see list_cameras"
+      }
+    },
+    "required" : [ "name" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "recall_snapshot",
   "description" : "Recall a snapshot's captured state, restoring the mixer/pattern/effect/modulation values it holds. By default the recall follows the snapshot engine's own transitionEnabled/transitionTimeSecs settings (see list_snapshots) — when transitions are enabled, values fade in over transitionTimeSecs; pass immediate=true to force an instant recall for this call regardless of that setting. The engine's recallMixer/recallPattern/recallEffect/recallModulation/recallMaster/recallOutput booleans (also from list_snapshots) limit which categories of state the recall is allowed to touch. It lands on the Chromatik undo stack, but Cmd-Z after a recall does not reliably restore plain parameter values to their pre-recall state (an LX-side ordering quirk in how it builds the undo entry) — recall_snapshot again, or another snapshot, to get back to a known state instead of relying on undo here.",
   "readOnly" : false,
@@ -1688,6 +1725,21 @@
       }
     },
     "required" : [ "lanePath", "index" ],
+    "additionalProperties" : false
+  }
+}, {
+  "name" : "remove_camera",
+  "description" : "Forget a saved viewpoint. The live camera does not move — this only drops the name from the project's saved list. Unknown name returns not_found. Not undoable with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "name" : {
+        "type" : "string",
+        "description" : "Name of a saved angle, matched exactly (case-sensitive) — see list_cameras"
+      }
+    },
+    "required" : [ "name" ],
     "additionalProperties" : false
   }
 }, {
@@ -2011,6 +2063,82 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "save_camera",
+  "description" : "Name the current viewpoint so it can be returned to exactly. A named angle is what makes successive renders comparable: re-shooting a pattern from 'stage-looking-up' across tuning passes shows what the change did, while two images shot from slightly different angles mostly show the camera move. It is also shared vocabulary — a PR can say which angle a render came from and a reviewer can reproduce it. Saves the live camera by default; pass camera fields to save an angle without moving there first. The camera orbits a look-at point: 'target' is that point, 'radius' the distance out to the eye, 'theta' the azimuth in degrees (0 looks from -Z toward +Z, the same viewpoint as get_frame's 'front' plane; increasing theta swings right) and 'phi' the elevation in degrees (positive looks down from above, negative looks up from below). Up is always +Y. Give 'eye' instead to place the camera by absolute position — mutually exclusive with theta/phi/radius, and converted to the same orbit angle, which the response reports back. Values out of LX's range are clamped (phi to ±89°, fovDegrees to 15-150) and theta wraps, so read the response rather than assuming the request landed verbatim. Saving an existing name overwrites it (the response's 'replaced' says so). Saved angles live in the project file, so they survive a restart — but like every other edit here they only reach disk when save_project runs. Not undoable with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "name" : {
+        "type" : "string",
+        "description" : "Name for this angle, e.g. 'stage-looking-up'. Matched exactly (case-sensitive) by recall_camera; surrounding whitespace is trimmed."
+      },
+      "theta" : {
+        "type" : "number",
+        "description" : "Azimuth in degrees around +Y; 0 looks from -Z toward +Z. Wraps into [0, 360)."
+      },
+      "phi" : {
+        "type" : "number",
+        "description" : "Elevation in degrees from the XZ plane: positive looks down at the target, negative looks up at it. Clamped to LX's ±89 (the look-at degenerates at the poles), so 'straight up' is phi -89."
+      },
+      "radius" : {
+        "type" : "number",
+        "description" : "Distance from the eye to the target, in model units. Also sets the framing in orthographic projection, where the visible width is radius."
+      },
+      "target" : {
+        "type" : "object",
+        "description" : "The look-at point in model coordinates (LX's camera center). All three components are required.",
+        "properties" : {
+          "x" : {
+            "type" : "number",
+            "description" : "X coordinate in model units"
+          },
+          "y" : {
+            "type" : "number",
+            "description" : "Y coordinate in model units"
+          },
+          "z" : {
+            "type" : "number",
+            "description" : "Z coordinate in model units"
+          }
+        },
+        "required" : [ "x", "y", "z" ],
+        "additionalProperties" : false
+      },
+      "eye" : {
+        "type" : "object",
+        "description" : "Absolute camera position in model coordinates, as an alternative to theta/phi/radius — pass it with 'target' to aim. Rejected alongside theta/phi/radius. All three components are required.",
+        "properties" : {
+          "x" : {
+            "type" : "number",
+            "description" : "X coordinate in model units"
+          },
+          "y" : {
+            "type" : "number",
+            "description" : "Y coordinate in model units"
+          },
+          "z" : {
+            "type" : "number",
+            "description" : "Z coordinate in model units"
+          }
+        },
+        "required" : [ "x", "y", "z" ],
+        "additionalProperties" : false
+      },
+      "projection" : {
+        "type" : "string",
+        "description" : "'perspective' (a real lens — near geometry looms, which is what makes an interior viewpoint read as interior) or 'orthographic' (parallel, no foreshortening; good for a structural read of the model).",
+        "enum" : [ "perspective", "orthographic" ]
+      },
+      "fovDegrees" : {
+        "type" : "number",
+        "description" : "Vertical field of view in degrees for perspective projection (LX's 'perspective' lens control): 15 is a long lens, 150 an extreme wide angle. Clamped to 15-150. Carried but unused in orthographic projection."
+      }
+    },
+    "required" : [ "name" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "save_model",
   "description" : "\"Save Model As\": export the project's structure (fixtures, normalization, label config) to an external .lxm file and re-point the project's model link at it (LXStructure.exportModel). path omitted re-exports to the currently linked model file (invalid_argument if the model isn't linked to one yet — see get_project_info's model.file); a given path resolves relative paths under LX's Models media folder and moves the link there, absolute paths are used as-is. overwrite (default false) is required to replace an existing file other than the currently linked one — omitting it against an existing target returns invalid_argument naming the resolved path instead of clobbering it. This is the fix for the shared-.lxm hazard save_project's description warns about: export to a NEW path here before calling save_project, rather than disabling syncModelFile, so the .lxm other projects on the rig load is never touched. The response echoes get_project_info's model block so a client can confirm the link moved. model.external false while model.file is set means the link will not survive a reload (see get_project_info's model.file/model.external description). This is a file write, not undoable engine state — it does not appear in undo history. Requires a dynamic structure — invalid_argument if model.isStatic is true, since a static model has no fixture-based model to export.",
   "readOnly" : false,
@@ -2195,6 +2323,78 @@
       }
     },
     "required" : [ "lanePath", "index" ],
+    "additionalProperties" : false
+  }
+}, {
+  "name" : "set_camera",
+  "description" : "Move the 3D viewpoint — the angle the model is seen from. This is what lets a walk-in installation be judged from inside it: put the eye where a visitor stands and aim from there, rather than reading it off an outside elevation. Every field is optional and defaults to the current camera (get_camera), so a single field nudges one axis. The camera orbits a look-at point: 'target' is that point, 'radius' the distance out to the eye, 'theta' the azimuth in degrees (0 looks from -Z toward +Z, the same viewpoint as get_frame's 'front' plane; increasing theta swings right) and 'phi' the elevation in degrees (positive looks down from above, negative looks up from below). Up is always +Y. Give 'eye' instead to place the camera by absolute position — mutually exclusive with theta/phi/radius, and converted to the same orbit angle, which the response reports back. Values out of LX's range are clamped (phi to ±89°, fovDegrees to 15-150) and theta wraps, so read the response rather than assuming the request landed verbatim. When Chromatik's UI is running this moves the 3D preview a person is watching (the response's 'livePreview' says so); headless it moves only the viewpoint this server holds. Framing an interior angle by trial and error is slow — save_camera names the result so later renders can be shot from the same place and actually compared. Not undoable with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "theta" : {
+        "type" : "number",
+        "description" : "Azimuth in degrees around +Y; 0 looks from -Z toward +Z. Wraps into [0, 360)."
+      },
+      "phi" : {
+        "type" : "number",
+        "description" : "Elevation in degrees from the XZ plane: positive looks down at the target, negative looks up at it. Clamped to LX's ±89 (the look-at degenerates at the poles), so 'straight up' is phi -89."
+      },
+      "radius" : {
+        "type" : "number",
+        "description" : "Distance from the eye to the target, in model units. Also sets the framing in orthographic projection, where the visible width is radius."
+      },
+      "target" : {
+        "type" : "object",
+        "description" : "The look-at point in model coordinates (LX's camera center). All three components are required.",
+        "properties" : {
+          "x" : {
+            "type" : "number",
+            "description" : "X coordinate in model units"
+          },
+          "y" : {
+            "type" : "number",
+            "description" : "Y coordinate in model units"
+          },
+          "z" : {
+            "type" : "number",
+            "description" : "Z coordinate in model units"
+          }
+        },
+        "required" : [ "x", "y", "z" ],
+        "additionalProperties" : false
+      },
+      "eye" : {
+        "type" : "object",
+        "description" : "Absolute camera position in model coordinates, as an alternative to theta/phi/radius — pass it with 'target' to aim. Rejected alongside theta/phi/radius. All three components are required.",
+        "properties" : {
+          "x" : {
+            "type" : "number",
+            "description" : "X coordinate in model units"
+          },
+          "y" : {
+            "type" : "number",
+            "description" : "Y coordinate in model units"
+          },
+          "z" : {
+            "type" : "number",
+            "description" : "Z coordinate in model units"
+          }
+        },
+        "required" : [ "x", "y", "z" ],
+        "additionalProperties" : false
+      },
+      "projection" : {
+        "type" : "string",
+        "description" : "'perspective' (a real lens — near geometry looms, which is what makes an interior viewpoint read as interior) or 'orthographic' (parallel, no foreshortening; good for a structural read of the model).",
+        "enum" : [ "perspective", "orthographic" ]
+      },
+      "fovDegrees" : {
+        "type" : "number",
+        "description" : "Vertical field of view in degrees for perspective projection (LX's 'perspective' lens control): 15 is a long lens, 150 an extreme wide angle. Clamped to 15-150. Carried but unused in orthographic projection."
+      }
+    },
+    "required" : [ ],
     "additionalProperties" : false
   }
 }, {

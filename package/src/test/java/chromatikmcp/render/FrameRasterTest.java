@@ -12,17 +12,23 @@ import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.Test;
 
+import chromatikmcp.domain.CameraProjection;
+import chromatikmcp.domain.Cameras;
 import chromatikmcp.domain.Frames;
 
 class FrameRasterTest {
 
   /** Four corner points: red bottom-left, green bottom-right, blue top-left, white top-right. */
   private static Frames.FrameSnapshot corners(float xRange, float yRange) {
+    float[] xn = {0f, 1f, 0f, 1f};
+    float[] yn = {0f, 0f, 1f, 1f};
+    float[] zn = {0.5f, 0.5f, 0.5f, 0.5f};
     return new Frames.FrameSnapshot(
         new int[] {0xFFFF0000, 0xFF00FF00, 0xFF0000FF, 0xFFFFFFFF},
-        new float[] {0f, 1f, 0f, 1f},
-        new float[] {0f, 0f, 1f, 1f},
-        new float[] {0.5f, 0.5f, 0.5f, 0.5f},
+        xn, yn, zn,
+        // World coordinates span the same unit square the normalized ones do, so the
+        // camera path can be aimed at this fixture with plain numbers.
+        xn, yn, new float[] {0f, 0f, 0f, 0f},
         4, xRange, yRange, 0f, "main");
   }
 
@@ -100,9 +106,82 @@ class FrameRasterTest {
   @Test
   void emptyModelStillEncodes() throws IOException {
     Frames.FrameSnapshot empty = new Frames.FrameSnapshot(
-        new int[0], new float[0], new float[0], new float[0], 0, 0f, 0f, 0f, "main");
+        new int[0], new float[0], new float[0], new float[0],
+        new float[0], new float[0], new float[0], 0, 0f, 0f, 0f, "main");
     BufferedImage image = decode(FrameRaster.png(empty, Frames.View.FRONT, 64));
     assertEquals(64, image.getWidth());
     assertEquals(0x101010, image.getRGB(32, 32) & 0xFFFFFF);
+  }
+
+  /**
+   * Two points on the view axis, the near one red and the far one green. A painter's
+   * algorithm must leave red on top — without it the far wall of a nested structure draws
+   * over the near one and an interior view is meaningless.
+   */
+  @Test
+  void nearPointsOccludeFarOnes() throws IOException {
+    Frames.FrameSnapshot inLine = new Frames.FrameSnapshot(
+        new int[] {0xFFFF0000, 0xFF00FF00},
+        new float[2], new float[2], new float[2],
+        new float[] {0f, 0f},
+        new float[] {0f, 0f},
+        new float[] {0f, 50f},
+        2, 1f, 1f, 1f, "main");
+    Cameras.CameraAngle angle = new Cameras.CameraAngle(
+        0, 0, 100, new Cameras.Vec3(0, 0, 0), Cameras.Projection.PERSPECTIVE, 60);
+
+    int width = 120;
+    int height = FrameRaster.cameraHeight(width);
+    BufferedImage image = decode(FrameRaster.png(
+        inLine, CameraProjection.of(angle, (double) width / height), width, height));
+
+    assertEquals(0xFF0000, image.getRGB(width / 2, height / 2) & 0xFFFFFF,
+        "the nearer point wins the center pixel");
+  }
+
+  @Test
+  void cameraRendersAtTheDeclaredSize() throws IOException {
+    Cameras.CameraAngle angle = new Cameras.CameraAngle(
+        0, 0, 4, new Cameras.Vec3(0.5, 0.5, 0), Cameras.Projection.ORTHOGRAPHIC, 60);
+    int width = 160;
+    int height = FrameRaster.cameraHeight(width);
+    assertEquals(120, height, "camera renders use a 4:3 frame");
+
+    BufferedImage image = decode(FrameRaster.png(
+        corners(1f, 1f), CameraProjection.of(angle, (double) width / height), width, height));
+    assertEquals(width, image.getWidth());
+    assertEquals(height, image.getHeight());
+    assertEquals(0x101010, image.getRGB(2, 2) & 0xFFFFFF, "background outside the model");
+  }
+
+  @Test
+  void aCameraLookingAwayRendersNothingButBackground() throws IOException {
+    // theta 180 puts the eye on the +Z side of its target looking back toward -Z; with the
+    // target beyond the model, the unit square ends up behind the camera.
+    Cameras.CameraAngle away = new Cameras.CameraAngle(
+        180, 0, 4, new Cameras.Vec3(0.5, 0.5, -8), Cameras.Projection.PERSPECTIVE, 60);
+    int width = 64;
+    int height = FrameRaster.cameraHeight(width);
+    BufferedImage image = decode(FrameRaster.png(
+        corners(1f, 1f), CameraProjection.of(away, (double) width / height), width, height));
+
+    for (int x = 0; x < width; x += 8) {
+      for (int y = 0; y < height; y += 8) {
+        assertEquals(0x101010, image.getRGB(x, y) & 0xFFFFFF, "background at " + x + "," + y);
+      }
+    }
+  }
+
+  @Test
+  void emptyModelStillEncodesFromACamera() throws IOException {
+    Frames.FrameSnapshot empty = new Frames.FrameSnapshot(
+        new int[0], new float[0], new float[0], new float[0],
+        new float[0], new float[0], new float[0], 0, 0f, 0f, 0f, "main");
+    Cameras.CameraAngle angle = new Cameras.CameraAngle(
+        0, 0, 10, new Cameras.Vec3(0, 0, 0), Cameras.Projection.PERSPECTIVE, 60);
+    BufferedImage image = decode(
+        FrameRaster.png(empty, CameraProjection.of(angle, 4.0 / 3.0), 64, 48));
+    assertEquals(64, image.getWidth());
+    assertEquals(0x101010, image.getRGB(32, 24) & 0xFFFFFF);
   }
 }

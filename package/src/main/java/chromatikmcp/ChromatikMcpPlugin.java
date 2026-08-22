@@ -10,6 +10,7 @@ import heronarts.lx.LXLoopTask;
 import heronarts.lx.LXPlugin;
 import heronarts.lx.LXRegistry;
 
+import chromatikmcp.domain.Cameras;
 import chromatikmcp.engine.EngineExecutor;
 import chromatikmcp.mcp.BuildInfo;
 import chromatikmcp.mcp.ConfigFile;
@@ -38,6 +39,10 @@ public class ChromatikMcpPlugin implements LXPlugin {
   // never runs more than one LX per process, so that's an acceptable limit.
   private static volatile ServerStatus currentStatus;
 
+  // Published on the same terms as currentStatus above, and for the same consumer: the UI
+  // companion binds Chromatik's 3D preview to this instance in onUIReady().
+  private static volatile Cameras currentCameras;
+
   private LX lx;
   private ServerStatus status;
   private EmbeddedMcpServer server;
@@ -63,6 +68,12 @@ public class ChromatikMcpPlugin implements LXPlugin {
     // `this.server` — a client could otherwise call get_status between tomcat.start()
     // returning and `this.server` being assigned a few lines down, hitting a null
     // dereference (only possible with a fixed configured port racy enough to matter).
+    // Registered as a project external before anything can save or load one, so a project
+    // opened later restores its named angles. registerExternal throws on a duplicate key,
+    // which would mean this plugin initialized twice against one LX.
+    Cameras cameras = new Cameras();
+    lx.registerExternal(Cameras.EXTERNAL_KEY, cameras);
+
     ConnectionTracker connectionTracker = new ConnectionTracker();
     GetStatus getStatus = new GetStatus(
         this.status, () -> connectionTracker.snapshot(System.currentTimeMillis()));
@@ -73,7 +84,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
     // would leave the plugin looking healthy while the server is down.
     this.server = EmbeddedMcpServer.start(
         SERVER_NAME, BuildInfo.version(), config.port(), config.host(),
-        Tools.specifications(lx, engineExecutor, getStatus), Tools.INSTRUCTIONS,
+        Tools.specifications(lx, engineExecutor, getStatus, cameras), Tools.INSTRUCTIONS,
         connectionTracker, Map.of("/osc-params", new OscParamsServlet(lx, engineExecutor)));
     long startedAtMs = System.currentTimeMillis();
     this.status.initialize(config.host(), this.server.port(), startedAtMs, EmbeddedMcpServer.ENDPOINT);
@@ -82,6 +93,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
     // this earlier would let ChromatikMcpUiPlugin's null check pass and build a section over
     // an uninitialized ServerStatus ("http://null:0null", a grey dot that looks healthy).
     currentStatus = this.status;
+    currentCameras = cameras;
 
     writeStatusFile(false, null);
 
@@ -159,6 +171,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
     }
     this.loopTask = null;
     currentStatus = null;
+    currentCameras = null;
     if (this.server != null) {
       // Best-effort: leave the discovery file honest (connected=false) rather than
       // stale from the last-observed state. Must never throw out of dispose() over a
@@ -180,5 +193,10 @@ public class ChromatikMcpPlugin implements LXPlugin {
   /** {@code null} until {@link #initialize} has run; the UI plugin checks for this. */
   public static ServerStatus status() {
     return currentStatus;
+  }
+
+  /** The camera store the tools read and write; {@code null} on the same terms as {@link #status()}. */
+  public static Cameras cameras() {
+    return currentCameras;
   }
 }
