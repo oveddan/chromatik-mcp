@@ -7,6 +7,8 @@ import java.util.Map;
 
 import heronarts.lx.LX;
 
+import chromatikmcp.domain.CameraProjection;
+import chromatikmcp.domain.Cameras;
 import chromatikmcp.domain.Frames;
 import chromatikmcp.render.FrameRaster;
 
@@ -21,6 +23,12 @@ public final class GetFrame implements LxTool {
   private static final int MIN_LIT_THRESHOLD = 0;
   private static final int MAX_LIT_THRESHOLD = 255;
   private static final int LIT_THRESHOLD_DEFAULT = Frames.LIT_THRESHOLD;
+
+  private final Cameras cameras;
+
+  public GetFrame(Cameras cameras) {
+    this.cameras = cameras;
+  }
 
   @Override
   public String name() {
@@ -47,8 +55,15 @@ public final class GetFrame implements LxTool {
         + "litFraction always 0.0, since no channel can exceed the maximum. Image content "
         + "is token-expensive, so default to "
         + "the numeric summary and only request the PNG when actually looking at the "
-        + "picture matters. Supports orthographic front/top/side views and main/cue/aux "
-        + "output buses.";
+        + "picture matters. Renders either a fixed orthographic plane (the 'view' "
+        + "argument's front/top/side, good for a structural read) or an actual camera "
+        + "('camera': a name from list_cameras, or 'current' for the live viewpoint "
+        + "get_camera reports and Chromatik's preview shows) — a walk-in piece can only be "
+        + "judged from a viewpoint a visitor would occupy, and no orthographic elevation "
+        + "shows that. The two are mutually exclusive; the response echoes whichever it "
+        + "used. Reads main/cue/aux output buses. Only the grid depends on the viewpoint: "
+        + "the fractions and dominant colors describe the whole buffer, so a point the "
+        + "camera cannot see still counts toward them.";
   }
 
   @Override
@@ -60,6 +75,10 @@ public final class GetFrame implements LxTool {
     properties.put("width", Schemas.integer(
         "Image width in pixels (default " + DEFAULT_WIDTH + "); height follows the model's aspect ratio",
         MIN_WIDTH, MAX_WIDTH));
+    properties.put("camera", Schemas.string(
+        "Render from a camera instead of an orthographic plane: the name of a saved angle "
+            + "(list_cameras) or '" + Cameras.CURRENT + "' for the live viewpoint "
+            + "(get_camera). Rejected together with 'view'."));
     properties.put("bus", Schemas.enumString(
         "Which composited buffer to read (default main)", List.of("main", "cue", "aux")));
     properties.put("include_image", Schemas.bool(
@@ -83,6 +102,11 @@ public final class GetFrame implements LxTool {
 
   @Override
   public Result<Map<String, Object>> handle(LX lx, Map<String, Object> args) {
+    String cameraName = Args.optionalString(args, "camera");
+    if (cameraName != null && args.get("view") != null) {
+      return Result.error(Result.INVALID_ARGUMENT,
+          "view and camera are two different ways to frame the render — pass one or the other");
+    }
     Frames.View view;
     Frames.Bus bus;
     try {
@@ -98,20 +122,50 @@ public final class GetFrame implements LxTool {
 
     int litThreshold = intArg(args, "litThreshold", LIT_THRESHOLD_DEFAULT, MIN_LIT_THRESHOLD, MAX_LIT_THRESHOLD);
 
+    // Resolved before the frame is captured: an unknown camera name should fail without
+    // paying for a buffer copy.
+    Cameras.CameraAngle angle = null;
+    if (cameraName != null) {
+      angle = Cameras.CURRENT.equals(cameraName)
+          ? this.cameras.current(lx).angle()
+          : this.cameras.lookup(cameraName);
+    }
+
     Frames.FrameSnapshot snap = Frames.capture(lx, bus);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("bus", snap.bus());
-    payload.put("view", view.name().toLowerCase(Locale.ROOT));
-    payload.putAll(summaryToMap(Frames.summarize(snap, view, grid, litThreshold)));
+
+    if (angle == null) {
+      payload.put("view", view.name().toLowerCase(Locale.ROOT));
+      payload.putAll(summaryToMap(Frames.summarize(snap, view, grid, litThreshold)));
+      if (!includeImage) {
+        return Result.ok(payload);
+      }
+      payload.put("imageWidth", width);
+      payload.put("imageHeight", FrameRaster.height(snap, view, width));
+      // The PNG is encoded by the seam on the HTTP worker thread, after this handler has
+      // left the engine thread; the supplier closes only over the detached snapshot.
+      return Result.okImage(payload, () -> FrameRaster.png(snap, view, width));
+    }
+
+    // The grid and the PNG share one projection, built at the exact image size, so the
+    // numbers and the picture describe the same frame rather than two similar ones.
+    int height = FrameRaster.cameraHeight(width);
+    CameraProjection projection =
+        CameraProjection.of(angle, (double) width / height);
+
+    Map<String, Object> camera = new LinkedHashMap<>();
+    camera.put("name", cameraName);
+    camera.putAll(CameraPayload.angleToMap(angle));
+    payload.put("camera", camera);
+    payload.putAll(summaryToMap(Frames.summarize(snap, projection, grid, litThreshold)));
 
     if (!includeImage) {
       return Result.ok(payload);
     }
     payload.put("imageWidth", width);
-    payload.put("imageHeight", FrameRaster.height(snap, view, width));
-    // The PNG is encoded by the seam on the HTTP worker thread, after this handler has
-    // left the engine thread; the supplier closes only over the detached snapshot.
-    return Result.okImage(payload, () -> FrameRaster.png(snap, view, width));
+    payload.put("imageHeight", height);
+    return Result.okImage(payload, () -> FrameRaster.png(snap, projection, width, height));
   }
 
   static Map<String, Object> summaryToMap(Frames.FrameSummary summary) {

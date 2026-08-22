@@ -35,10 +35,22 @@ public final class Frames {
   }
 
   /**
+   * Buckets a point into one cell of a {@code gridSize}×{@code gridSize} matrix laid over
+   * the image, so {@link #summarize}'s grid describes whatever view the caller is looking
+   * through — an orthographic plane ({@link View}) or a camera
+   * ({@link CameraProjection}).
+   */
+  public interface GridProjection {
+
+    /** Row-major cell index, or -1 when the point is not on screen at all. */
+    int cell(FrameSnapshot s, int i, int gridSize);
+  }
+
+  /**
    * Orthographic view plane. {@code u} runs left→right, {@code v} runs top→bottom in
    * image space (both 0–1), so a raster can consume them directly.
    */
-  public enum View {
+  public enum View implements GridProjection {
     FRONT {
       @Override
       public float u(FrameSnapshot s, int i) {
@@ -110,14 +122,33 @@ public final class Frames {
     public abstract float uRange(FrameSnapshot s);
 
     public abstract float vRange(FrameSnapshot s);
+
+    /** Every point is on screen in an orthographic plane view, so this never returns -1. */
+    @Override
+    public int cell(FrameSnapshot s, int i, int gridSize) {
+      int col = clamp((int) (u(s, i) * gridSize), gridSize);
+      int row = clamp((int) (v(s, i) * gridSize), gridSize);
+      return row * gridSize + col;
+    }
   }
 
-  /** Fully detached from LX: arrays are copies, indexed by {@link LXPoint#index}. */
+  /**
+   * Fully detached from LX: arrays are copies, indexed by {@link LXPoint#index}.
+   *
+   * <p>Both coordinate systems are carried. {@code xn}/{@code yn}/{@code zn} are LX's own
+   * normalized values, which the orthographic {@link View} planes consume directly;
+   * {@code x}/{@code y}/{@code z} are world coordinates, which a {@link CameraProjection}
+   * needs and which cannot be reconstructed from the normalized ones (LX normalizes
+   * against a model's {@code normalizationBounds}, not necessarily its own extent).
+   */
   public record FrameSnapshot(
       int[] colors,
       float[] xn,
       float[] yn,
       float[] zn,
+      float[] x,
+      float[] y,
+      float[] z,
       int size,
       float xRange,
       float yRange,
@@ -158,6 +189,9 @@ public final class Frames {
     float[] xn = new float[size];
     float[] yn = new float[size];
     float[] zn = new float[size];
+    float[] x = new float[size];
+    float[] y = new float[size];
+    float[] z = new float[size];
     for (LXPoint p : model.points) {
       // Buffers are indexed by point.index; a model that skipped reindexPoints() (LX only
       // reindexes via LXStructure.setStaticModel, not the immutable-model constructor)
@@ -169,8 +203,11 @@ public final class Frames {
       xn[p.index] = p.xn;
       yn[p.index] = p.yn;
       zn[p.index] = p.zn;
+      x[p.index] = p.x;
+      y[p.index] = p.y;
+      z[p.index] = p.z;
     }
-    return new FrameSnapshot(colors, xn, yn, zn, size,
+    return new FrameSnapshot(colors, xn, yn, zn, x, y, z, size,
         model.xRange, model.yRange, model.zRange, bus.name().toLowerCase(Locale.ROOT));
   }
 
@@ -184,14 +221,16 @@ public final class Frames {
   /**
    * Compact stats over the snapshot: non-black fraction, lit fraction (see {@link
    * #LIT_THRESHOLD}), mean brightness, top dominant colors from a hue histogram, and a
-   * {@code gridSize}×{@code gridSize} matrix of mean cell colors over the view plane
-   * (rows top→bottom; cells with no points are null). {@code litThreshold} is the max-
+   * {@code gridSize}×{@code gridSize} matrix of mean cell colors over the view
+   * {@code projection} (rows top→bottom; cells with no points are null). Only the grid
+   * depends on the view: the fractions and dominant colors describe the whole buffer, so
+   * a point the camera cannot see still counts toward them. {@code litThreshold} is the max-
    * channel value (0-255) a pixel must exceed to count toward litFraction. At 0 litFraction
    * equals nonBlackFraction (max > 0 is the nonBlack condition); at 255 litFraction is
    * always 0.0, since no channel can exceed the maximum.
    */
   public static FrameSummary summarize(
-      FrameSnapshot s, View view, int gridSize, int litThreshold) {
+      FrameSnapshot s, GridProjection projection, int gridSize, int litThreshold) {
     int size = s.size();
     int nonBlack = 0;
     int lit = 0;
@@ -214,13 +253,13 @@ public final class Frames {
       int g = (c >> 8) & 0xFF;
       int b = c & 0xFF;
 
-      int col = clamp((int) (view.u(s, i) * gridSize), gridSize);
-      int row = clamp((int) (view.v(s, i) * gridSize), gridSize);
-      int cell = row * gridSize + col;
-      cellCount[cell]++;
-      cellR[cell] += r;
-      cellG[cell] += g;
-      cellB[cell] += b;
+      int cell = projection.cell(s, i, gridSize);
+      if (cell >= 0) {
+        cellCount[cell]++;
+        cellR[cell] += r;
+        cellG[cell] += g;
+        cellB[cell] += b;
+      }
 
       int max = Math.max(r, Math.max(g, b));
       brightnessSum += max / 255.0;

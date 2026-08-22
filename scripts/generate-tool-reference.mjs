@@ -30,6 +30,38 @@ const CATEGORIES = [
     ],
   },
   {
+    key: 'camera',
+    title: 'Camera: where the model is seen from',
+    intro: `A walk-in installation is judged from inside it, and \`get_frame\`'s \`front\`/\`top\`/\`side\`
+planes are all outside elevations. The camera puts the eye wherever a visitor would stand.
+
+It is an orbit rig, LX's own: \`target\` is the look-at point, \`radius\` the distance out to
+the eye, \`theta\` the azimuth in degrees (0 looks from -Z toward +Z, the same viewpoint as
+\`get_frame\`'s \`front\` plane) and \`phi\` the elevation (positive looks down, negative looks
+up). Pass \`eye\` instead to place the camera by absolute position. Up is always +Y.
+
+When Chromatik's UI is running this is the 3D preview a person is watching — one camera,
+not a private copy — so \`recall_camera\` puts the human and the agent on the same
+viewpoint. Headless, the viewpoint is held by the server.
+
+Framing a good interior angle takes trial and error, and an unnamed one is unrepeatable.
+Named angles are saved in the project file, which makes successive renders comparable
+(same angle, so the difference is the pattern's) and gives a PR shared vocabulary.
+
+\`\`\`
+set_camera {eye: {x: 0, y: 0, z: 0}, target: {x: 0, y: 400, z: 0}, fovDegrees: 110}
+save_camera {name: "stage-looking-up"}
+recall_camera {name: "stage-looking-up"}
+\`\`\`
+
+Camera moves are not \`LXCommand\`-backed, so none of these appear in Chromatik's undo
+history.`,
+    tools: [
+      'get_camera', 'set_camera', 'save_camera', 'list_cameras', 'recall_camera',
+      'remove_camera',
+    ],
+  },
+  {
     key: 'project',
     title: 'Save the project & model',
     intro: `Everything built over this API lives only in the running engine until \`save_project\`

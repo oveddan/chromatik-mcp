@@ -10,6 +10,7 @@ import heronarts.lx.LXLoopTask;
 import heronarts.lx.LXPlugin;
 import heronarts.lx.LXRegistry;
 
+import chromatikmcp.domain.Cameras;
 import chromatikmcp.engine.EngineExecutor;
 import chromatikmcp.mcp.BuildInfo;
 import chromatikmcp.mcp.ConfigFile;
@@ -38,6 +39,10 @@ public class ChromatikMcpPlugin implements LXPlugin {
   // never runs more than one LX per process, so that's an acceptable limit.
   private static volatile ServerStatus currentStatus;
 
+  // Published on the same terms as currentStatus above, and for the same consumer: the UI
+  // companion binds Chromatik's 3D preview to this instance in onUIReady().
+  private static volatile Cameras currentCameras;
+
   private LX lx;
   private ServerStatus status;
   private EmbeddedMcpServer server;
@@ -58,6 +63,24 @@ public class ChromatikMcpPlugin implements LXPlugin {
 
     this.lx = lx;
     this.status = new ServerStatus();
+    // Registered as a project external before anything can save or load one, so a project
+    // opened later restores its named angles.
+    Cameras cameras = new Cameras();
+    try {
+      lx.registerExternal(Cameras.EXTERNAL_KEY, cameras);
+    } catch (IllegalStateException e) {
+      // Duplicate key. LX calls initializePlugins() exactly once per LX, so the reachable
+      // cause is this plugin class being registered twice against one instance — e.g. a
+      // stale copy of the jar in the packages directory alongside a classpath build.
+      // Degrade instead of rethrowing: an escaping exception here takes down the whole MCP
+      // server, which is a far worse failure than losing camera persistence. LX exposes no
+      // way to fetch the already-registered instance, so this one simply goes unregistered
+      // and its angles live only for the session.
+      Log.error(e, "Camera store not registered for project persistence — saved camera "
+          + "angles will not survive a restart. This usually means the Chromatik-MCP plugin "
+          + "is loaded twice (check for a stale jar in the packages directory).");
+    }
+
     // Constructed here (not inside EmbeddedMcpServer.start()) and passed in, so the
     // get_status supplier below can close over this tracker directly instead of over
     // `this.server` — a client could otherwise call get_status between tomcat.start()
@@ -73,7 +96,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
     // would leave the plugin looking healthy while the server is down.
     this.server = EmbeddedMcpServer.start(
         SERVER_NAME, BuildInfo.version(), config.port(), config.host(),
-        Tools.specifications(lx, engineExecutor, getStatus), Tools.INSTRUCTIONS,
+        Tools.specifications(lx, engineExecutor, getStatus, cameras), Tools.INSTRUCTIONS,
         connectionTracker, Map.of("/osc-params", new OscParamsServlet(lx, engineExecutor)));
     long startedAtMs = System.currentTimeMillis();
     this.status.initialize(config.host(), this.server.port(), startedAtMs, EmbeddedMcpServer.ENDPOINT);
@@ -82,6 +105,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
     // this earlier would let ChromatikMcpUiPlugin's null check pass and build a section over
     // an uninitialized ServerStatus ("http://null:0null", a grey dot that looks healthy).
     currentStatus = this.status;
+    currentCameras = cameras;
 
     writeStatusFile(false, null);
 
@@ -159,6 +183,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
     }
     this.loopTask = null;
     currentStatus = null;
+    currentCameras = null;
     if (this.server != null) {
       // Best-effort: leave the discovery file honest (connected=false) rather than
       // stale from the last-observed state. Must never throw out of dispose() over a
@@ -180,5 +205,10 @@ public class ChromatikMcpPlugin implements LXPlugin {
   /** {@code null} until {@link #initialize} has run; the UI plugin checks for this. */
   public static ServerStatus status() {
     return currentStatus;
+  }
+
+  /** The camera store the tools read and write; {@code null} on the same terms as {@link #status()}. */
+  public static Cameras cameras() {
+    return currentCameras;
   }
 }

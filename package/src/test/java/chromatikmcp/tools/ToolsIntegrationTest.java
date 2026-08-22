@@ -52,6 +52,7 @@ import io.modelcontextprotocol.spec.McpSchema;
 
 import chromatikmcp.ServerStatus;
 import chromatikmcp.StreamableHttpTestHarness;
+import chromatikmcp.domain.Cameras;
 import chromatikmcp.domain.Projects;
 import chromatikmcp.domain.Registry;
 import chromatikmcp.domain.Resolve;
@@ -124,7 +125,7 @@ class ToolsIntegrationTest {
         status, () -> connectionTracker.snapshot(System.currentTimeMillis()));
     engineExecutor = new EngineExecutor(lx);
     harness = StreamableHttpTestHarness.startMcp(
-        lx, Tools.specifications(lx, engineExecutor, getStatus), Tools.INSTRUCTIONS,
+        lx, Tools.specifications(lx, engineExecutor, getStatus, new Cameras()), Tools.INSTRUCTIONS,
         connectionTracker);
     status.initialize(
         "127.0.0.1", harness.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
@@ -156,7 +157,9 @@ class ToolsIntegrationTest {
             "list_parameters", "set_parameter", "undo", "redo", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "remove_modulator", "move_modulator", "list_modulations", "fire_trigger",
             "get_component_doc", "get_fixture_format",
-            "get_frame", "get_palette", "describe_model", "get_views", "add_view", "remove_view",
+            "get_frame", "get_camera", "set_camera", "save_camera", "list_cameras",
+            "recall_camera", "remove_camera",
+            "get_palette", "describe_model", "get_views", "add_view", "remove_view",
             "list_fixtures", "get_fixture", "get_output_map", "list_available_fixtures", "add_fixture",
             "remove_fixture", "move_fixture", "duplicate_fixture",
             "set_fixture_params", "set_fixture_tags", "reload_fixtures",
@@ -200,6 +203,7 @@ class ToolsIntegrationTest {
         "remove_automation_point", "remove_clip_range", "collapse_clip_range",
         "add_audio_lane", "add_notes_lane", "add_clip_note", "set_clip_note",
         "set_composition_arm",
+        "set_camera", "save_camera", "recall_camera", "remove_camera",
         "apply_operations");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());

@@ -93,12 +93,54 @@ Don't report success on the strength of an unchecked mutation. Loop:
 2. **Look.** `get_frame` returns a cheap numeric summary — non-black fraction, lit
    fraction, mean brightness, dominant colors, an NxN mean-color grid — on every call,
    and a token-expensive PNG only when you pass `include_image: true`. Use the summary
-   in a tight loop; reach for the PNG at checkpoints.
+   in a tight loop; reach for the PNG at checkpoints. Look from somewhere a viewer
+   would stand: `front`/`top`/`side` are outside elevations, and a piece meant to be
+   seen from inside cannot be judged from one (see "Framing the shot" below).
 3. **Adjust.** If the frame doesn't match intent, change the parameter and loop back to
    step 1 — against the actual render, not your mental model of what the change should
    have done.
 
 Only report done after the change has landed (echo/readback) *and* looks right (frame).
+
+## Framing the shot
+
+`get_frame` defaults to an orthographic `front` plane. Pass `camera` instead to render
+from an actual viewpoint — `current` for wherever the camera is now, or the name of a
+saved angle from `list_cameras`.
+
+`set_camera` aims it. It is LX's orbit rig: `target` is the look-at point, `radius` the
+distance out to the eye, `theta` the azimuth in degrees (0 looks from -Z toward +Z, the
+same viewpoint as the `front` plane) and `phi` the elevation (positive looks down,
+negative looks up). Up is always +Y. Or skip the angles and pass `eye` as an absolute
+position with a `target` to aim at — `get_camera` reports both spellings, so read it
+first and nudge from where the camera already is.
+
+```
+set_camera {eye: {x: 0, y: 0, z: 0}, target: {x: 0, y: 400, z: 0}, fovDegrees: 110}
+save_camera {name: "stage-looking-up"}
+get_frame {camera: "stage-looking-up", include_image: true}
+```
+
+Name the angle once you have it. Comparing two renders shot from different angles is
+worse than useless — it invites conclusions about the change that are really about the
+camera — so re-shoot from one saved name across tuning passes. Saved angles live in the
+project file (`save_project` to persist them) and give a PR shared vocabulary.
+
+When Chromatik's UI is running, this is the same 3D preview a person is watching, not a
+private copy: `recall_camera` puts you both on one viewpoint. `get_camera`'s
+`livePreview` says which case you are in. Values out of LX's range are clamped (`phi` to
+±89°, `fovDegrees` to 15-150) and `theta` wraps, so read the response rather than
+assuming your request landed verbatim. Camera moves are not undoable with Cmd-Z.
+
+**Don't guess "the center" from the whole model's bounding box.** `describe_model`'s
+top-level `center` averages every point, including anything off to one side — a
+secondary structure, a floating prop, a stray fixture group — and that pulls the average
+away from where a visitor would actually stand. Call `describe_model` at depth 1 or 2
+and look at the named children instead: the child whose bounds are square/symmetric in
+plan (`xRange` ≈ `zRange`, centered on round numbers) is usually the real chamber: its
+own `center.x`/`center.z` is the floor's true center, and floor-level fixtures (a low,
+flat `yRange` near the chamber's `yMin`) confirm the floor height and, if present, that
+their own center matches. Frame from *that* center, not the whole model's.
 
 ## The visibility chain
 

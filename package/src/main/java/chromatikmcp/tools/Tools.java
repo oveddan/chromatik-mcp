@@ -13,6 +13,7 @@ import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 
+import chromatikmcp.domain.Cameras;
 import chromatikmcp.domain.Resolve;
 import chromatikmcp.engine.EngineExecutor;
 
@@ -51,7 +52,18 @@ public final class Tools {
           + "'Default' inherits the view from the parent device/channel instead. describe_model reports "
           + "the model tree those view selectors match against, depth-limited (re-call with a "
           + "child's path or a higher depth to keep descending) — its pointIndexRange fields "
-          + "index the same global color buffer get_frame reports. list_fixtures/get_fixture "
+          + "index the same global color buffer get_frame reports. get_frame renders either "
+          + "a fixed orthographic plane (front/top/side) or an actual camera: set_camera "
+          + "aims one (LX's orbit rig — a look-at target, a radius out to the eye, azimuth "
+          + "theta and elevation phi in degrees, or an absolute eye position), save_camera "
+          + "names it, and get_frame {camera: <name>} shoots from it. That matters for a "
+          + "walk-in piece, which can only be judged from a viewpoint a visitor would "
+          + "occupy, and it makes successive renders comparable — same named angle, so the "
+          + "difference between two images is the pattern's, not the camera's. With "
+          + "Chromatik's UI running these move the 3D preview a person is watching, so a "
+          + "recalled angle puts the human and the agent on one viewpoint. Named angles "
+          + "persist in the project file; camera moves are not undoable with Cmd-Z. "
+          + "list_fixtures/get_fixture "
           + "report the physical wiring layer beneath that model tree — one entry per fixture, "
           + "with its output protocol (universe/channel/host) and geometry transform; "
           + "get_output_map is the diagnostic companion, reporting a declared/derived "
@@ -99,11 +111,11 @@ public final class Tools {
 
   /**
    * The plain tool instances, independent of any live {@link LX} or executor — every
-   * constructor argument here is either stateless or (for {@code getStatus}) supplied by
-   * the caller. Used both to build MCP specifications and to dump the tool catalog for the
-   * docs site (see {@code chromatikmcp.ToolCatalogDump}).
+   * constructor argument here is either stateless or (for {@code getStatus} and
+   * {@code cameras}) supplied by the caller. Used both to build MCP specifications and to
+   * dump the tool catalog for the docs site (see {@code chromatikmcp.ToolCatalogDump}).
    */
-  public static List<LxTool> allTools(GetStatus getStatus) {
+  public static List<LxTool> allTools(GetStatus getStatus, Cameras cameras) {
     List<LxTool> tools = new ArrayList<>(List.of(
             new GetProjectInfo(),
             new SaveProject(),
@@ -129,7 +141,13 @@ public final class Tools {
             new FireTrigger(),
             new GetComponentDoc(),
             new GetFixtureFormat(),
-            new GetFrame(),
+            new GetFrame(cameras),
+            new GetCamera(cameras),
+            new SetCamera(cameras),
+            new SaveCamera(cameras),
+            new ListCameras(cameras),
+            new RecallCamera(cameras),
+            new RemoveCamera(cameras),
             new GetPalette(),
             new DescribeModel(),
             new SaveSwatch(),
@@ -226,8 +244,8 @@ public final class Tools {
   }
 
   public static List<McpServerFeatures.SyncToolSpecification> specifications(
-      LX lx, EngineExecutor executor, GetStatus getStatus) {
-    return allTools(getStatus).stream()
+      LX lx, EngineExecutor executor, GetStatus getStatus, Cameras cameras) {
+    return allTools(getStatus, cameras).stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();
   }
