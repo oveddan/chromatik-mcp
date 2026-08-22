@@ -63,17 +63,29 @@ public class ChromatikMcpPlugin implements LXPlugin {
 
     this.lx = lx;
     this.status = new ServerStatus();
+    // Registered as a project external before anything can save or load one, so a project
+    // opened later restores its named angles.
+    Cameras cameras = new Cameras();
+    try {
+      lx.registerExternal(Cameras.EXTERNAL_KEY, cameras);
+    } catch (IllegalStateException e) {
+      // Duplicate key. LX calls initializePlugins() exactly once per LX, so the reachable
+      // cause is this plugin class being registered twice against one instance — e.g. a
+      // stale copy of the jar in the packages directory alongside a classpath build.
+      // Degrade instead of rethrowing: an escaping exception here takes down the whole MCP
+      // server, which is a far worse failure than losing camera persistence. LX exposes no
+      // way to fetch the already-registered instance, so this one simply goes unregistered
+      // and its angles live only for the session.
+      Log.error(e, "Camera store not registered for project persistence — saved camera "
+          + "angles will not survive a restart. This usually means the Chromatik-MCP plugin "
+          + "is loaded twice (check for a stale jar in the packages directory).");
+    }
+
     // Constructed here (not inside EmbeddedMcpServer.start()) and passed in, so the
     // get_status supplier below can close over this tracker directly instead of over
     // `this.server` — a client could otherwise call get_status between tomcat.start()
     // returning and `this.server` being assigned a few lines down, hitting a null
     // dereference (only possible with a fixed configured port racy enough to matter).
-    // Registered as a project external before anything can save or load one, so a project
-    // opened later restores its named angles. registerExternal throws on a duplicate key,
-    // which would mean this plugin initialized twice against one LX.
-    Cameras cameras = new Cameras();
-    lx.registerExternal(Cameras.EXTERNAL_KEY, cameras);
-
     ConnectionTracker connectionTracker = new ConnectionTracker();
     GetStatus getStatus = new GetStatus(
         this.status, () -> connectionTracker.snapshot(System.currentTimeMillis()));

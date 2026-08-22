@@ -128,4 +128,25 @@ class CameraProjectionTest {
         facingOrigin(100, Cameras.Projection.ORTHOGRAPHIC, 60), 1).referenceDepth(), EPSILON,
         "a parallel projection has no size falloff to scale against");
   }
+
+  /**
+   * The tools reject a zero radius, so this state only arrives from a hand-edited project
+   * file. It must render an empty frame, not NaN coordinates bucketed into cell 0 —
+   * reporting colors for a view that does not exist is worse than reporting nothing.
+   */
+  @Test
+  void aDegenerateCameraSeesNothingRatherThanReportingNaN() {
+    for (Cameras.Projection mode : Cameras.Projection.values()) {
+      CameraProjection projection =
+          CameraProjection.of(facingOrigin(0, mode, 60), 4.0 / 3.0);
+      double[] out = new double[3];
+      assertFalse(projection.project(0, 0, 0, out), mode + " at its own target");
+      assertFalse(projection.project(10, 20, 30, out), mode + " for any other point");
+
+      Frames.FrameSnapshot snapshot = new Frames.FrameSnapshot(
+          new int[1], new float[1], new float[1], new float[1],
+          new float[1], new float[1], new float[1], 1, 1f, 1f, 1f, "main");
+      assertEquals(-1, projection.cell(snapshot, 0, 3), mode + " buckets nothing");
+    }
+  }
 }

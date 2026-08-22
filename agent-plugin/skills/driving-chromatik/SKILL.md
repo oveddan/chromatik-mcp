@@ -132,6 +132,16 @@ private copy: `recall_camera` puts you both on one viewpoint. `get_camera`'s
 ±89°, `fovDegrees` to 15-150) and `theta` wraps, so read the response rather than
 assuming your request landed verbatim. Camera moves are not undoable with Cmd-Z.
 
+**Don't guess "the center" from the whole model's bounding box.** `describe_model`'s
+top-level `center` averages every point, including anything off to one side — a
+secondary structure, a floating prop, a stray fixture group — and that pulls the average
+away from where a visitor would actually stand. Call `describe_model` at depth 1 or 2
+and look at the named children instead: the child whose bounds are square/symmetric in
+plan (`xRange` ≈ `zRange`, centered on round numbers) is usually the real chamber: its
+own `center.x`/`center.z` is the floor's true center, and floor-level fixtures (a low,
+flat `yRange` near the chamber's `yMin`) confirm the floor height and, if present, that
+their own center matches. Frame from *that* center, not the whole model's.
+
 ## The visibility chain
 
 Pixels only reach fixtures when the whole chain is on: pattern contributing → channel

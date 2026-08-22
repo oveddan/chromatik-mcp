@@ -20,13 +20,14 @@ final class CameraArgs {
   static final String ORBIT_SUMMARY =
       "The camera orbits a look-at point: 'target' is that point, 'radius' the distance out "
           + "to the eye, 'theta' the azimuth in degrees (0 looks from -Z toward +Z, the same "
-          + "viewpoint as get_frame's 'front' plane; increasing theta swings right) and 'phi' "
-          + "the elevation in degrees (positive looks down from above, negative looks up from "
-          + "below). Up is always +Y. Give 'eye' instead to place the camera by absolute "
-          + "position — mutually exclusive with theta/phi/radius, and converted to the same "
-          + "orbit angle, which the response reports back. Values out of LX's range are "
-          + "clamped (phi to ±89°, fovDegrees to 15-150) and theta wraps, so read the "
-          + "response rather than assuming the request landed verbatim.";
+          + "viewpoint as get_frame's 'front' plane; increasing theta orbits the eye toward "
+          + "+X) and 'phi' the elevation in degrees (positive looks down from above, negative "
+          + "looks up from below). Up is always +Y. Give 'eye' instead to place the camera by "
+          + "absolute position — mutually exclusive with theta/phi/radius, and converted to "
+          + "the same orbit angle, which the response reports back. Values out of LX's range "
+          + "are clamped (phi to ±89°, fovDegrees to 15-150) and theta wraps, so read the "
+          + "response rather than assuming the request landed verbatim; a radius of 0 is "
+          + "rejected instead, since a camera at its own target has no view direction.";
 
   private CameraArgs() {}
 
@@ -40,8 +41,9 @@ final class CameraArgs {
             + "negative looks up at it. Clamped to LX's ±89 (the look-at degenerates at "
             + "the poles), so 'straight up' is phi -89."));
     properties.put("radius", Schemas.number(
-        "Distance from the eye to the target, in model units. Also sets the framing in "
-            + "orthographic projection, where the visible width is radius."));
+        "Distance from the eye to the target, in model units; must be greater than 0. Also "
+            + "sets the framing in orthographic projection, where the visible width is "
+            + "radius."));
     properties.put("target", vec3Schema(
         "The look-at point in model coordinates (LX's camera center)."));
     properties.put("eye", vec3Schema(
@@ -92,7 +94,9 @@ final class CameraArgs {
    * rest as they were.
    *
    * @throws Resolve.ResolveException TYPE_MISMATCH on a mistyped field, on mixing
-   *     {@code eye} with the orbit fields, or on an eye that sits on its own target
+   *     {@code eye} with the orbit fields, or on a camera that sits on its own target —
+   *     spelled either as a non-positive {@code radius} or as an {@code eye} equal to
+   *     {@code target}
    */
   static Cameras.CameraAngle merge(Map<String, Object> args, Cameras.CameraAngle base) {
     Cameras.Projection projection = base.projection();
@@ -105,10 +109,18 @@ final class CameraArgs {
 
     Map<String, Object> eye = Args.optionalMap(args, "eye");
     if (eye == null) {
+      double radius = optionalDouble(args, "radius", base.radius());
+      if (radius <= 0) {
+        // The orbit spelling of the state fromEye() rejects: at radius 0 the eye sits on
+        // its own target, naming no view direction, and nothing can be rendered from it.
+        // Rejected rather than clamped — there is no nearby value that means what was asked.
+        throw Resolve.invalidArgument(
+            "radius must be greater than 0: a camera at its own target has no view direction");
+      }
       return new Cameras.CameraAngle(
           optionalDouble(args, "theta", base.theta()),
           optionalDouble(args, "phi", base.phi()),
-          optionalDouble(args, "radius", base.radius()),
+          radius,
           target,
           projection,
           fov);

@@ -44,6 +44,8 @@ public final class CameraProjection implements Frames.GridProjection {
 
   private final boolean perspective;
   private final double radius;
+  /** Radius 0: near == far == 0 under perspective, a zero-width box under orthographic. */
+  private final boolean degenerate;
   /** Perspective: tan(fov/2), the half-height one unit ahead. Orthographic: the half-height. */
   private final double halfHeight;
   private final double aspect;
@@ -99,6 +101,11 @@ public final class CameraProjection implements Frames.GridProjection {
 
     this.perspective = angle.projection() == Cameras.Projection.PERSPECTIVE;
     this.radius = angle.radius();
+    // The tools reject a zero radius, so this is only reachable from a hand-edited project
+    // file. Treating every point as off-screen renders an honest empty frame; without the
+    // guard the orthographic path divides by a zero half-height and buckets the resulting
+    // NaN into cell 0, reporting colors for a view that does not exist.
+    this.degenerate = !(angle.radius() > 0);
     this.aspect = aspect;
     if (this.perspective) {
       this.halfHeight = Math.tan(Math.toRadians(angle.fovDegrees()) / 2);
@@ -120,9 +127,13 @@ public final class CameraProjection implements Frames.GridProjection {
    * what a painter's-algorithm raster sorts on.
    *
    * @return false when the point falls outside the near/far range (behind the camera, or
-   *     beyond its depth of field), in which case {@code out} is untouched
+   *     beyond its depth of field), or when the camera itself is degenerate (radius 0), in
+   *     which case {@code out} is untouched
    */
   public boolean project(double x, double y, double z, double[] out) {
+    if (this.degenerate) {
+      return false;
+    }
     double dx = x - this.eyeX;
     double dy = y - this.eyeY;
     double dz = z - this.eyeZ;

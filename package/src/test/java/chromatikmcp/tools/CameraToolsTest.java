@@ -295,4 +295,28 @@ class CameraToolsTest extends HeadlessLxTest {
     assertEquals(Result.INVALID_ARGUMENT, failure.code());
     assertTrue(failure.message().contains("reserved"), failure.message());
   }
+
+  /**
+   * A camera at its own target names no view direction: the perspective near/far planes
+   * both collapse to zero and the orthographic box has zero width. Rejected rather than
+   * accepted-then-rendered-blank.
+   */
+  @Test
+  void setCameraRejectsANonPositiveRadius() {
+    LX lx = newHeadlessLx();
+    for (Object radius : List.of(0, -5)) {
+      Result.Error<Map<String, Object>> failure = error(Tools.invoke(
+          new SetCamera(new Cameras()), lx, Map.of("radius", radius)));
+      assertEquals(Result.INVALID_ARGUMENT, failure.code(), "radius " + radius);
+      assertTrue(failure.message().contains("radius must be greater than 0"),
+          failure.message());
+    }
+  }
+
+  @Test
+  void saveCameraRejectsANonPositiveRadiusToo() {
+    LX lx = newHeadlessLx();
+    assertEquals(Result.INVALID_ARGUMENT, error(Tools.invoke(
+        new SaveCamera(new Cameras()), lx, Map.of("name", "flat", "radius", 0))).code());
+  }
 }
