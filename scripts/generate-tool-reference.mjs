@@ -63,6 +63,15 @@ history.`,
     ],
   },
   {
+    key: 'point-style',
+    title: 'Live preview point style',
+    intro: `These settings belong to Chromatik's live GLX preview and have no canonical
+\`/lx/...\` path. They persist with that preview's project state, but are unavailable in a
+headless LX runtime. \`get_frame\` uses a separate filled-disc raster and does not reproduce
+sparkle, LED textures, or the other preview-only controls.`,
+    tools: ['get_point_style', 'set_point_style'],
+  },
+  {
     key: 'project',
     title: 'Save the project & model',
     intro: `Everything built over this API lives only in the running engine until \`save_project\`

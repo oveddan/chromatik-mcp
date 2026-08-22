@@ -164,6 +164,38 @@ own `center.x`/`center.z` is the floor's true center, and floor-level fixtures (
 flat `yRange` near the chamber's `yMin`) confirm the floor height and, if present, that
 their own center matches. Frame from *that* center, not the whole model's.
 
+### Taming preview sparkle
+
+A close, wide-FOV interior view can make every LED read as a strong star or diffraction
+artifact. That is not the pattern: Chromatik's live 3D preview renders each LED as a
+screen-facing quad and additively blends a sparkle sprite over it. Read the current point
+style before deciding what to change:
+
+```
+get_point_style {}
+```
+
+Set `sparkleAmount` to `0`, or select the plain `CIRCLE` LED style, to remove the
+artifact:
+
+```
+set_point_style {setting: "sparkleAmount", value: 0}
+set_point_style {setting: "ledStyle", value: "CIRCLE"}
+```
+
+`set_point_style` changes one setting at a time. Its numeric, boolean, and discrete
+values follow `set_parameter`'s coercion rules; an enum accepts either its option name or
+its integer index.
+
+**These settings affect only the live preview a person is watching. They do not change
+`get_frame`.** `get_frame` uses an independent filled-disc rasterizer with no sparkle or
+LED style, so changing point style and then calling `get_frame` will not show the change.
+
+These settings belong to the preview's `UIPointCloud`, which has no canonical `/lx/...`
+path, so they use dedicated tools rather than `get_parameter` and `set_parameter`. If
+`get_camera` reports `livePreview: false`, there is no UI preview; in that headless case
+both point-style tools return an error instead of inventing state.
+
 ## The visibility chain
 
 Pixels only reach fixtures when the whole chain is on: pattern contributing → channel

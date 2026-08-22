@@ -8,6 +8,7 @@ import chromatikmcp.Log;
 import chromatikmcp.ChromatikMcpPlugin;
 import chromatikmcp.ServerStatus;
 import chromatikmcp.domain.Cameras;
+import chromatikmcp.domain.PointStyle;
 
 /**
  * Chromatik-only companion to {@link ChromatikMcpPlugin}: adds a left-pane status section.
@@ -37,6 +38,7 @@ public class ChromatikMcpUiPlugin implements LXStudio.Plugin {
 
   // Held so dispose() can unbind it; null whenever nothing is bound.
   private Cameras boundCameras;
+  private PointStyle boundPointStyle;
 
   @Override
   public void initialize(LX lx) {}
@@ -61,10 +63,19 @@ public class ChromatikMcpUiPlugin implements LXStudio.Plugin {
       cameras.bindPreview(new PreviewCameraBinding(ui.preview));
       this.boundCameras = cameras;
     }
+    PointStyle pointStyle = ChromatikMcpPlugin.pointStyle();
+    if (pointStyle != null) {
+      pointStyle.bindPreview(new PreviewPointStyleBinding(ui.preview));
+      this.boundPointStyle = pointStyle;
+    }
   }
 
   @Override
   public void dispose() {
+    if (this.boundPointStyle != null) {
+      this.boundPointStyle.unbindPreview();
+      this.boundPointStyle = null;
+    }
     // First, so nothing can reach a UI3dContext that is on its way out — the camera store
     // outlives this plugin and would otherwise keep driving a disposed preview.
     if (this.boundCameras != null) {

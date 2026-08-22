@@ -1,6 +1,7 @@
 package chromatikmcp.tools;
 
 import chromatikmcp.domain.Cameras;
+import chromatikmcp.domain.PointStyle;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,7 +62,9 @@ class SaveModelIntegrationTest {
     GetStatus getStatus = new GetStatus(
         status, () -> connectionTracker.snapshot(System.currentTimeMillis()));
     harness = StreamableHttpTestHarness.startMcp(
-        lx, Tools.specifications(lx, new EngineExecutor(lx), getStatus, new Cameras()), Tools.INSTRUCTIONS,
+        lx, Tools.specifications(
+            lx, new EngineExecutor(lx), getStatus, new Cameras(), new PointStyle()),
+        Tools.INSTRUCTIONS,
         connectionTracker);
     status.initialize(
         "127.0.0.1", harness.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);

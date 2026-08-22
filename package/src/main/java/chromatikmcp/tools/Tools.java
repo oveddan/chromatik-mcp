@@ -14,6 +14,7 @@ import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 
 import chromatikmcp.domain.Cameras;
+import chromatikmcp.domain.PointStyle;
 import chromatikmcp.domain.Resolve;
 import chromatikmcp.engine.EngineExecutor;
 
@@ -111,11 +112,12 @@ public final class Tools {
 
   /**
    * The plain tool instances, independent of any live {@link LX} or executor — every
-   * constructor argument here is either stateless or (for {@code getStatus} and
-   * {@code cameras}) supplied by the caller. Used both to build MCP specifications and to
-   * dump the tool catalog for the docs site (see {@code chromatikmcp.ToolCatalogDump}).
+   * constructor argument here is either stateless or (for {@code getStatus}, {@code cameras},
+   * and {@code pointStyle}) supplied by the caller. Used both to build MCP specifications
+   * and to dump the tool catalog for the docs site (see {@code chromatikmcp.ToolCatalogDump}).
    */
-  public static List<LxTool> allTools(GetStatus getStatus, Cameras cameras) {
+  public static List<LxTool> allTools(
+      GetStatus getStatus, Cameras cameras, PointStyle pointStyle) {
     List<LxTool> tools = new ArrayList<>(List.of(
             new GetProjectInfo(),
             new SaveProject(),
@@ -142,6 +144,8 @@ public final class Tools {
             new GetComponentDoc(),
             new GetFixtureFormat(),
             new GetFrame(cameras),
+            new GetPointStyle(pointStyle),
+            new SetPointStyle(pointStyle),
             new GetCamera(cameras),
             new SetCamera(cameras),
             new AnimateCamera(cameras),
@@ -249,8 +253,9 @@ public final class Tools {
   }
 
   public static List<McpServerFeatures.SyncToolSpecification> specifications(
-      LX lx, EngineExecutor executor, GetStatus getStatus, Cameras cameras) {
-    return allTools(getStatus, cameras).stream()
+      LX lx, EngineExecutor executor, GetStatus getStatus, Cameras cameras,
+      PointStyle pointStyle) {
+    return allTools(getStatus, cameras, pointStyle).stream()
         .map(tool -> specification(tool, lx, executor))
         .toList();
   }

@@ -65,7 +65,10 @@ public final class GetFrame implements LxTool {
         + "the fractions and dominant colors describe the whole buffer, so a point the "
         + "camera cannot see still counts toward them. If animate_camera is moving the "
         + "current camera, a current-camera render shoots its interpolated position now "
-        + "and reports camera.midMove=true; it does not stall or wait for arrival.";
+        + "and reports camera.midMove=true; it does not stall or wait for arrival. The PNG "
+        + "is an independent filled-disc projection, not Chromatik's GLX preview, so it does "
+        + "not reflect get_point_style/set_point_style settings such as sparkle or LED "
+        + "style.";
   }
 
   @Override

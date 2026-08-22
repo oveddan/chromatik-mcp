@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import chromatikmcp.domain.Cameras;
+import chromatikmcp.domain.PointStyle;
 import chromatikmcp.tools.GetStatus;
 import chromatikmcp.tools.LxTool;
 import chromatikmcp.tools.Tools;
@@ -30,7 +31,7 @@ final class ToolCatalogJson {
 
   static String catalogJson() {
     GetStatus getStatus = new GetStatus(new ServerStatus(), () -> new ConnectionSnapshot(0, 0, false));
-    List<LxTool> tools = Tools.allTools(getStatus, new Cameras()).stream()
+    List<LxTool> tools = Tools.allTools(getStatus, new Cameras(), new PointStyle()).stream()
         .sorted(Comparator.comparing(LxTool::name))
         .toList();
 

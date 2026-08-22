@@ -1,6 +1,7 @@
 package chromatikmcp.tools;
 
 import chromatikmcp.domain.Cameras;
+import chromatikmcp.domain.PointStyle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,7 +40,9 @@ class CommandHistoryToolsTest {
     GetStatus getStatus = new GetStatus(new ServerStatus(),
         () -> connectionTracker.snapshot(System.currentTimeMillis()));
     harness = StreamableHttpTestHarness.startMcp(
-        lx, Tools.specifications(lx, new EngineExecutor(lx), getStatus, new Cameras()), Tools.INSTRUCTIONS,
+        lx, Tools.specifications(
+            lx, new EngineExecutor(lx), getStatus, new Cameras(), new PointStyle()),
+        Tools.INSTRUCTIONS,
         connectionTracker);
   }
 

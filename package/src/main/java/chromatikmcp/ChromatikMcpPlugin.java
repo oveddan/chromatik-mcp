@@ -11,6 +11,7 @@ import heronarts.lx.LXPlugin;
 import heronarts.lx.LXRegistry;
 
 import chromatikmcp.domain.Cameras;
+import chromatikmcp.domain.PointStyle;
 import chromatikmcp.engine.EngineExecutor;
 import chromatikmcp.mcp.BuildInfo;
 import chromatikmcp.mcp.ConfigFile;
@@ -42,6 +43,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
   // Published on the same terms as currentStatus above, and for the same consumer: the UI
   // companion binds Chromatik's 3D preview to this instance in onUIReady().
   private static volatile Cameras currentCameras;
+  private static volatile PointStyle currentPointStyle;
 
   private LX lx;
   private ServerStatus status;
@@ -66,6 +68,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
     // Registered as a project external before anything can save or load one, so a project
     // opened later restores its named angles.
     Cameras cameras = new Cameras();
+    PointStyle pointStyle = new PointStyle();
     try {
       lx.registerExternal(Cameras.EXTERNAL_KEY, cameras);
     } catch (IllegalStateException e) {
@@ -96,7 +99,8 @@ public class ChromatikMcpPlugin implements LXPlugin {
     // would leave the plugin looking healthy while the server is down.
     this.server = EmbeddedMcpServer.start(
         SERVER_NAME, BuildInfo.version(), config.port(), config.host(),
-        Tools.specifications(lx, engineExecutor, getStatus, cameras), Tools.INSTRUCTIONS,
+        Tools.specifications(lx, engineExecutor, getStatus, cameras, pointStyle),
+        Tools.INSTRUCTIONS,
         connectionTracker, Map.of("/osc-params", new OscParamsServlet(lx, engineExecutor)));
     long startedAtMs = System.currentTimeMillis();
     this.status.initialize(config.host(), this.server.port(), startedAtMs, EmbeddedMcpServer.ENDPOINT);
@@ -106,6 +110,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
     // an uninitialized ServerStatus ("http://null:0null", a grey dot that looks healthy).
     currentStatus = this.status;
     currentCameras = cameras;
+    currentPointStyle = pointStyle;
 
     writeStatusFile(false, null);
 
@@ -184,6 +189,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
     this.loopTask = null;
     currentStatus = null;
     currentCameras = null;
+    currentPointStyle = null;
     if (this.server != null) {
       // Best-effort: leave the discovery file honest (connected=false) rather than
       // stale from the last-observed state. Must never throw out of dispose() over a
@@ -210,5 +216,10 @@ public class ChromatikMcpPlugin implements LXPlugin {
   /** The camera store the tools read and write; {@code null} on the same terms as {@link #status()}. */
   public static Cameras cameras() {
     return currentCameras;
+  }
+
+  /** The live-preview point-style bridge; null on the same terms as {@link #status()}. */
+  public static PointStyle pointStyle() {
+    return currentPointStyle;
   }
 }

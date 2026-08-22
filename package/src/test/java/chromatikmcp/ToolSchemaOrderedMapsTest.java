@@ -11,6 +11,7 @@ import java.util.SortedMap;
 import org.junit.jupiter.api.Test;
 
 import chromatikmcp.domain.Cameras;
+import chromatikmcp.domain.PointStyle;
 import chromatikmcp.tools.GetStatus;
 import chromatikmcp.tools.LxTool;
 import chromatikmcp.tools.Tools;
@@ -26,7 +27,7 @@ class ToolSchemaOrderedMapsTest {
   @Test
   void allToolSchemasUseOrderedMaps() {
     GetStatus getStatus = new GetStatus(new ServerStatus(), () -> new ConnectionSnapshot(0, 0, false));
-    for (LxTool tool : Tools.allTools(getStatus, new Cameras())) {
+    for (LxTool tool : Tools.allTools(getStatus, new Cameras(), new PointStyle())) {
       Map<String, Object> schema = tool.inputSchema();
       assertSchemaUsesOrderedMaps(schema, "tool '" + tool.name() + "'");
     }
