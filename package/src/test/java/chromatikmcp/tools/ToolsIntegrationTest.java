@@ -220,6 +220,7 @@ class ToolsIntegrationTest {
             "remove_automation_point", "remove_clip_range", "collapse_clip_range",
             "add_audio_lane", "add_notes_lane", "add_clip_note", "set_clip_note",
             "set_composition_arm",
+            "list_stages", "add_stage", "remove_stage", "set_stage",
             "apply_operations"),
         names);
     Set<String> mutators = Set.of("save_project", "save_model", "set_parameter", "undo", "redo", "add_modulator", "wire_modulator",
@@ -244,6 +245,7 @@ class ToolsIntegrationTest {
         "set_composition_arm",
         "set_camera", "animate_camera", "save_camera", "recall_camera", "remove_camera",
         "set_point_style",
+        "add_stage", "remove_stage", "set_stage",
         "apply_operations");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());

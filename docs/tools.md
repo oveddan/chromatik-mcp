@@ -103,6 +103,10 @@ handling, verifying your own work — are in
 | [`wire_trigger`](#wire_trigger) | write | Wire a trigger modulation: when the boolean source fires (e.g. a MacroTriggers macro1), the boolean target is pulsed. Both ends must be boolean… |
 | [`remove_modulation`](#remove_modulation) | write | Remove a modulation (continuous or trigger) by the canonical path returned when it was wired (e.g. /lx/modulation/modulation/1). Remaining… |
 | [`fire_trigger`](#fire_trigger) | write | Fire a momentary trigger by its canonical path — a TriggerParameter, or a momentary boolean like a MacroTriggers macro (the pulse's rising edge fires… |
+| [`list_stages`](#list_stages) | read | Every stage on a MultiStageEnvelope modulator (basis/value/shape point), in basis order: 0-based index, basis, value, per-segment shape (exponent… |
+| [`add_stage`](#add_stage) | write | Insert an interior stage on a MultiStageEnvelope modulator. basis (rejected unless strictly between 0 and 1, and unless it differs from every… |
+| [`remove_stage`](#remove_stage) | write | Remove an interior stage from a MultiStageEnvelope modulator, addressed by {path, index} (index from list_stages). Only interior stages may be… |
+| [`set_stage`](#set_stage) | write | Edit one existing stage on a MultiStageEnvelope modulator, addressed by {path, index} (index from list_stages). Applies any combination of basis (new… |
 
 **Palette & snapshots**
 
@@ -794,6 +798,54 @@ Fire a momentary trigger by its canonical path — a TriggerParameter, or a mome
 | param | type | required | constraints | description |
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical LX path of the trigger parameter |
+
+### `list_stages`
+
+_read-only_
+
+Every stage on a MultiStageEnvelope modulator (basis/value/shape point), in basis order: 0-based index, basis, value, per-segment shape (exponent applied to the segment arriving at this stage; 1 is linear), initial/last (true for the fixed first/last stage, at basis 0/1 — never removable, basis never moves). Stages are NOT LXComponents and have no canonical path — they don't appear in list_parameters and are addressed positionally as {path, index} to add_stage/remove_stage/set_stage. Indices are POSITIONAL: they shift whenever a stage is added or removed — re-list rather than reuse an index from an earlier response.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the MultiStageEnvelope modulator |
+
+### `add_stage`
+
+_mutating_
+
+Insert an interior stage on a MultiStageEnvelope modulator. basis (rejected unless strictly between 0 and 1, and unless it differs from every existing stage's basis — landing on the fixed first/last stage's position, or on another interior stage's, would shadow it during interpolation instead of creating a distinct point) and value (rejected outside [0,1], the class's normalized output range) place the new point; the stage is inserted in basis order — its resulting index depends on where it lands among the existing stages, read it back from the response rather than assuming it was appended. shape (default 1, linear; rejected if negative — Math.pow(relativeBasis, shape) grows unbounded, and can hit Infinity, as relativeBasis approaches 0 near a segment's start; 0 is valid and produces an instant step to this stage's value) is the exponent applied to the segment's relative basis (value = lerp(prevValue, value, relativeBasis^shape)) — it does not map to convex/concave in a fixed way, since that also depends on whether the segment rises or falls; a shape below 1 front-loads the value's approach to this stage's value, above 1 back-loads it. Returns the created stage plus the envelope's resulting stageCount. Stage indices are POSITIONAL: every later stage shifts when one is added or removed — re-run list_stages rather than reuse an index from an earlier response. MultiStageEnvelope has no LXCommand for stage mutation, so this is a direct engine edit (marks the project dirty itself, since stages are saved into it). Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the MultiStageEnvelope modulator |
+| `basis` | number | yes | — | Position along the envelope, strictly between 0 and 1 exclusive, and distinct from every existing stage's basis (rejected otherwise — a coinciding basis would shadow that stage) |
+| `value` | number | yes | — | Envelope output value at this stage, normalized [0,1] (rejected outside that range) |
+| `shape` | number | no | — | Exponent applied to relativeBasis^shape for the segment arriving at this stage (default 1, linear; rejected if negative — can drive the output to Infinity near the segment's start; 0 is a valid instant step; below 1 front-loads the approach to this stage's value, above 1 back-loads it) |
+
+### `remove_stage`
+
+_mutating_
+
+Remove an interior stage from a MultiStageEnvelope modulator, addressed by {path, index} (index from list_stages). Only interior stages may be removed — the fixed first/last stage (basis 0/1, initial:true/last:true) is rejected with invalid_argument before anything changes. Returns the removed stage (same shape as list_stages) plus the envelope's resulting stages read back from the engine. Stage indices are POSITIONAL: every later stage shifts down after a removal — use the returned stages array or re-run list_stages rather than reuse an index from an earlier response. MultiStageEnvelope has no LXCommand for stage mutation, so this is a direct engine edit (marks the project dirty itself, since stages are saved into it). Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the MultiStageEnvelope modulator |
+| `index` | integer | yes | 0–2147483647 | 0-based index of the stage in the envelope's stage list (from list_stages) |
+
+### `set_stage`
+
+_mutating_
+
+Edit one existing stage on a MultiStageEnvelope modulator, addressed by {path, index} (index from list_stages). Applies any combination of basis (new position), value (in [0,1] normalized space — rejected outside that range, matching the class's normalized output), and shape (curve exponent of the segment arriving at this stage; rejected if negative — Math.pow(relativeBasis, shape) grows unbounded, and can hit Infinity, as relativeBasis approaches 0 near a segment's start; 0 is valid and produces an instant step; also rejected on the fixed initial stage, index 0 — it has no preceding segment, so its shape field is never read); at least one is required. On an interior stage, basis is rejected unless it lands strictly between its neighboring stages' basis values — a stage can never reach or cross a neighbor, since landing exactly on one would shadow it during interpolation (remove and re-add it to jump past one). On the fixed first/last stage (initial:true/last:true), basis never moves — value still applies. The payload echoes the stage read back from the engine (resulting basis/value/shape), never the request. Stage indices are POSITIONAL: they shift whenever a stage is added or removed — re-run list_stages rather than reuse an index from an earlier response. MultiStageEnvelope has no LXCommand for stage mutation, so this is a direct engine edit (marks the project dirty itself, since stages are saved into it). Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the MultiStageEnvelope modulator |
+| `index` | integer | yes | 0–2147483647 | 0-based index of the stage in the envelope's stage list (from list_stages) |
+| `basis` | number | no | — | New position: on an interior stage, rejected unless strictly between its neighboring stages' basis values (landing on a neighbor would shadow it); ignored on the fixed first/last stage |
+| `value` | number | no | — | New envelope output value at this stage, normalized [0,1] (rejected outside that range) |
+| `shape` | number | no | — | New exponent applied to relativeBasis^shape for the segment arriving at this stage (1 is linear; rejected if negative — can drive the output to Infinity near the segment's start; 0 is a valid instant step; below 1 front-loads the approach to this stage's value, above 1 back-loads it; rejected on the fixed initial stage, index 0, which has no preceding segment) |
 
 ## Palette & snapshots
 

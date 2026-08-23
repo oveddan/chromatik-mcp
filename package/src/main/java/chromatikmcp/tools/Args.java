@@ -85,6 +85,19 @@ final class Args {
     return number.doubleValue();
   }
 
+  /**
+   * Required bounded number: same rejection rationale as {@link
+   * #optionalBoundedNumber(Map, String, double, double)}, but the argument itself is
+   * mandatory.
+   */
+  static double requireBoundedDouble(Map<String, Object> args, String name, double min, double max) {
+    double value = requireDouble(args, name);
+    if (value < min || value > max) {
+      throw Resolve.invalidArgument(name + " must be within [" + min + ", " + max + "]: " + value);
+    }
+    return value;
+  }
+
   /** Required boolean argument. */
   static boolean requireBoolean(Map<String, Object> args, String name) {
     if (!(args.get(name) instanceof Boolean value)) {
@@ -124,6 +137,18 @@ final class Args {
       throw Resolve.invalidArgument(name + " must be within [" + min + ", " + max + "]: " + d);
     }
     return d;
+  }
+
+  /** Optional finite number argument, unbounded: {@code null} if absent. */
+  static Double optionalDouble(Map<String, Object> args, String name) {
+    Object value = args.get(name);
+    if (value == null) {
+      return null;
+    }
+    if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())) {
+      throw Resolve.invalidArgument("Optional finite number argument: " + name);
+    }
+    return number.doubleValue();
   }
 
   /** Optional string argument: {@code null} if absent, else must be a string. */

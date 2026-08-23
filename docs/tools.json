@@ -547,6 +547,33 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "add_stage",
+  "description" : "Insert an interior stage on a MultiStageEnvelope modulator. basis (rejected unless strictly between 0 and 1, and unless it differs from every existing stage's basis — landing on the fixed first/last stage's position, or on another interior stage's, would shadow it during interpolation instead of creating a distinct point) and value (rejected outside [0,1], the class's normalized output range) place the new point; the stage is inserted in basis order — its resulting index depends on where it lands among the existing stages, read it back from the response rather than assuming it was appended. shape (default 1, linear; rejected if negative — Math.pow(relativeBasis, shape) grows unbounded, and can hit Infinity, as relativeBasis approaches 0 near a segment's start; 0 is valid and produces an instant step to this stage's value) is the exponent applied to the segment's relative basis (value = lerp(prevValue, value, relativeBasis^shape)) — it does not map to convex/concave in a fixed way, since that also depends on whether the segment rises or falls; a shape below 1 front-loads the value's approach to this stage's value, above 1 back-loads it. Returns the created stage plus the envelope's resulting stageCount. Stage indices are POSITIONAL: every later stage shifts when one is added or removed — re-run list_stages rather than reuse an index from an earlier response. MultiStageEnvelope has no LXCommand for stage mutation, so this is a direct engine edit (marks the project dirty itself, since stages are saved into it). Not undoable with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "path" : {
+        "type" : "string",
+        "description" : "Canonical path of the MultiStageEnvelope modulator"
+      },
+      "basis" : {
+        "type" : "number",
+        "description" : "Position along the envelope, strictly between 0 and 1 exclusive, and distinct from every existing stage's basis (rejected otherwise — a coinciding basis would shadow that stage)"
+      },
+      "value" : {
+        "type" : "number",
+        "description" : "Envelope output value at this stage, normalized [0,1] (rejected outside that range)"
+      },
+      "shape" : {
+        "type" : "number",
+        "description" : "Exponent applied to relativeBasis^shape for the segment arriving at this stage (default 1, linear; rejected if negative — can drive the output to Infinity near the segment's start; 0 is a valid instant step; below 1 front-loads the approach to this stage's value, above 1 back-loads it)"
+      }
+    },
+    "required" : [ "path", "basis", "value" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "add_view",
   "description" : "Compose a new named model subset ('view', at /lx/structure/views/view/<n>), matched by a tag selector — see get_views for the selector grammar and the modelTags vocabulary this project's fixtures expose. 'numFixtures'/'numGroups' in the response are immediate match feedback: 0 fixtures is legal (an empty view) but usually means a selector typo — cross-check against get_views' modelTags. Map a device to the new view by setting its 'view' parameter (set_parameter) to the view's label.",
   "readOnly" : false,
@@ -1550,6 +1577,21 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "list_stages",
+  "description" : "Every stage on a MultiStageEnvelope modulator (basis/value/shape point), in basis order: 0-based index, basis, value, per-segment shape (exponent applied to the segment arriving at this stage; 1 is linear), initial/last (true for the fixed first/last stage, at basis 0/1 — never removable, basis never moves). Stages are NOT LXComponents and have no canonical path — they don't appear in list_parameters and are addressed positionally as {path, index} to add_stage/remove_stage/set_stage. Indices are POSITIONAL: they shift whenever a stage is added or removed — re-list rather than reuse an index from an earlier response.",
+  "readOnly" : true,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "path" : {
+        "type" : "string",
+        "description" : "Canonical path of the MultiStageEnvelope modulator"
+      }
+    },
+    "required" : [ "path" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "move_channel",
   "description" : "Move a channel or group to a 0-based destination index in the mixer's flat channel list. The index is interpreted after removing the moved channel or entire group block: moving index 0 to index 2 in [A, B, C] produces [B, C, A]. Groups move together with all their members. This tool preserves membership: a grouped channel must stay within its group, and a top-level channel cannot be inserted into a group. Moving shifts 1-based paths for the moved block, crossed siblings, their effects/patterns, bus-level modulation, grid clips and lanes, and corresponding arrange-timeline lanes — re-list rather than reusing cached paths. The response's oscChanges array reports every changed canonical path (componentId, before, after). Returns invalid_argument for an out-of-range index or a destination that would change group membership. Undoable in Chromatik with Cmd-Z; an undo inverts every path in oscChanges with no separate signal.",
   "readOnly" : false,
@@ -2208,6 +2250,27 @@
       }
     },
     "required" : [ "path" ],
+    "additionalProperties" : false
+  }
+}, {
+  "name" : "remove_stage",
+  "description" : "Remove an interior stage from a MultiStageEnvelope modulator, addressed by {path, index} (index from list_stages). Only interior stages may be removed — the fixed first/last stage (basis 0/1, initial:true/last:true) is rejected with invalid_argument before anything changes. Returns the removed stage (same shape as list_stages) plus the envelope's resulting stages read back from the engine. Stage indices are POSITIONAL: every later stage shifts down after a removal — use the returned stages array or re-run list_stages rather than reuse an index from an earlier response. MultiStageEnvelope has no LXCommand for stage mutation, so this is a direct engine edit (marks the project dirty itself, since stages are saved into it). Not undoable with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "path" : {
+        "type" : "string",
+        "description" : "Canonical path of the MultiStageEnvelope modulator"
+      },
+      "index" : {
+        "type" : "integer",
+        "description" : "0-based index of the stage in the envelope's stage list (from list_stages)",
+        "minimum" : 0,
+        "maximum" : 2147483647
+      }
+    },
+    "required" : [ "path", "index" ],
     "additionalProperties" : false
   }
 }, {
@@ -2996,6 +3059,39 @@
       }
     },
     "required" : [ "setting", "value" ],
+    "additionalProperties" : false
+  }
+}, {
+  "name" : "set_stage",
+  "description" : "Edit one existing stage on a MultiStageEnvelope modulator, addressed by {path, index} (index from list_stages). Applies any combination of basis (new position), value (in [0,1] normalized space — rejected outside that range, matching the class's normalized output), and shape (curve exponent of the segment arriving at this stage; rejected if negative — Math.pow(relativeBasis, shape) grows unbounded, and can hit Infinity, as relativeBasis approaches 0 near a segment's start; 0 is valid and produces an instant step; also rejected on the fixed initial stage, index 0 — it has no preceding segment, so its shape field is never read); at least one is required. On an interior stage, basis is rejected unless it lands strictly between its neighboring stages' basis values — a stage can never reach or cross a neighbor, since landing exactly on one would shadow it during interpolation (remove and re-add it to jump past one). On the fixed first/last stage (initial:true/last:true), basis never moves — value still applies. The payload echoes the stage read back from the engine (resulting basis/value/shape), never the request. Stage indices are POSITIONAL: they shift whenever a stage is added or removed — re-run list_stages rather than reuse an index from an earlier response. MultiStageEnvelope has no LXCommand for stage mutation, so this is a direct engine edit (marks the project dirty itself, since stages are saved into it). Not undoable with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "path" : {
+        "type" : "string",
+        "description" : "Canonical path of the MultiStageEnvelope modulator"
+      },
+      "index" : {
+        "type" : "integer",
+        "description" : "0-based index of the stage in the envelope's stage list (from list_stages)",
+        "minimum" : 0,
+        "maximum" : 2147483647
+      },
+      "basis" : {
+        "type" : "number",
+        "description" : "New position: on an interior stage, rejected unless strictly between its neighboring stages' basis values (landing on a neighbor would shadow it); ignored on the fixed first/last stage"
+      },
+      "value" : {
+        "type" : "number",
+        "description" : "New envelope output value at this stage, normalized [0,1] (rejected outside that range)"
+      },
+      "shape" : {
+        "type" : "number",
+        "description" : "New exponent applied to relativeBasis^shape for the segment arriving at this stage (1 is linear; rejected if negative — can drive the output to Infinity near the segment's start; 0 is a valid instant step; below 1 front-loads the approach to this stage's value, above 1 back-loads it; rejected on the fixed initial stage, index 0, which has no preceding segment)"
+      }
+    },
+    "required" : [ "path", "index" ],
     "additionalProperties" : false
   }
 }, {
