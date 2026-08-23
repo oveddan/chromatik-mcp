@@ -195,8 +195,8 @@ positional and shift under edits: re-list rather than reuse them. Clip behavior
 parameters (\`timeBase\`, \`loop\`, \`referenceBpm\`, \`/lx/timeline/sync\`) are ordinary
 registered parameters for \`set_parameter\`; marker positions are not.`,
     tools: [
-      'get_composition', 'get_clip', 'list_clip_lanes', 'launch_clip', 'stop_clip',
-      'set_clip_marker', 'list_locators', 'add_locator', 'remove_locator', 'move_locator',
+      'get_composition', 'get_clip', 'list_clip_lanes', 'add_clip', 'remove_clip',
+      'capture_clip', 'launch_clip', 'stop_clip', 'launch_scene', 'set_clip_marker', 'list_locators', 'add_locator', 'remove_locator', 'move_locator',
       'go_locator', 'add_clip_lane', 'remove_clip_lane', 'move_clip_lane',
       'set_clip_lane_visible', 'add_audio_lane', 'add_notes_lane', 'set_composition_arm',
     ],

@@ -95,8 +95,8 @@ class PayloadsTest extends CompositionTestSupport {
       assertEquals(CURSOR_KEYS, keys(castMap(envelope.get(marker))), marker + " is a cursor object");
     }
 
-    // get_clip is the envelope plus exactly one key; get_composition adds exactly four.
-    assertEquals(concat(ENVELOPE_KEYS, "pending"),
+    // get_clip is the envelope plus exactly three keys; get_composition adds exactly four.
+    assertEquals(concat(ENVELOPE_KEYS, "pending", "snapshotEnabled", "snapshotViewCount"),
         keys(Payloads.clip(Clips.describe(composition))));
     assertEquals(concat(ENVELOPE_KEYS, "armed", "sync", "locatorCount", "lanes"),
         keys(Payloads.composition(Compositions.describe(lx))));

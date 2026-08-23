@@ -175,7 +175,8 @@ class ToolsIntegrationTest {
             "list_snapshots", "add_snapshot", "recall_snapshot",
             "update_snapshot", "remove_snapshot",
             "get_composition", "list_clip_lanes",
-            "get_clip", "launch_clip", "stop_clip", "set_clip_marker",
+            "get_clip", "add_clip", "remove_clip", "capture_clip",
+            "launch_clip", "stop_clip", "launch_scene", "set_clip_marker",
             "list_locators", "add_locator", "remove_locator", "move_locator", "go_locator",
             "add_clip_lane", "remove_clip_lane", "move_clip_lane", "set_clip_lane_visible",
             "get_clip_lane", "add_automation_point", "set_automation_point",
@@ -196,7 +197,8 @@ class ToolsIntegrationTest {
         "add_snapshot", "recall_snapshot", "update_snapshot", "remove_snapshot",
         "add_midi_mapping", "remove_midi_mapping", "set_midi_input", "set_midi_surface_enabled",
         "add_midi_template",
-        "launch_clip", "stop_clip", "set_clip_marker",
+        "add_clip", "remove_clip", "capture_clip",
+        "launch_clip", "stop_clip", "launch_scene", "set_clip_marker",
         "add_locator", "remove_locator", "move_locator", "go_locator",
         "add_clip_lane", "remove_clip_lane", "move_clip_lane", "set_clip_lane_visible",
         "add_automation_point", "set_automation_point",
@@ -220,6 +222,105 @@ class ToolsIntegrationTest {
     assertEquals(channel.fader.getLabel(), payload.get("label"), "same full field set as get_parameter");
     assertEquals(0.5, ((Number) payload.get("value")).doubleValue(), 1e-9);
     assertEquals(0.5, channel.fader.getValue(), 1e-9, "the live parameter changed");
+  }
+
+  @Test
+  void clipLifecycleOverMcpCreatesCapturesAndRemoves() {
+    // Row 5 rather than 0: this class shares one LX, so each clip test claims its own
+    // grid row and clears it again, keeping the suite order-independent.
+    Map<String, Object> added = structured(call("add_clip", Map.of(
+        "containerPath", "/lx/mixer/channel/1", "index", 5,
+        "snapshot", false, "label", "Chapter Six")));
+    assertEquals("/lx/mixer/channel/1/clip/6", added.get("path"));
+    assertEquals("Chapter Six", added.get("label"));
+    assertEquals(Boolean.FALSE, added.get("snapshotEnabled"));
+    assertEquals(0, added.get("snapshotViewCount"));
+
+    Map<String, Object> captured = structured(call("capture_clip", Map.of(
+        "path", "/lx/mixer/channel/1/clip/6")));
+    assertEquals(Boolean.TRUE, captured.get("enabledRecall"));
+    assertTrue((Integer) captured.get("snapshotViewCount") > 0);
+
+    Map<String, Object> removed = structured(call("remove_clip", Map.of(
+        "path", "/lx/mixer/channel/1/clip/6")));
+    assertEquals("/lx/mixer/channel/1/clip/6", removed.get("removed"));
+    assertEquals("clip", removed.get("kind"));
+    assertEquals("/lx/mixer/channel/1", removed.get("containerPath"));
+
+    assertEquals(Boolean.TRUE,
+        call("get_clip", Map.of("path", "/lx/mixer/channel/1/clip/6")).isError(),
+        "the slot is empty again");
+  }
+
+  @Test
+  void aClipAtAHighRowLeavesTheChannelStillListable() {
+    // Regression: LXBus.addClip pads its clip list with nulls up to the requested row,
+    // and the padding survives the clip's removal. Every walk of a path-registered child
+    // array has to treat an empty grid slot as "no child" — before the guards, one
+    // add_clip permanently broke list_parameters on that channel for the whole session.
+    structured(call("add_clip", Map.of(
+        "containerPath", "/lx/mixer/channel/1", "index", 5, "snapshot", false)));
+    try {
+      structured(call("list_parameters", Map.of("path", "/lx/mixer/channel/1")));
+      structured(call("get_channel", Map.of("path", "/lx/mixer/channel/1")));
+    } finally {
+      structured(call("remove_clip", Map.of("path", "/lx/mixer/channel/1/clip/6")));
+    }
+    // Still listable after the removal — the null padding is what outlives the clip.
+    structured(call("list_parameters", Map.of("path", "/lx/mixer/channel/1")));
+  }
+
+  @Test
+  void addClipRefusesAnOccupiedSlotOverMcp() {
+    Map<String, Object> args = Map.of(
+        "containerPath", "/lx/mixer/channel/1", "index", 6, "snapshot", false);
+    structured(call("add_clip", args));
+    try {
+      McpSchema.CallToolResult result = call("add_clip", args);
+      assertEquals(Boolean.TRUE, result.isError());
+      McpSchema.TextContent text =
+          assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+      assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    } finally {
+      structured(call("remove_clip", Map.of("path", "/lx/mixer/channel/1/clip/7")));
+    }
+  }
+
+  @Test
+  void addClipNegativeIndexIsRejectedBeforeTheHandlerRuns() {
+    // The schema's minimum is the guard here — the SDK validates and rejects server-side,
+    // which only an end-to-end call exercises.
+    assertEquals(Boolean.TRUE, call("add_clip", Map.of(
+        "containerPath", "/lx/mixer/channel/1", "index", -1)).isError());
+  }
+
+  @Test
+  void launchSceneOverMcpFiresTheWholeRow() {
+    // snapshot:false so the launch recalls nothing — this class shares one LX, and a
+    // snapshot recall would rewrite the pattern state other tests assert against.
+    structured(call("add_clip", Map.of(
+        "containerPath", "/lx/mixer/channel/1", "index", 4, "snapshot", false)));
+    try {
+      Map<String, Object> scene = structured(call("launch_scene", Map.of(
+          "index", 4, "immediate", true)));
+      assertEquals(4, scene.get("index"));
+      assertEquals(1, scene.get("clipCount"));
+      List<?> clips = assertInstanceOf(List.class, scene.get("clips"));
+      Map<?, ?> entry = assertInstanceOf(Map.class, clips.get(0));
+      assertEquals("/lx/mixer/channel/1/clip/5", entry.get("path"));
+    } finally {
+      structured(call("stop_clip", Map.of("path", "/lx/mixer/channel/1/clip/5")));
+      structured(call("remove_clip", Map.of("path", "/lx/mixer/channel/1/clip/5")));
+    }
+  }
+
+  @Test
+  void launchSceneOnAnEmptyRowIsInvalidArgument() {
+    McpSchema.CallToolResult result = call("launch_scene", Map.of("index", 7));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text =
+        assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
   }
 
   @Test

@@ -204,6 +204,12 @@ public final class Parameters {
     for (Map.Entry<String, List<? extends LXComponent>> entry : component.childArrays.entrySet()) {
       String key = entry.getKey();
       for (LXComponent child : entry.getValue()) {
+        // A child array can be SPARSE: LXBus.addClip pads its clip list with nulls up to
+        // the requested grid row, and the padding outlives the clip. An empty grid slot
+        // is not a child — listing one would dereference null (see Modulators.snapshotPaths).
+        if (child == null) {
+          continue;
+        }
         ChildInfo childInfo = describeChild(key, child);
         if (!seenPaths.contains(childInfo.path())) {
           children.add(childInfo);
