@@ -21,8 +21,9 @@ public final class SetMidiInput implements LxTool {
         + "list_midi_devices' inputs list: channelEnabled (forward notes/CCs to channel and "
         + "modulator devices), controlEnabled (feed the control-mapping layer — see "
         + "list_midi_mappings), syncEnabled (this port's MIDI clock drives the engine tempo). "
-        + "At least one flag must be provided; flags left unset are unchanged. enabled is a "
-        + "derived union of the three and cannot be set directly. Returns the updated input "
+        + "At least one flag must be provided; flags left unset are unchanged. enabled is "
+        + "derived (the union of the three, though a bound control surface can also hold the "
+        + "port open) and cannot be set directly. Returns the updated input "
         + "in list_midi_devices' shape. Not undoable — LX has no undo command for these "
         + "flags.";
   }

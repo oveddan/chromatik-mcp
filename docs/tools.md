@@ -1107,7 +1107,7 @@ Remove a MIDI mapping by its 0-based index into list_midi_mappings. Returns the 
 
 _mutating_
 
-Set one or more of a MIDI input's routing flags by its 0-based index into list_midi_devices' inputs list: channelEnabled (forward notes/CCs to channel and modulator devices), controlEnabled (feed the control-mapping layer — see list_midi_mappings), syncEnabled (this port's MIDI clock drives the engine tempo). At least one flag must be provided; flags left unset are unchanged. enabled is a derived union of the three and cannot be set directly. Returns the updated input in list_midi_devices' shape. Not undoable — LX has no undo command for these flags.
+Set one or more of a MIDI input's routing flags by its 0-based index into list_midi_devices' inputs list: channelEnabled (forward notes/CCs to channel and modulator devices), controlEnabled (feed the control-mapping layer — see list_midi_mappings), syncEnabled (this port's MIDI clock drives the engine tempo). At least one flag must be provided; flags left unset are unchanged. enabled is derived (the union of the three, though a bound control surface can also hold the port open) and cannot be set directly. Returns the updated input in list_midi_devices' shape. Not undoable — LX has no undo command for these flags.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|

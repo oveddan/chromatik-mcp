@@ -39,8 +39,10 @@ public final class Midi {
   private Midi() {}
 
   /**
-   * A discovered MIDI input port. {@code enabled} is the union of the three routing flags;
-   * each flag independently governs one path incoming MIDI can take: {@code channelEnabled}
+   * A discovered MIDI input port. {@code enabled} means the port is open: LX recomputes it as
+   * the union of the three routing flags, and also turns it on when a control surface bound to
+   * this port holds it open (so an input can read enabled with all three flags false).
+   * Each flag independently governs one path incoming MIDI can take: {@code channelEnabled}
    * forwards notes/CCs to channel + modulator devices, {@code controlEnabled} feeds the
    * control-mapping layer (the mappings {@link #mappings} lists), {@code syncEnabled} lets
    * this port's MIDI clock drive the engine tempo (only takes effect when get_tempo's
@@ -212,8 +214,8 @@ public final class Midi {
    * Set one or more of an input's routing flags (see {@link InputInfo}) by 0-based index
    * into {@link #devices}' input list. A {@code null} argument leaves that flag unchanged.
    * No {@code LXCommand} covers these {@code BooleanParameter}s, so they're set directly
-   * (CLAUDE.md layering); {@code enabled} is a derived union LX recomputes from the three
-   * flags and can't be set directly.
+   * (CLAUDE.md layering); {@code enabled} is derived — LX recomputes it from the three flags
+   * on every change — and can't be set directly.
    *
    * @throws Resolve.ResolveException TYPE_MISMATCH if index is out of range
    */

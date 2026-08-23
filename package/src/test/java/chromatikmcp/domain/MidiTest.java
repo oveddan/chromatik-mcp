@@ -7,9 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Path;
+
 import javax.sound.midi.InvalidMidiDataException;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import chromatikmcp.HeadlessLxTest;
 
@@ -18,10 +21,14 @@ import heronarts.lx.command.LXCommand;
 import heronarts.lx.midi.LXMidiInput;
 import heronarts.lx.midi.MidiControlChange;
 import heronarts.lx.midi.MidiNoteOn;
+import heronarts.lx.midi.SyntheticMidiInput;
 import heronarts.lx.midi.template.AkaiMPD218;
 import heronarts.lx.mixer.LXChannel;
 
 class MidiTest extends HeadlessLxTest {
+
+  @TempDir
+  private Path mediaPath;
 
   @Test
   void devicesSnapshotReturnsBothPortListsAndIsTotalOnEmpty() {
@@ -240,11 +247,16 @@ class MidiTest extends HeadlessLxTest {
 
   @Test
   void setInputFlagsSetsFlagAndDerivedEnabledUnion() {
-    LX lx = newHeadlessLx();
-    LXMidiInput input = awaitFirstInput(lx);
+    LX.Flags flags = new LX.Flags();
+    // Flag changes make LX rewrite its .lxmidi device-settings file under the media path;
+    // point that at a temp dir so the test doesn't drop one in the build directory.
+    flags.mediaPath = mediaPath.toString();
+    LX lx = track(new LX(flags, newModel()));
+    LXMidiInput input = SyntheticMidiInput.register(lx, "Synthetic Test Input");
     assertFalse(input.enabled.isOn(), "no routing flag set yet");
 
     Midi.InputInfo info = Midi.setInputFlags(lx, 0, true, null, null);
+    assertEquals("Synthetic Test Input", info.name());
     assertTrue(info.channelEnabled());
     assertFalse(info.controlEnabled());
     assertFalse(info.syncEnabled());
@@ -264,27 +276,4 @@ class MidiTest extends HeadlessLxTest {
     assertEquals(Resolve.Failure.TYPE_MISMATCH, e.failure);
   }
 
-  /**
-   * LX populates {@code engine.midi.inputs} from an async device-detection thread that
-   * finishes with an {@code engine.addTask(...)}, so headless tests (which never run the
-   * engine loop) see it empty until they drain the queue themselves. The JDK's built-in
-   * "Real Time Sequencer" software device is always present, on any OS, so this resolves
-   * without depending on real hardware.
-   */
-  private static LXMidiInput awaitFirstInput(LX lx) {
-    long deadline = System.currentTimeMillis() + 5000;
-    while (lx.engine.midi.inputs.isEmpty()) {
-      if (System.currentTimeMillis() > deadline) {
-        throw new IllegalStateException("No MIDI input discovered within 5s");
-      }
-      lx.engine.run();
-      try {
-        Thread.sleep(20);
-      } catch (InterruptedException ix) {
-        Thread.currentThread().interrupt();
-        throw new IllegalStateException(ix);
-      }
-    }
-    return lx.engine.midi.inputs.get(0);
-  }
 }

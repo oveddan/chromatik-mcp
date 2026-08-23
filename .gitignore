@@ -27,3 +27,6 @@ drafts/
 # chromatik-mcp-catalog machine-local checkout paths
 .claude/skills/chromatik-mcp-catalog/sources.local.json
 landing/dist/
+
+# LX MIDI device settings written by headless tests under package/
+package/.lxmidi
