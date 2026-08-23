@@ -158,8 +158,12 @@ handling, verifying your own work — are in
 | [`get_composition`](#get_composition) | read | The arrange-timeline composition at /lx/timeline/composition: timeBase (ABSOLUTE or TEMPO — decides which cursor fields are authoritative)… |
 | [`get_clip`](#get_clip) | read | One clip's timeline envelope: timeBase (ABSOLUTE or TEMPO — decides which cursor fields are authoritative), referenceBpm (the fixed bpm cursor millis… |
 | [`list_clip_lanes`](#list_clip_lanes) | read | Every automation lane on a clip: canonical path (always <clipPath>/lane/<n>, 1-indexed — the address every lane tool takes), 0-based index, type… |
+| [`add_clip`](#add_clip) | write | Create a clip in an empty grid slot — the verb that brings a slot into being so every other clip tool can address it. containerPath is the bus that… |
+| [`remove_clip`](#remove_clip) | write | Remove a grid clip, emptying its slot — its automation lanes, notes, and snapshot go with it. path is a grid clip (/lx/mixer/channel/N/clip/M); the… |
+| [`capture_clip`](#capture_clip) | write | Capture the current live state into a clip's snapshot, overwriting whatever it held — the write side of the snapshot that launch_clip mode 'launch'… |
 | [`launch_clip`](#launch_clip) | write | Start clip playback. mode 'play' (the default) is immediate and unquantized, from the 'from' cursor or the current playhead — it requires the clip to… |
 | [`stop_clip`](#stop_clip) | write | Stop clip playback immediately, bypassing any launch-quantization delay; also cancels a pending quantized launch. Safe to call on a stopped clip… |
+| [`launch_scene`](#launch_scene) | write | Fire a whole row of the clip grid at once — every clip at that index across all channels plus the master bus. This is what makes a chapter land… |
 | [`set_clip_marker`](#set_clip_marker) | write | Set or nudge one timeline marker on a clip: insertMarker (the scrub/insert position — this IS how you scrub the arrange timeline), loopStart… |
 | [`list_locators`](#list_locators) | read | Every locator (named position marker) on the arrange-timeline composition, in timeline order: canonical path (/lx/timeline/composition/locator/<n>)… |
 | [`add_locator`](#add_locator) | write | Adds a locator (named position marker) to the arrange-timeline composition at the given cursor, optionally labeled. Returns the new locator's summary… |
@@ -1170,6 +1174,40 @@ Every automation lane on a clip: canonical path (always <clipPath>/lane/<n>, 1-i
 |---|---|---|---|---|
 | `path` | string | no | — | Canonical path of the clip — the composition (default: /lx/timeline/composition) or a grid clip (/lx/mixer/channel/N/clip/M) |
 
+### `add_clip`
+
+_mutating_
+
+Create a clip in an empty grid slot — the verb that brings a slot into being so every other clip tool can address it. containerPath is the bus that owns the row (a channel like /lx/mixer/channel/1, or /lx/mixer/master); index is the 0-based scene row, and the resulting clip path is 1-indexed, so index 0 becomes /lx/mixer/channel/1/clip/1. An occupied slot is an invalid_argument naming the existing clip unless replace:true is passed (the save_project overwrite precedent) — replacing discards the old clip's automation and snapshot in a single undo step. An index at or past the engine's numScenes is rejected: LX hides such clips from the grid and from launch_scene, so raise /lx/clips/numScenes with set_parameter first. snapshot (default true) makes the clip recall a snapshot when launched, and LX captures the bus's live state into it right then — so add_clip with snapshot:true is already a capture of that moment, and capture_clip is how you overwrite it later. With snapshot:false the clip stores nothing (snapshotViewCount 0) until capture_clip runs. Either way a new clip has no automation content. Undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `containerPath` | string | yes | — | Canonical path of the bus that owns the grid row — a channel (/lx/mixer/channel/N) or /lx/mixer/master |
+| `index` | integer | yes | 0–2147483647 | 0-based scene row; the clip's path is 1-indexed (index 0 -> .../clip/1). Must be below the engine's /lx/clips/numScenes |
+| `snapshot` | boolean | no | — | Whether launching the clip recalls its snapshot (default true) — capture_clip writes that snapshot |
+| `replace` | boolean | no | — | Overwrite a clip already in the slot (default false); without it an occupied slot is rejected |
+| `label` | string | no | — | Optional label for the new clip; defaults to LX's <bus>-<row> naming |
+
+### `remove_clip`
+
+_mutating_
+
+Remove a grid clip, emptying its slot — its automation lanes, notes, and snapshot go with it. path is a grid clip (/lx/mixer/channel/N/clip/M); the arrange composition (/lx/timeline/composition) is not removable and is rejected. Slots do NOT reindex: removing .../clip/2 leaves .../clip/1 and .../clip/3 where they were, because a grid row is an address, not a list position. Returns the shared remove-tool shape (removed: the clip's path, kind: "clip") plus the freed slot's containerPath, index, and the label the clip had. Undoable with Cmd-Z, which restores the clip's full contents.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the grid clip to remove, e.g. /lx/mixer/channel/1/clip/1 |
+
+### `capture_clip`
+
+_mutating_
+
+Capture the current live state into a clip's snapshot, overwriting whatever it held — the write side of the snapshot that launch_clip mode 'launch' recalls. This is how a clip becomes a preset without placing automation points one at a time. A clip snapshot is BUS-SCOPED, not a whole-show capture: it stores the owning bus's active pattern (or every enabled pattern in blend mode), those patterns' parameters, and its effects. It does NOT store the channel fader, crossfade group, or composite mode — for a whole-mixer capture use add_snapshot/update_snapshot instead, and for a fader use an automation lane. Recall is gated on the clip's snapshotEnabled, so capturing into a clip with it off silently produces a snapshot that never fires — this turns the flag on instead and reports enabledRecall:true when it did, which costs a second Cmd-Z to undo. Returns the clip state read back after the capture; snapshotViewCount is how many parameter values were stored. path must be a grid clip (/lx/mixer/channel/N/clip/M) — the arrange composition has no owning bus to scope a capture to and is rejected. Undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the clip to capture into, e.g. /lx/mixer/channel/1/clip/1 |
+
 ### `launch_clip`
 
 _mutating_
@@ -1191,6 +1229,17 @@ Stop clip playback immediately, bypassing any launch-quantization delay; also ca
 | param | type | required | constraints | description |
 |---|---|---|---|---|
 | `path` | string | no | — | Canonical path of the clip — the composition (default: /lx/timeline/composition) or a grid clip (/lx/mixer/channel/N/clip/M) |
+
+### `launch_scene`
+
+_mutating_
+
+Fire a whole row of the clip grid at once — every clip at that index across all channels plus the master bus. This is what makes a chapter land simultaneously; launching its clips one at a time loses that. index is the 0-based scene row, matching add_clip (index 0 fires the clips at /lx/mixer/channel/N/clip/1). By default the launch is subject to the global launch quantization — clips come back pending:true and flip to running on the quantization boundary — while immediate:true fires now. Each launched clip recalls its own snapshot if enabled (see capture_clip). A row no bus holds a clip on is rejected with invalid_argument rather than silently cancelled, which is what LX does on its own. Returns every clip on the row with its running/pending state read back after the call. A quantized launch also cancels any other scene still pending; immediate:true does NOT — it fires the clips directly, so a scene pending from an earlier quantized launch still lands afterwards. Transport is not an LXCommand upstream — Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `index` | integer | yes | 0–2147483647 | 0-based scene row to launch; must be below the engine's /lx/clips/numScenes |
+| `immediate` | boolean | no | — | Fire now, bypassing the global launch quantization (default false) |
 
 ### `set_clip_marker`
 

@@ -26,6 +26,8 @@ import chromatikmcp.domain.Compositions.LocatorList;
 import chromatikmcp.domain.Compositions.LocatorSummary;
 import chromatikmcp.domain.Cursors;
 import chromatikmcp.domain.Cursors.CursorInfo;
+import chromatikmcp.domain.Scenes.SceneClip;
+import chromatikmcp.domain.Scenes.SceneState;
 
 /** Payload-shaping helpers shared across tool handlers. */
 final class Payloads {
@@ -85,10 +87,35 @@ final class Payloads {
     return map;
   }
 
-  /** get_clip / launch_clip / stop_clip: the envelope plus {@code pending}. */
+  /**
+   * get_clip / launch_clip / stop_clip / add_clip / capture_clip: the envelope plus
+   * {@code pending} and the clip's snapshot state — {@code snapshotEnabled} decides
+   * whether a launch recalls it at all, {@code snapshotViewCount} is how many parameter
+   * values capture_clip stored (0 means the snapshot would recall nothing).
+   */
   static Map<String, Object> clip(ClipDetail clip) {
     Map<String, Object> map = clipEnvelope(clip.envelope());
     map.put("pending", clip.pending());
+    map.put("snapshotEnabled", clip.snapshotEnabled());
+    map.put("snapshotViewCount", clip.snapshotViewCount());
+    return map;
+  }
+
+  /** launch_scene: the row index plus every clip on it, read back after the launch. */
+  static Map<String, Object> scene(SceneState scene) {
+    Map<String, Object> map = new LinkedHashMap<>();
+    map.put("index", scene.index());
+    List<Map<String, Object>> clips = new ArrayList<>();
+    for (SceneClip clip : scene.clips()) {
+      Map<String, Object> entry = new LinkedHashMap<>();
+      entry.put("path", clip.path());
+      entry.put("label", clip.label());
+      entry.put("running", clip.running());
+      entry.put("pending", clip.pending());
+      clips.add(entry);
+    }
+    map.put("clips", clips);
+    map.put("clipCount", clips.size());
     return map;
   }
 

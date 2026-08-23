@@ -704,7 +704,10 @@ public final class Channels {
     }
     if (component instanceof LXBus bus) {
       for (LXClip clip : bus.clips) {
-        collectSubtree(clip, snapshot);
+        // Sparse by design — an empty grid clip slot is a null entry (see LXBus.addClip).
+        if (clip != null) {
+          collectSubtree(clip, snapshot);
+        }
       }
     }
     if (component instanceof LXClip clip) {

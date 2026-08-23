@@ -86,7 +86,10 @@ public final class OscParams {
     }
     for (List<? extends LXComponent> array : component.childArrays.values()) {
       for (LXComponent child : array) {
-        walk(child, visited, out);
+        // Sparse by design — an empty grid clip slot is a null entry (see LXBus.addClip).
+        if (child != null) {
+          walk(child, visited, out);
+        }
       }
     }
   }
