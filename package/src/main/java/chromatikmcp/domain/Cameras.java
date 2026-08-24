@@ -5,12 +5,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import heronarts.lx.LX;
+import heronarts.lx.LXLoopTask;
 import heronarts.lx.LXSerializable;
 import heronarts.lx.model.LXModel;
 
@@ -107,6 +110,88 @@ public final class Cameras implements LXSerializable {
   /** {@code replaced} distinguishes overwriting a name from adding one. */
   public record SaveResult(SavedCamera camera, boolean replaced) {}
 
+  /** LX's three camera-animation curves; the live UI defaults to sinusoidal. */
+  public enum AnimationEase {
+    SINUSOIDAL,
+    QUADRATIC,
+    CUBIC;
+
+    public String wire() {
+      return name().toLowerCase(Locale.ROOT);
+    }
+
+    /** @throws Resolve.ResolveException TYPE_MISMATCH on anything else */
+    public static AnimationEase parse(String wire) {
+      for (AnimationEase ease : values()) {
+        if (ease.wire().equals(wire)) {
+          return ease;
+        }
+      }
+      throw Resolve.invalidArgument(
+          "ease must be sinusoidal|quadratic|cubic: " + wire);
+    }
+
+    private double shape(double basis) {
+      return switch (this) {
+        case SINUSOIDAL -> .5 - .5 * Math.cos(basis * Math.PI);
+        case QUADRATIC -> (basis < .5)
+            ? 2 * basis * basis
+            : 1 - 2 * (1 - basis) * (1 - basis);
+        case CUBIC -> (basis < .5)
+            ? 4 * basis * basis * basis
+            : 1 - 4 * (1 - basis) * (1 - basis) * (1 - basis);
+      };
+    }
+  }
+
+  /**
+   * Immutable description of one move plus its thread-safe completion signal. Awaiting is
+   * for an HTTP worker thread, never the engine thread that advances the move.
+   */
+  public static final class CameraAnimation {
+
+    private final CameraAngle from;
+    private final CameraAngle to;
+    private final int durationMs;
+    private final AnimationEase ease;
+    private final CompletableFuture<CameraView> completion = new CompletableFuture<>();
+
+    private CameraAnimation(
+        CameraAngle from, CameraAngle to, int durationMs, AnimationEase ease) {
+      this.from = from;
+      this.to = to;
+      this.durationMs = durationMs;
+      this.ease = ease;
+    }
+
+    public CameraAngle from() {
+      return this.from;
+    }
+
+    public CameraAngle to() {
+      return this.to;
+    }
+
+    public int durationMs() {
+      return this.durationMs;
+    }
+
+    public AnimationEase ease() {
+      return this.ease;
+    }
+
+    public CameraView await() {
+      try {
+        return this.completion.get();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IllegalStateException("Interrupted while awaiting camera animation", e);
+      } catch (ExecutionException e) {
+        throw new IllegalStateException("Camera animation failed", e.getCause());
+      }
+    }
+  }
+
   /**
    * Binding to Chromatik's running 3D preview, implemented in {@code chromatikmcp.ui}
    * against {@code UI3dContext} and installed once the UI is up. Absent headless — which
@@ -132,6 +217,9 @@ public final class Cameras implements LXSerializable {
   private CameraAngle detached;
 
   private volatile PreviewCamera preview;
+
+  /** Non-null only while its loop task is installed on the engine. */
+  private AnimationLoop animation;
 
   public void bindPreview(PreviewCamera preview) {
     this.preview = preview;
@@ -159,6 +247,43 @@ public final class Cameras implements LXSerializable {
    * clamps again through its own parameters.
    */
   public synchronized CameraView apply(LX lx, CameraAngle angle) {
+    if (this.animation != null) {
+      throw Resolve.invalidArgument(
+          "A camera animation is in flight; wait for animate_camera to finish before "
+              + "starting another camera move");
+    }
+    return applyStep(angle);
+  }
+
+  /**
+   * Starts a camera move on the LX loop and returns immediately. Callers await the returned
+   * handle off the engine thread; waiting on the engine thread would deadlock the loop that
+   * advances it.
+   */
+  public synchronized CameraAnimation animate(
+      LX lx, CameraAngle to, int durationMs, AnimationEase ease) {
+    if (durationMs <= 0) {
+      throw Resolve.invalidArgument("durationMs must be greater than 0");
+    }
+    if (this.animation != null) {
+      throw Resolve.invalidArgument(
+          "A camera animation is already in flight; wait for it to finish before starting "
+              + "another");
+    }
+    CameraAnimation move = new CameraAnimation(
+        current(lx).angle(), normalize(to), durationMs, ease);
+    AnimationLoop loop = new AnimationLoop(lx, move);
+    this.animation = loop;
+    lx.engine.addLoopTask(loop);
+    return move;
+  }
+
+  /** Whether the current camera is between animation endpoints right now. */
+  public synchronized boolean isAnimating() {
+    return this.animation != null;
+  }
+
+  private CameraView applyStep(CameraAngle angle) {
     CameraAngle normalized = normalize(angle);
     PreviewCamera bound = this.preview;
     if (bound == null) {
@@ -171,6 +296,48 @@ public final class Cameras implements LXSerializable {
     CameraAngle readBack = normalize(bound.read());
     this.detached = readBack;
     return view(readBack, true);
+  }
+
+  private final class AnimationLoop implements LXLoopTask {
+
+    private final LX lx;
+    private final CameraAnimation move;
+    private double elapsedMs;
+
+    private AnimationLoop(LX lx, CameraAnimation move) {
+      this.lx = lx;
+      this.move = move;
+    }
+
+    @Override
+    public void loop(double deltaMs) {
+      synchronized (Cameras.this) {
+        if (animation != this) {
+          this.lx.engine.removeLoopTask(this);
+          return;
+        }
+        try {
+          this.elapsedMs = Math.min(
+              this.move.durationMs(), this.elapsedMs + Math.max(0, deltaMs));
+          double basis = this.elapsedMs / this.move.durationMs();
+          CameraView view = (basis >= 1)
+              ? applyStep(this.move.to())
+              : applyStep(interpolate(
+                  this.move.from(), this.move.to(), basis, this.move.ease()));
+          if (basis < 1) {
+            return;
+          }
+          animation = null;
+          this.lx.engine.removeLoopTask(this);
+          this.move.completion.complete(view);
+        } catch (RuntimeException | Error failure) {
+          animation = null;
+          this.lx.engine.removeLoopTask(this);
+          this.move.completion.completeExceptionally(failure);
+          throw failure;
+        }
+      }
+    }
   }
 
   /** Stores the angle under {@code name}, replacing any angle already saved under it. */
@@ -300,6 +467,45 @@ public final class Cameras implements LXSerializable {
             clamp(angle.target().z(), -TARGET_ABS_MAX, TARGET_ABS_MAX)),
         angle.projection(),
         clamp(angle.fovDegrees(), FOV_MIN, FOV_MAX));
+  }
+
+  /**
+   * LX {@code UI3dContext.Camera.lerp} semantics, including shortest-arc theta and the
+   * live UI's default 50% blend between linear time and the selected ease curve.
+   */
+  public static CameraAngle interpolate(
+      CameraAngle fromAngle, CameraAngle toAngle, double basis, AnimationEase ease) {
+    CameraAngle from = normalize(fromAngle);
+    CameraAngle to = normalize(toAngle);
+    double linearBasis = clamp(basis, 0, 1);
+    double easedBasis = lerp(linearBasis, ease.shape(linearBasis), .5);
+
+    double fromTheta = from.theta();
+    double toTheta = to.theta();
+    if (Math.abs(fromTheta - toTheta) > 180) {
+      if (fromTheta < toTheta) {
+        fromTheta += 360;
+      } else {
+        toTheta += 360;
+      }
+    }
+    double theta = lerp(fromTheta, toTheta, easedBasis) % 360;
+    Vec3 fromTarget = from.target();
+    Vec3 toTarget = to.target();
+    return new CameraAngle(
+        theta,
+        lerp(from.phi(), to.phi(), easedBasis),
+        lerp(from.radius(), to.radius(), easedBasis),
+        new Vec3(
+            lerp(fromTarget.x(), toTarget.x(), easedBasis),
+            lerp(fromTarget.y(), toTarget.y(), easedBasis),
+            lerp(fromTarget.z(), toTarget.z(), easedBasis)),
+        (linearBasis >= 1) ? to.projection() : from.projection(),
+        lerp(from.fovDegrees(), to.fovDegrees(), easedBasis));
+  }
+
+  private static double lerp(double from, double to, double basis) {
+    return from + (to - from) * basis;
   }
 
   private static double wrapDegrees(double degrees) {

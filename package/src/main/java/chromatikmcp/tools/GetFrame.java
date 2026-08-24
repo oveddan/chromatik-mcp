@@ -63,7 +63,9 @@ public final class GetFrame implements LxTool {
         + "shows that. The two are mutually exclusive; the response echoes whichever it "
         + "used. Reads main/cue/aux output buses. Only the grid depends on the viewpoint: "
         + "the fractions and dominant colors describe the whole buffer, so a point the "
-        + "camera cannot see still counts toward them.";
+        + "camera cannot see still counts toward them. If animate_camera is moving the "
+        + "current camera, a current-camera render shoots its interpolated position now "
+        + "and reports camera.midMove=true; it does not stall or wait for arrival.";
   }
 
   @Override
@@ -157,6 +159,8 @@ public final class GetFrame implements LxTool {
     Map<String, Object> camera = new LinkedHashMap<>();
     camera.put("name", cameraName);
     camera.putAll(CameraPayload.angleToMap(angle));
+    camera.put("midMove",
+        Cameras.CURRENT.equals(cameraName) && this.cameras.isAnimating());
     payload.put("camera", camera);
     payload.putAll(summaryToMap(Frames.summarize(snap, projection, grid, litThreshold)));
 

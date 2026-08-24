@@ -41,6 +41,7 @@ handling, verifying your own work — are in
 |---|---|---|
 | [`get_camera`](#get_camera) | read | Read the current 3D viewpoint — where the model is being looked at from, in both orbit form (theta/phi/radius about a target) and absolute eye… |
 | [`set_camera`](#set_camera) | write | Move the 3D viewpoint — the angle the model is seen from. This is what lets a walk-in installation be judged from inside it: put the eye where a… |
+| [`animate_camera`](#animate_camera) | write | Move smoothly from the current 3D viewpoint to a saved angle or an explicit camera over durationMs. Pass 'to' as a name from list_cameras (or… |
 | [`save_camera`](#save_camera) | write | Name the current viewpoint so it can be returned to exactly. A named angle is what makes successive renders comparable: re-shooting a pattern from… |
 | [`list_cameras`](#list_cameras) | read | The viewpoints saved in this project by save_camera, in the order they were first named, each with the same angle fields get_camera reports. Check… |
 | [`recall_camera`](#recall_camera) | write | Move the viewpoint to a saved angle (list_cameras reports the names). Shoot successive renders of the same pattern from one recalled angle so the… |
@@ -321,7 +322,7 @@ No parameters.
 
 _read-only_
 
-See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, lit fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. nonBlackFraction counts any pixel with a nonzero channel, so near-black residuals (e.g. a #101010 blur tail) inflate it even though they read as dark. litFraction excludes those residuals: it counts only pixels whose max channel exceeds litThreshold (default 26, ~10% of full scale — a documented heuristic, not perceptual luminance; raise it to make litFraction stricter) and is the field to use when judging negative space or whether an area actually reads as dark. litThreshold=0 makes litFraction equal to nonBlackFraction (max > 0 is the nonBlack condition); litThreshold=255 makes litFraction always 0.0, since no channel can exceed the maximum. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Renders either a fixed orthographic plane (the 'view' argument's front/top/side, good for a structural read) or an actual camera ('camera': a name from list_cameras, or 'current' for the live viewpoint get_camera reports and Chromatik's preview shows) — a walk-in piece can only be judged from a viewpoint a visitor would occupy, and no orthographic elevation shows that. The two are mutually exclusive; the response echoes whichever it used. Reads main/cue/aux output buses. Only the grid depends on the viewpoint: the fractions and dominant colors describe the whole buffer, so a point the camera cannot see still counts toward them.
+See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, lit fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. nonBlackFraction counts any pixel with a nonzero channel, so near-black residuals (e.g. a #101010 blur tail) inflate it even though they read as dark. litFraction excludes those residuals: it counts only pixels whose max channel exceeds litThreshold (default 26, ~10% of full scale — a documented heuristic, not perceptual luminance; raise it to make litFraction stricter) and is the field to use when judging negative space or whether an area actually reads as dark. litThreshold=0 makes litFraction equal to nonBlackFraction (max > 0 is the nonBlack condition); litThreshold=255 makes litFraction always 0.0, since no channel can exceed the maximum. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Renders either a fixed orthographic plane (the 'view' argument's front/top/side, good for a structural read) or an actual camera ('camera': a name from list_cameras, or 'current' for the live viewpoint get_camera reports and Chromatik's preview shows) — a walk-in piece can only be judged from a viewpoint a visitor would occupy, and no orthographic elevation shows that. The two are mutually exclusive; the response echoes whichever it used. Reads main/cue/aux output buses. Only the grid depends on the viewpoint: the fractions and dominant colors describe the whole buffer, so a point the camera cannot see still counts toward them. If animate_camera is moving the current camera, a current-camera render shoots its interpolated position now and reports camera.midMove=true; it does not stall or wait for arrival.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
@@ -366,6 +367,7 @@ Named angles are saved in the project file, which makes successive renders compa
 set_camera {eye: {x: 0, y: 0, z: 0}, target: {x: 0, y: 400, z: 0}, fovDegrees: 110}
 save_camera {name: "stage-looking-up"}
 recall_camera {name: "stage-looking-up"}
+animate_camera {to: "stage-looking-up", durationMs: 4000}
 ```
 
 Camera moves are not `LXCommand`-backed, so none of these appear in Chromatik's undo
@@ -387,6 +389,25 @@ Move the 3D viewpoint — the angle the model is seen from. This is what lets a 
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
+| `theta` | number | no | — | Azimuth in degrees around +Y; 0 looks from -Z toward +Z. Wraps into [0, 360). |
+| `phi` | number | no | — | Elevation in degrees from the XZ plane: positive looks down at the target, negative looks up at it. Clamped to LX's ±89 (the look-at degenerates at the poles), so 'straight up' is phi -89. |
+| `radius` | number | no | — | Distance from the eye to the target, in model units; must be greater than 0. Also sets the framing in orthographic projection, where the visible width is radius. |
+| `target` | object | no | — | The look-at point in model coordinates (LX's camera center). All three components are required. |
+| `eye` | object | no | — | Absolute camera position in model coordinates, as an alternative to theta/phi/radius — pass it with 'target' to aim. Rejected alongside theta/phi/radius. All three components are required. |
+| `projection` | string | no | one of: `perspective`, `orthographic` | 'perspective' (a real lens — near geometry looms, which is what makes an interior viewpoint read as interior) or 'orthographic' (parallel, no foreshortening; good for a structural read of the model). |
+| `fovDegrees` | number | no | — | Vertical field of view in degrees for perspective projection (LX's 'perspective' lens control): 15 is a long lens, 150 an extreme wide angle. Clamped to 15-150. Carried but unused in orthographic projection. |
+
+### `animate_camera`
+
+_mutating_
+
+Move smoothly from the current 3D viewpoint to a saved angle or an explicit camera over durationMs. Pass 'to' as a name from list_cameras (or 'current' for the viewpoint get_camera reports), or omit it and pass camera fields directly; the two forms are mutually exclusive. Explicit fields default to the current camera, so one field animates a single-axis nudge. The camera orbits a look-at point: 'target' is that point, 'radius' the distance out to the eye, 'theta' the azimuth in degrees (0 looks from -Z toward +Z, the same viewpoint as get_frame's 'front' plane; increasing theta orbits the eye toward +X) and 'phi' the elevation in degrees (positive looks down from above, negative looks up from below). Up is always +Y. Give 'eye' instead to place the camera by absolute position — mutually exclusive with theta/phi/radius, and converted to the same orbit angle, which the response reports back. Values out of LX's range are clamped (phi to ±89°, fovDegrees to 15-150) and theta wraps, so read the response rather than assuming the request landed verbatim; a radius of 0 is rejected instead, since a camera at its own target has no view direction. The call returns only when the camera has arrived, while the LX engine keeps rendering throughout the move. A concurrent get_frame {'camera':'current'} shoots the interpolated position immediately and reports midMove:true. Ease matches LX camera animation: sinusoidal (the default), quadratic, or cubic, blended 50% with linear time. durationMs must be 1-29000, leaving one second of headroom under the server's 30000ms tool-call timeout. Not undoable with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `to` | string | no | — | Destination saved-camera name (case-sensitive; see list_cameras), or 'current'. Rejected together with explicit camera fields. |
+| `durationMs` | integer | yes | — | Move duration in milliseconds, 1-29000. Longer moves are rejected before they can exceed the 30000ms call timeout. |
+| `ease` | string | no | one of: `sinusoidal`, `quadratic`, `cubic` | LX ease curve (default sinusoidal); each is blended 50% with linear time. |
 | `theta` | number | no | — | Azimuth in degrees around +Y; 0 looks from -Z toward +Z. Wraps into [0, 360). |
 | `phi` | number | no | — | Elevation in degrees from the XZ plane: positive looks down at the target, negative looks up at it. Clamped to LX's ±89 (the look-at degenerates at the poles), so 'straight up' is phi -89. |
 | `radius` | number | no | — | Distance from the eye to the target, in model units; must be greater than 0. Also sets the framing in orthographic projection, where the visible width is radius. |

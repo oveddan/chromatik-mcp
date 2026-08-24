@@ -24,6 +24,15 @@ public sealed interface Result<T> {
    */
   record OkImage<T>(T value, Supplier<byte[]> png) implements Result<T> {}
 
+  /**
+   * Success whose value becomes available only after engine-thread work started by the
+   * handler has completed. The seam invokes {@code value} on the HTTP worker thread after
+   * the handler has left the engine thread, so it may block without preventing the engine
+   * loop from making progress. It must not read live LX state off-thread; close only over
+   * immutable snapshots and thread-safe completion state.
+   */
+  record OkAwait<T>(Supplier<T> value) implements Result<T> {}
+
   record Error<T>(String code, String message) implements Result<T> {}
 
   static <T> Result<T> ok(T value) {
@@ -32,6 +41,10 @@ public sealed interface Result<T> {
 
   static <T> Result<T> okImage(T value, Supplier<byte[]> png) {
     return new OkImage<>(value, png);
+  }
+
+  static <T> Result<T> okAwait(Supplier<T> value) {
+    return new OkAwait<>(value);
   }
 
   static <T> Result<T> error(String code, String message) {

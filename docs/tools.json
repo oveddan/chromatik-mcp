@@ -576,6 +576,91 @@
     "additionalProperties" : false
   }
 }, {
+  "name" : "animate_camera",
+  "description" : "Move smoothly from the current 3D viewpoint to a saved angle or an explicit camera over durationMs. Pass 'to' as a name from list_cameras (or 'current' for the viewpoint get_camera reports), or omit it and pass camera fields directly; the two forms are mutually exclusive. Explicit fields default to the current camera, so one field animates a single-axis nudge. The camera orbits a look-at point: 'target' is that point, 'radius' the distance out to the eye, 'theta' the azimuth in degrees (0 looks from -Z toward +Z, the same viewpoint as get_frame's 'front' plane; increasing theta orbits the eye toward +X) and 'phi' the elevation in degrees (positive looks down from above, negative looks up from below). Up is always +Y. Give 'eye' instead to place the camera by absolute position — mutually exclusive with theta/phi/radius, and converted to the same orbit angle, which the response reports back. Values out of LX's range are clamped (phi to ±89°, fovDegrees to 15-150) and theta wraps, so read the response rather than assuming the request landed verbatim; a radius of 0 is rejected instead, since a camera at its own target has no view direction. The call returns only when the camera has arrived, while the LX engine keeps rendering throughout the move. A concurrent get_frame {'camera':'current'} shoots the interpolated position immediately and reports midMove:true. Ease matches LX camera animation: sinusoidal (the default), quadratic, or cubic, blended 50% with linear time. durationMs must be 1-29000, leaving one second of headroom under the server's 30000ms tool-call timeout. Not undoable with Cmd-Z.",
+  "readOnly" : false,
+  "inputSchema" : {
+    "type" : "object",
+    "properties" : {
+      "to" : {
+        "type" : "string",
+        "description" : "Destination saved-camera name (case-sensitive; see list_cameras), or 'current'. Rejected together with explicit camera fields."
+      },
+      "durationMs" : {
+        "type" : "integer",
+        "description" : "Move duration in milliseconds, 1-29000. Longer moves are rejected before they can exceed the 30000ms call timeout."
+      },
+      "ease" : {
+        "type" : "string",
+        "description" : "LX ease curve (default sinusoidal); each is blended 50% with linear time.",
+        "enum" : [ "sinusoidal", "quadratic", "cubic" ]
+      },
+      "theta" : {
+        "type" : "number",
+        "description" : "Azimuth in degrees around +Y; 0 looks from -Z toward +Z. Wraps into [0, 360)."
+      },
+      "phi" : {
+        "type" : "number",
+        "description" : "Elevation in degrees from the XZ plane: positive looks down at the target, negative looks up at it. Clamped to LX's ±89 (the look-at degenerates at the poles), so 'straight up' is phi -89."
+      },
+      "radius" : {
+        "type" : "number",
+        "description" : "Distance from the eye to the target, in model units; must be greater than 0. Also sets the framing in orthographic projection, where the visible width is radius."
+      },
+      "target" : {
+        "type" : "object",
+        "description" : "The look-at point in model coordinates (LX's camera center). All three components are required.",
+        "properties" : {
+          "x" : {
+            "type" : "number",
+            "description" : "X coordinate in model units"
+          },
+          "y" : {
+            "type" : "number",
+            "description" : "Y coordinate in model units"
+          },
+          "z" : {
+            "type" : "number",
+            "description" : "Z coordinate in model units"
+          }
+        },
+        "required" : [ "x", "y", "z" ],
+        "additionalProperties" : false
+      },
+      "eye" : {
+        "type" : "object",
+        "description" : "Absolute camera position in model coordinates, as an alternative to theta/phi/radius — pass it with 'target' to aim. Rejected alongside theta/phi/radius. All three components are required.",
+        "properties" : {
+          "x" : {
+            "type" : "number",
+            "description" : "X coordinate in model units"
+          },
+          "y" : {
+            "type" : "number",
+            "description" : "Y coordinate in model units"
+          },
+          "z" : {
+            "type" : "number",
+            "description" : "Z coordinate in model units"
+          }
+        },
+        "required" : [ "x", "y", "z" ],
+        "additionalProperties" : false
+      },
+      "projection" : {
+        "type" : "string",
+        "description" : "'perspective' (a real lens — near geometry looms, which is what makes an interior viewpoint read as interior) or 'orthographic' (parallel, no foreshortening; good for a structural read of the model).",
+        "enum" : [ "perspective", "orthographic" ]
+      },
+      "fovDegrees" : {
+        "type" : "number",
+        "description" : "Vertical field of view in degrees for perspective projection (LX's 'perspective' lens control): 15 is a long lens, 150 an extreme wide angle. Clamped to 15-150. Carried but unused in orthographic projection."
+      }
+    },
+    "required" : [ "durationMs" ],
+    "additionalProperties" : false
+  }
+}, {
   "name" : "apply_operations",
   "description" : "Apply up to 50 mutation-tool calls in one MCP round-trip. Every handler already runs on the LX engine thread, so a batch schedules onto it once and every operation lands in the same engine frame — no intermediate half-built state is ever rendered or output between operations, unlike issuing the same calls one at a time. Each entry is {tool, args}: 'tool' names any registered batchable mutation tool (by its normal tool name) and 'args' is exactly the argument object a top-level call to that tool would take. Every operations[i].tool is validated up front — an unknown name, a read-only tool, undo/redo, or apply_operations itself (batches cannot nest) fails the whole call with invalid_argument and applies nothing. Once validated, execution is continue-on-error: an operation that fails does not stop the ones after it. The response's results array has one entry per operation, in order: {index, ok: true, result} on success or {index, ok: false, code, message} on failure, using the same error codes a top-level call would return. Two sharp edges this tool does NOT smooth over: (1) it does not collapse the batch into one undo step — each operation still produces its own undo entry (or entries) exactly as if called individually, so undoing an N-operation batch takes N presses of Cmd-Z; (2) LX's lx.command.perform() wipes the entire undo/redo history when a command fails — in a batch, one failing operation can silently erase undo history for every earlier operation in the SAME batch, even though those operations still report ok: true; (3) all operations run inside one engine frame, so an I/O-heavy operation stalls the whole batch's cost onto that single frame — save_project (full project serialization plus a disk write, plus a .lxm write-through when syncModelFile is on) is now the worst case, ahead of reload_fixtures (which re-reads every .lxf from disk); a large or slow batch can hit the 30s executor timeout. A batch still queued at that point is cancelled; one already started on the engine thread cannot be interrupted safely and may still complete.",
   "readOnly" : false,
@@ -1018,7 +1103,7 @@
   }
 }, {
   "name" : "get_frame",
-  "description" : "See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, lit fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. nonBlackFraction counts any pixel with a nonzero channel, so near-black residuals (e.g. a #101010 blur tail) inflate it even though they read as dark. litFraction excludes those residuals: it counts only pixels whose max channel exceeds litThreshold (default 26, ~10% of full scale — a documented heuristic, not perceptual luminance; raise it to make litFraction stricter) and is the field to use when judging negative space or whether an area actually reads as dark. litThreshold=0 makes litFraction equal to nonBlackFraction (max > 0 is the nonBlack condition); litThreshold=255 makes litFraction always 0.0, since no channel can exceed the maximum. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Renders either a fixed orthographic plane (the 'view' argument's front/top/side, good for a structural read) or an actual camera ('camera': a name from list_cameras, or 'current' for the live viewpoint get_camera reports and Chromatik's preview shows) — a walk-in piece can only be judged from a viewpoint a visitor would occupy, and no orthographic elevation shows that. The two are mutually exclusive; the response echoes whichever it used. Reads main/cue/aux output buses. Only the grid depends on the viewpoint: the fractions and dominant colors describe the whole buffer, so a point the camera cannot see still counts toward them.",
+  "description" : "See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, lit fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. nonBlackFraction counts any pixel with a nonzero channel, so near-black residuals (e.g. a #101010 blur tail) inflate it even though they read as dark. litFraction excludes those residuals: it counts only pixels whose max channel exceeds litThreshold (default 26, ~10% of full scale — a documented heuristic, not perceptual luminance; raise it to make litFraction stricter) and is the field to use when judging negative space or whether an area actually reads as dark. litThreshold=0 makes litFraction equal to nonBlackFraction (max > 0 is the nonBlack condition); litThreshold=255 makes litFraction always 0.0, since no channel can exceed the maximum. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Renders either a fixed orthographic plane (the 'view' argument's front/top/side, good for a structural read) or an actual camera ('camera': a name from list_cameras, or 'current' for the live viewpoint get_camera reports and Chromatik's preview shows) — a walk-in piece can only be judged from a viewpoint a visitor would occupy, and no orthographic elevation shows that. The two are mutually exclusive; the response echoes whichever it used. Reads main/cue/aux output buses. Only the grid depends on the viewpoint: the fractions and dominant colors describe the whole buffer, so a point the camera cannot see still counts toward them. If animate_camera is moving the current camera, a current-camera render shoots its interpolated position now and reports camera.midMove=true; it does not stall or wait for arrival.",
   "readOnly" : true,
   "inputSchema" : {
     "type" : "object",

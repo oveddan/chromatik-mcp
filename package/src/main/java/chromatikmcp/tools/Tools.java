@@ -144,6 +144,7 @@ public final class Tools {
             new GetFrame(cameras),
             new GetCamera(cameras),
             new SetCamera(cameras),
+            new AnimateCamera(cameras),
             new SaveCamera(cameras),
             new ListCameras(cameras),
             new RecallCamera(cameras),
@@ -286,6 +287,17 @@ public final class Tools {
     }
     return switch (result) {
       case Result.Ok<Map<String, Object>> ok -> success(tool, ok.value(), null);
+      case Result.OkAwait<Map<String, Object>> awaited -> {
+        try {
+          yield success(tool, awaited.value().get(), null);
+        } catch (RuntimeException e) {
+          LX.error(e, "[Chromatik-MCP] Tool " + tool.name() + " failed while awaiting completion");
+          yield McpSchema.CallToolResult.builder()
+              .isError(true)
+              .addTextContent(Result.INTERNAL + ": failed while awaiting completion")
+              .build();
+        }
+      }
       case Result.OkImage<Map<String, Object>> ok -> {
         // Encoded here, on the HTTP worker thread — executor.call has already returned,
         // so the engine thread never pays for rasterization or PNG compression. The

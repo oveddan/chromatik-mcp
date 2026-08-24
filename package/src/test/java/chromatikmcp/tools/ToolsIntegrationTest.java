@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterAll;
@@ -157,7 +158,7 @@ class ToolsIntegrationTest {
             "list_parameters", "set_parameter", "undo", "redo", "add_modulator", "wire_modulator", "wire_trigger",
             "remove_modulation", "remove_modulator", "move_modulator", "list_modulations", "fire_trigger",
             "get_component_doc", "get_fixture_format",
-            "get_frame", "get_camera", "set_camera", "save_camera", "list_cameras",
+            "get_frame", "get_camera", "set_camera", "animate_camera", "save_camera", "list_cameras",
             "recall_camera", "remove_camera",
             "get_palette", "describe_model", "get_views", "add_view", "remove_view",
             "list_fixtures", "get_fixture", "get_output_map", "list_available_fixtures", "add_fixture",
@@ -205,7 +206,7 @@ class ToolsIntegrationTest {
         "remove_automation_point", "remove_clip_range", "collapse_clip_range",
         "add_audio_lane", "add_notes_lane", "add_clip_note", "set_clip_note",
         "set_composition_arm",
-        "set_camera", "save_camera", "recall_camera", "remove_camera",
+        "set_camera", "animate_camera", "save_camera", "recall_camera", "remove_camera",
         "apply_operations");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
@@ -287,6 +288,26 @@ class ToolsIntegrationTest {
   }
 
   @Test
+  void animateCameraWaitsForArrivalWithoutBlockingEngineTicks() {
+    AtomicInteger ticks = new AtomicInteger();
+    heronarts.lx.LXLoopTask ticker = deltaMs -> ticks.incrementAndGet();
+    engineExecutor.execute(() -> lx.engine.addLoopTask(ticker));
+    int before = ticks.get();
+    try {
+      Map<String, Object> payload = structured(call("animate_camera", Map.of(
+          "theta", 123, "durationMs", 80, "ease", "cubic")));
+
+      assertEquals(123.0, ((Number) payload.get("theta")).doubleValue(), 1e-4,
+          "the blocking call returns only after arrival");
+      assertEquals("cubic", payload.get("ease"));
+      assertTrue(ticks.get() - before > 1,
+          "the engine kept ticking while the HTTP worker awaited the move");
+    } finally {
+      engineExecutor.execute(() -> lx.engine.removeLoopTask(ticker));
+    }
+  }
+
+  @Test
   void addClipNegativeIndexIsRejectedBeforeTheHandlerRuns() {
     // The schema's minimum is the guard here — the SDK validates and rejects server-side,
     // which only an end-to-end call exercises.
@@ -321,6 +342,17 @@ class ToolsIntegrationTest {
     McpSchema.TextContent text =
         assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
     assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+  }
+
+  @Test
+  void animateCameraDurationOverCapIsInvalidArgumentOverHttp() {
+    McpSchema.CallToolResult result = call("animate_camera", Map.of(
+        "theta", 90, "durationMs", AnimateCamera.MAX_DURATION_MS + 1));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text =
+        assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT + ":"), text.text());
+    assertTrue(text.text().contains(String.valueOf(AnimateCamera.MAX_DURATION_MS)), text.text());
   }
 
   @Test

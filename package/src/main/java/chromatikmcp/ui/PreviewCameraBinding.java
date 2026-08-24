@@ -5,8 +5,9 @@ import heronarts.glx.ui.UI3dContext;
 import chromatikmcp.domain.Cameras;
 
 /**
- * Binds {@link Cameras} to Chromatik's live 3D preview, so {@code set_camera} moves the
- * view a person is actually watching rather than a private copy of it.
+ * Binds {@link Cameras} to Chromatik's live 3D preview, so {@code set_camera} and each
+ * engine-loop step of {@code animate_camera} move the view a person is actually watching
+ * rather than a private copy of it.
  *
  * <p>The mapping is one-to-one because {@link Cameras}' angle model was taken from
  * {@code UI3dContext.Camera} in the first place — theta/phi/radius about a center, plus the

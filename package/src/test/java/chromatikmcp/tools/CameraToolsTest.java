@@ -40,6 +40,8 @@ class CameraToolsTest extends HeadlessLxTest {
     return switch (result) {
       case Result.Ok<Map<String, Object>> value -> value.value();
       case Result.OkImage<Map<String, Object>> image -> image.value();
+      case Result.OkAwait<Map<String, Object>> awaited ->
+          throw new AssertionError("test must advance the engine before awaiting: " + awaited);
       case Result.Error<Map<String, Object>> error ->
           throw new AssertionError(error.code() + ": " + error.message());
     };
@@ -242,10 +244,46 @@ class CameraToolsTest extends HeadlessLxTest {
     assertEquals(Cameras.CURRENT, camera.get("name"));
     assertEquals(45.0, ((Number) camera.get("theta")).doubleValue(), EPSILON);
     assertEquals("orthographic", camera.get("projection"));
+    assertEquals(false, camera.get("midMove"));
     assertEquals(
         ((Number) payload.get("imageWidth")).intValue() * 3 / 4,
         ((Number) payload.get("imageHeight")).intValue(),
         "camera renders use a 4:3 frame");
+  }
+
+  @Test
+  void getFrameFlagsTheCurrentInterpolatedCameraMidMove() {
+    LX lx = newHeadlessLx();
+    lx.engine.setFixedDeltaMs(10);
+    Cameras cameras = new Cameras();
+    cameras.apply(lx, new Cameras.CameraAngle(
+        350, 0, 10, new Cameras.Vec3(0, 0, 0),
+        Cameras.Projection.PERSPECTIVE, 60));
+    Cameras.CameraAnimation move = cameras.animate(
+        lx,
+        new Cameras.CameraAngle(10, 0, 10, new Cameras.Vec3(0, 0, 0),
+            Cameras.Projection.PERSPECTIVE, 60),
+        20, Cameras.AnimationEase.SINUSOIDAL);
+    lx.engine.run();
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> camera = (Map<String, Object>)
+        ok(new GetFrame(cameras).handle(lx, Map.of("camera", Cameras.CURRENT))).get("camera");
+    assertEquals(true, camera.get("midMove"));
+    assertEquals(0.0, ((Number) camera.get("theta")).doubleValue(), EPSILON,
+        "the frame uses the current interpolated position rather than either endpoint");
+
+    lx.engine.run();
+    move.await();
+  }
+
+  @Test
+  void animateCameraRejectsDurationOverTheExecutorDerivedCap() {
+    LX lx = newHeadlessLx();
+    Result.Error<Map<String, Object>> failure = error(new AnimateCamera(new Cameras()).handle(
+        lx, Map.of("theta", 90, "durationMs", AnimateCamera.MAX_DURATION_MS + 1)));
+    assertEquals(Result.INVALID_ARGUMENT, failure.code());
+    assertTrue(failure.message().contains(String.valueOf(AnimateCamera.MAX_DURATION_MS)));
   }
 
   @Test

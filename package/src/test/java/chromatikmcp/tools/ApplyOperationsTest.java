@@ -193,6 +193,16 @@ class ApplyOperationsTest {
   }
 
   @Test
+  void awaitCapableCameraAnimationIsRejected() {
+    McpSchema.CallToolResult result = call("apply_operations", Map.of(
+        "operations", List.of(op("animate_camera", Map.of(
+            "theta", 90, "durationMs", 100)))));
+    String text = errorText(result);
+    assertTrue(text.startsWith(Result.INVALID_ARGUMENT), text);
+    assertTrue(text.contains("animate_camera"), text);
+  }
+
+  @Test
   void nestedApplyOperationsIsRejectedTheSameWayAsAReadOnlyTool() {
     // No special-cased "am I nested?" check exists — apply_operations is simply absent from
     // the mutation-tool map it was built from (Tools.allTools), so it fails the same
