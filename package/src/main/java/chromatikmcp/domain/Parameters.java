@@ -49,12 +49,15 @@ public final class Parameters {
     /**
      * The full wire-shape field set shared by every tool that surfaces a parameter
      * (get_parameter, list_parameters, set_parameter): omits null-valued optional fields
-     * and the {@code modulated}/{@code baseValue}/{@code baseNormalized} block entirely
-     * when the parameter has no live modulation.
+     * (including {@code path} for a real but unregistered preview parameter) and the
+     * {@code modulated}/{@code baseValue}/{@code baseNormalized} block entirely when the
+     * parameter has no live modulation.
      */
     public Map<String, Object> toMap() {
       Map<String, Object> payload = new LinkedHashMap<>();
-      payload.put("path", path);
+      if (path != null) {
+        payload.put("path", path);
+      }
       payload.put("label", label);
       if (description != null) {
         payload.put("description", description);
@@ -453,6 +456,15 @@ public final class Parameters {
   }
 
   static ParameterInfo describe(LXParameter parameter) {
+    return describe(parameter, Resolve.canonicalPath(parameter));
+  }
+
+  /** Snapshot for a real parameter that deliberately has no canonical component-tree path. */
+  static ParameterInfo describeUnregistered(LXParameter parameter) {
+    return describe(parameter, null);
+  }
+
+  private static ParameterInfo describe(LXParameter parameter, String path) {
     // Only CompoundParameter / CompoundDiscreteParameter implement Target — the only
     // parameter types LX layers live modulation on top of the base value/normalized.
     boolean modulated = parameter instanceof LXCompoundModulation.Target target
@@ -519,7 +531,7 @@ public final class Parameters {
       }
     }
     return new ParameterInfo(
-        Resolve.canonicalPath(parameter),
+        path,
         parameter.getLabel(),
         parameter.getDescription(),
         parameter.getClass().getSimpleName(),

@@ -45,6 +45,9 @@ import heronarts.lx.modulator.VariableLFO;
 import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.pattern.PatternRack;
 import heronarts.lx.pattern.color.GradientPattern;
+import heronarts.lx.parameter.BoundedParameter;
+import heronarts.lx.parameter.EnumParameter;
+import heronarts.lx.parameter.LXParameter;
 
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -54,6 +57,7 @@ import io.modelcontextprotocol.spec.McpSchema;
 import chromatikmcp.ServerStatus;
 import chromatikmcp.StreamableHttpTestHarness;
 import chromatikmcp.domain.Cameras;
+import chromatikmcp.domain.PointStyle;
 import chromatikmcp.domain.Projects;
 import chromatikmcp.domain.Registry;
 import chromatikmcp.domain.Resolve;
@@ -87,6 +91,34 @@ class ToolsIntegrationTest {
   private static StreamableHttpTestHarness harness;
   private static McpSyncClient client;
   private static EngineExecutor engineExecutor;
+  private static PointStyle pointStyle;
+
+  public enum PreviewLedStyle { LENS1, LENS2, LENS3, CIRCLE, SQUARE }
+
+  private static final class FakePointStylePreview implements PointStyle.PreviewPointStyle {
+    private final Map<String, LXParameter> settings = new LinkedHashMap<>();
+
+    private FakePointStylePreview() {
+      this.settings.put("sparkleAmount", new BoundedParameter("Sparkle", 1));
+      this.settings.put("ledStyle", new EnumParameter<>("LED Style", PreviewLedStyle.LENS1));
+    }
+
+    @Override
+    public List<PointStyle.Setting> read() {
+      return this.settings.entrySet().stream()
+          .map(entry -> PointStyle.describe(entry.getKey(), entry.getValue()))
+          .toList();
+    }
+
+    @Override
+    public PointStyle.Setting set(String name, Object value) {
+      LXParameter parameter = this.settings.get(name);
+      if (parameter == null) {
+        throw Resolve.invalidArgument("Unknown point-style setting '" + name + "'");
+      }
+      return PointStyle.apply(name, parameter, value);
+    }
+  }
 
   /**
    * Registered but never cataloged: the fixture for undocumented-class assertions.
@@ -125,8 +157,11 @@ class ToolsIntegrationTest {
     GetStatus getStatus = new GetStatus(
         status, () -> connectionTracker.snapshot(System.currentTimeMillis()));
     engineExecutor = new EngineExecutor(lx);
+    pointStyle = new PointStyle();
+    pointStyle.bindPreview(new FakePointStylePreview());
     harness = StreamableHttpTestHarness.startMcp(
-        lx, Tools.specifications(lx, engineExecutor, getStatus, new Cameras()), Tools.INSTRUCTIONS,
+        lx, Tools.specifications(
+            lx, engineExecutor, getStatus, new Cameras(), pointStyle), Tools.INSTRUCTIONS,
         connectionTracker);
     status.initialize(
         "127.0.0.1", harness.port(), System.currentTimeMillis(), EmbeddedMcpServer.ENDPOINT);
@@ -160,6 +195,7 @@ class ToolsIntegrationTest {
             "get_component_doc", "get_fixture_format",
             "get_frame", "get_camera", "set_camera", "animate_camera", "save_camera", "list_cameras",
             "recall_camera", "remove_camera",
+            "get_point_style", "set_point_style",
             "get_palette", "describe_model", "get_views", "add_view", "remove_view",
             "list_fixtures", "get_fixture", "get_output_map", "list_available_fixtures", "add_fixture",
             "remove_fixture", "move_fixture", "duplicate_fixture",
@@ -207,12 +243,41 @@ class ToolsIntegrationTest {
         "add_audio_lane", "add_notes_lane", "add_clip_note", "set_clip_note",
         "set_composition_arm",
         "set_camera", "animate_camera", "save_camera", "recall_camera", "remove_camera",
+        "set_point_style",
         "apply_operations");
     for (McpSchema.Tool tool : tools.tools()) {
       boolean expectReadOnly = !mutators.contains(tool.name());
       assertEquals(expectReadOnly, tool.annotations().readOnlyHint(),
           tool.name() + " readOnlyHint");
     }
+  }
+
+  @Test
+  void pointStyleRoundTripsOverMcpAndEnumAcceptsOptionName() {
+    Map<String, Object> set = structured(call("set_point_style",
+        Map.of("setting", "ledStyle", "value", "CIRCLE")));
+    assertEquals("ledStyle", set.get("name"));
+    assertEquals(3, ((Number) set.get("value")).intValue());
+    assertEquals("CIRCLE", set.get("formatted"));
+    assertFalse(set.containsKey("path"), "UIPointCloud has no canonical LX path");
+
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> settings = (List<Map<String, Object>>) structured(
+        call("get_point_style", Map.of())).get("settings");
+    Map<String, Object> read = settings.stream()
+        .filter(setting -> "ledStyle".equals(setting.get("name")))
+        .findFirst().orElseThrow();
+    assertEquals(set, read, "set/get use one shared parameter serializer");
+  }
+
+  @Test
+  void unknownPointStyleSettingIsCleanInvalidArgument() {
+    McpSchema.CallToolResult result = call("set_point_style",
+        Map.of("setting", "starburst", "value", 0));
+    assertEquals(Boolean.TRUE, result.isError());
+    McpSchema.TextContent text = assertInstanceOf(
+        McpSchema.TextContent.class, result.content().get(0));
+    assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT + ": Unknown point-style setting"));
   }
 
   @Test

@@ -47,6 +47,13 @@ handling, verifying your own work — are in
 | [`recall_camera`](#recall_camera) | write | Move the viewpoint to a saved angle (list_cameras reports the names). Shoot successive renders of the same pattern from one recalled angle so the… |
 | [`remove_camera`](#remove_camera) | write | Forget a saved viewpoint. The live camera does not move — this only drops the name from the project's saved list. Unknown name returns not_found. Not… |
 
+**Live preview point style**
+
+| tool | | what it does |
+|---|---|---|
+| [`get_point_style`](#get_point_style) | read | Read the LED point-rendering settings used by Chromatik's live main 3D preview, including point size, sparkle, LED style, gamma, depth, and… |
+| [`set_point_style`](#set_point_style) | write | Set one LED point-rendering setting on Chromatik's live main 3D preview. Numeric, boolean, and discrete values follow set_parameter's rules… |
+
 **Save the project & model**
 
 | tool | | what it does |
@@ -322,7 +329,7 @@ No parameters.
 
 _read-only_
 
-See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, lit fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. nonBlackFraction counts any pixel with a nonzero channel, so near-black residuals (e.g. a #101010 blur tail) inflate it even though they read as dark. litFraction excludes those residuals: it counts only pixels whose max channel exceeds litThreshold (default 26, ~10% of full scale — a documented heuristic, not perceptual luminance; raise it to make litFraction stricter) and is the field to use when judging negative space or whether an area actually reads as dark. litThreshold=0 makes litFraction equal to nonBlackFraction (max > 0 is the nonBlack condition); litThreshold=255 makes litFraction always 0.0, since no channel can exceed the maximum. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Renders either a fixed orthographic plane (the 'view' argument's front/top/side, good for a structural read) or an actual camera ('camera': a name from list_cameras, or 'current' for the live viewpoint get_camera reports and Chromatik's preview shows) — a walk-in piece can only be judged from a viewpoint a visitor would occupy, and no orthographic elevation shows that. The two are mutually exclusive; the response echoes whichever it used. Reads main/cue/aux output buses. Only the grid depends on the viewpoint: the fractions and dominant colors describe the whole buffer, so a point the camera cannot see still counts toward them. If animate_camera is moving the current camera, a current-camera render shoots its interpolated position now and reports camera.midMove=true; it does not stall or wait for arrival.
+See what the model is rendering by reading the composited output buffer. Pass include_image=true to get an actual PNG image of the current frame — use this whenever you need to visually inspect the render (e.g. confirming a pattern/effect change looks right, debugging the mapping, or answering 'what does this look like'). The API always returns a cheap numeric summary (non-black fraction, lit fraction, mean brightness, dominant colors, and an NxN mean-color grid) — the PNG is additional when requested. nonBlackFraction counts any pixel with a nonzero channel, so near-black residuals (e.g. a #101010 blur tail) inflate it even though they read as dark. litFraction excludes those residuals: it counts only pixels whose max channel exceeds litThreshold (default 26, ~10% of full scale — a documented heuristic, not perceptual luminance; raise it to make litFraction stricter) and is the field to use when judging negative space or whether an area actually reads as dark. litThreshold=0 makes litFraction equal to nonBlackFraction (max > 0 is the nonBlack condition); litThreshold=255 makes litFraction always 0.0, since no channel can exceed the maximum. Image content is token-expensive, so default to the numeric summary and only request the PNG when actually looking at the picture matters. Renders either a fixed orthographic plane (the 'view' argument's front/top/side, good for a structural read) or an actual camera ('camera': a name from list_cameras, or 'current' for the live viewpoint get_camera reports and Chromatik's preview shows) — a walk-in piece can only be judged from a viewpoint a visitor would occupy, and no orthographic elevation shows that. The two are mutually exclusive; the response echoes whichever it used. Reads main/cue/aux output buses. Only the grid depends on the viewpoint: the fractions and dominant colors describe the whole buffer, so a point the camera cannot see still counts toward them. If animate_camera is moving the current camera, a current-camera render shoots its interpolated position now and reports camera.midMove=true; it does not stall or wait for arrival. The PNG is an independent filled-disc projection, not Chromatik's GLX preview, so it does not reflect get_point_style/set_point_style settings such as sparkle or LED style.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
@@ -460,6 +467,32 @@ Forget a saved viewpoint. The live camera does not move — this only drops the 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
 | `name` | string | yes | — | Name of a saved angle, matched exactly (case-sensitive) — see list_cameras |
+
+## Live preview point style
+
+These settings belong to Chromatik's live GLX preview and have no canonical
+`/lx/...` path. They persist with that preview's project state, but are unavailable in a
+headless LX runtime. `get_frame` uses a separate filled-disc raster and does not reproduce
+sparkle, LED textures, or the other preview-only controls.
+
+### `get_point_style`
+
+_read-only_
+
+Read the LED point-rendering settings used by Chromatik's live main 3D preview, including point size, sparkle, LED style, gamma, depth, and directional controls. Each entry uses the ordinary parameter wire shape (value, type, range, options, units, and formatting), with name in place of a canonical path because UIPointCloud is not an LXComponent. Unavailable headless. These settings affect only the preview a person watches: get_frame uses an independent filled-disc raster and does not show sparkle, LED style, or any other preview point-style setting.
+
+No parameters.
+
+### `set_point_style`
+
+_mutating_
+
+Set one LED point-rendering setting on Chromatik's live main 3D preview. Numeric, boolean, and discrete values follow set_parameter's rules; discrete/enum settings accept an option name string as well as an integer index (for example ledStyle: 'CIRCLE'). The response is the resulting ordinary parameter wire shape plus its setting name. Unavailable headless and not undoable with Cmd-Z. This changes only the preview a person watches: get_frame uses an independent filled-disc raster and does not show sparkle, LED style, or any other preview point-style setting.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `setting` | string | yes | — | Point-style setting name returned by get_point_style (for example sparkleAmount or ledStyle) |
+| `value` | number \| boolean \| string | yes | — | New value; discrete/enum settings also accept an exact option name string |
 
 ## Save the project & model
 
