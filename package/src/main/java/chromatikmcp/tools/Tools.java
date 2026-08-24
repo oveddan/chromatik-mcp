@@ -303,7 +303,8 @@ public final class Tools {
           LX.error(e, "[Chromatik-MCP] Tool " + tool.name() + " failed while awaiting completion");
           yield McpSchema.CallToolResult.builder()
               .isError(true)
-              .addTextContent(Result.INTERNAL + ": failed while awaiting completion")
+              .addTextContent(Result.INTERNAL + ": " +
+                  ((e.getMessage() == null) ? e.getClass().getSimpleName() : e.getMessage()))
               .build();
         }
       }

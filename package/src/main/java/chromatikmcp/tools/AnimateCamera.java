@@ -12,7 +12,7 @@ import chromatikmcp.engine.EngineExecutor;
 /** Smooth camera move whose client-visible wait happens off the LX engine thread. */
 public final class AnimateCamera implements LxTool {
 
-  /** One second of headroom under the seam's only 30-second tool-call timeout. */
+  /** Bounds the requested durationMs argument; completion time is unbounded by design (stall recovery in Cameras.CameraAnimation.await()). */
   static final int MAX_DURATION_MS = (int) EngineExecutor.DEFAULT_TIMEOUT_MS - 1_000;
 
   private final Cameras cameras;
@@ -38,8 +38,11 @@ public final class AnimateCamera implements LxTool {
         + "{'camera':'current'} shoots the interpolated position immediately and reports "
         + "midMove:true. Ease matches LX camera animation: sinusoidal (the default), "
         + "quadratic, or cubic, blended 50% with linear time. durationMs must be 1-"
-        + MAX_DURATION_MS + ", leaving one second of headroom under the server's 30000ms "
-        + "tool-call timeout. Not undoable with Cmd-Z.";
+        + MAX_DURATION_MS + ". The call blocks until the move finishes; completion time "
+        + "scales with /lx/engine/speed (speed is the move's playback-rate multiplier, so "
+        + "a slower speed — even set mid-move — is a proportionally longer wait), but the "
+        + "call is guaranteed to return rather than hang: it is cancelled automatically if "
+        + "the move makes no progress for a brief interval. Not undoable with Cmd-Z.";
   }
 
   @Override
@@ -52,7 +55,7 @@ public final class AnimateCamera implements LxTool {
     duration.put("type", "integer");
     duration.put("description",
         "Move duration in milliseconds, 1-" + MAX_DURATION_MS
-            + ". Longer moves are rejected before they can exceed the 30000ms call timeout.");
+            + ". Actual wait scales with /lx/engine/speed.");
     properties.put("durationMs", duration);
     properties.put("ease", Schemas.enumString(
         "LX ease curve (default sinusoidal); each is blended 50% with linear time.",
@@ -77,7 +80,9 @@ public final class AnimateCamera implements LxTool {
     if (durationMs <= 0 || durationMs > MAX_DURATION_MS) {
       return Result.error(Result.INVALID_ARGUMENT,
           "durationMs must be between 1 and " + MAX_DURATION_MS
-              + " (the cap leaves 1000ms under the 30000ms tool-call timeout)");
+              + " (the call itself has no fixed timeout — it blocks until the move "
+              + "finishes, with completion time scaling with /lx/engine/speed — this "
+              + "cap just bounds how long a single move can be requested to run)");
     }
 
     String toName = Args.optionalString(args, "to");
