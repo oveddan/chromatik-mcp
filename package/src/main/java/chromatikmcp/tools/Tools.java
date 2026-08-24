@@ -232,7 +232,11 @@ public final class Tools {
             new AddNotesLane(),
             new AddClipNote(),
             new SetClipNote(),
-            new SetCompositionArm()));
+            new SetCompositionArm(),
+            new ListStages(),
+            new AddStage(),
+            new RemoveStage(),
+            new SetStage()));
 
     // Built from the list above, not a static registry: appending after gives ApplyOperations
     // no way to see itself, and filtering batchable() excludes reads and global history

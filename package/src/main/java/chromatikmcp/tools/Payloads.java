@@ -26,6 +26,7 @@ import chromatikmcp.domain.Compositions.LocatorList;
 import chromatikmcp.domain.Compositions.LocatorSummary;
 import chromatikmcp.domain.Cursors;
 import chromatikmcp.domain.Cursors.CursorInfo;
+import chromatikmcp.domain.Envelopes.StageInfo;
 import chromatikmcp.domain.Scenes.SceneClip;
 import chromatikmcp.domain.Scenes.SceneState;
 
@@ -150,6 +151,27 @@ final class Payloads {
     List<Map<String, Object>> list = new ArrayList<>(lanes.size());
     for (LaneSummary lane : lanes) {
       list.add(laneSummary(lane));
+    }
+    return list;
+  }
+
+  /** One {@code MultiStageEnvelope} stage: index, basis, value, shape, initial, last. */
+  static Map<String, Object> stageSummary(StageInfo stage) {
+    Map<String, Object> map = new LinkedHashMap<>();
+    map.put("index", stage.index());
+    map.put("basis", stage.basis());
+    map.put("value", stage.value());
+    map.put("shape", stage.shape());
+    map.put("initial", stage.initial());
+    map.put("last", stage.last());
+    return map;
+  }
+
+  /** Stage summaries in basis order (index 0 = fixed at basis 0). */
+  static List<Map<String, Object>> stageSummaries(List<StageInfo> stages) {
+    List<Map<String, Object>> list = new ArrayList<>(stages.size());
+    for (StageInfo stage : stages) {
+      list.add(stageSummary(stage));
     }
     return list;
   }

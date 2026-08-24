@@ -127,6 +127,7 @@ reusing cached paths.`,
     tools: [
       'add_modulator', 'remove_modulator', 'move_modulator', 'wire_modulator',
       'wire_trigger', 'remove_modulation', 'fire_trigger',
+      'list_stages', 'add_stage', 'remove_stage', 'set_stage',
     ],
   },
   {
