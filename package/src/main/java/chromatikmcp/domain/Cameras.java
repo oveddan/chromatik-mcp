@@ -7,6 +7,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -40,8 +42,8 @@ import heronarts.lx.model.LXModel;
  *
  * <p>This is a stateful domain object, not a static utility: it owns the named-angle map
  * and is registered with {@link LX#registerExternal} under {@link #EXTERNAL_KEY} so the
- * angles ride along in the project file. Every method is synchronized — project save/load
- * can run off the engine thread that tool handlers use.
+ * angles ride along in the project file. Every method holds the same lock — project
+ * save/load can run off the engine thread that tool handlers use.
  */
 public final class Cameras implements LXSerializable {
 
@@ -155,13 +157,21 @@ public final class Cameras implements LXSerializable {
     private final int durationMs;
     private final AnimationEase ease;
     private final CompletableFuture<CameraView> completion = new CompletableFuture<>();
+    private final Cameras cameras;
+    private AnimationLoop loop;
 
     private CameraAnimation(
-        CameraAngle from, CameraAngle to, int durationMs, AnimationEase ease) {
+        CameraAngle from, CameraAngle to, int durationMs, AnimationEase ease,
+        Cameras cameras) {
       this.from = from;
       this.to = to;
       this.durationMs = durationMs;
       this.ease = ease;
+      this.cameras = cameras;
+    }
+
+    void setLoop(AnimationLoop loop) {
+      this.loop = loop;
     }
 
     public CameraAngle from() {
@@ -181,8 +191,96 @@ public final class Cameras implements LXSerializable {
     }
 
     public CameraView await() {
+      // A fixed deadline computed up front (even from a re-sampled speed) can't track
+      // a speed change that happens mid-flight, since the loop's real wall-clock pace
+      // changes the instant /lx/engine/speed does. Poll instead, and only declare a
+      // stall — and only then recover — once elapsedMs has made zero forward progress
+      // for a full grace window. That is correct under any number of speed changes,
+      // including changes to and from 0, without re-deriving anything from speed.
+      final long pollMs = 500L;
+      final long stallGraceMs = 2_000L;
+      double lastElapsedMs = -1;
+      long stalledSinceNs = 0;
+      boolean stalledDetected = false;
       try {
-        return this.completion.get();
+        while (true) {
+          try {
+            return this.completion.get(pollMs, TimeUnit.MILLISECONDS);
+          } catch (TimeoutException e) {
+            double currentElapsedMs = (this.loop != null) ? this.loop.elapsedMs : -1;
+            if (currentElapsedMs != lastElapsedMs) {
+              // Forward progress since the last poll (at any speed, however slow) —
+              // keep waiting.
+              lastElapsedMs = currentElapsedMs;
+              stalledDetected = false;
+              continue;
+            }
+            long now = System.nanoTime();
+            if (!stalledDetected) {
+              stalledSinceNs = now;
+              stalledDetected = true;
+              continue;
+            }
+            if (now - stalledSinceNs < stallGraceMs * 1_000_000L) {
+              continue;
+            }
+            // No progress for stallGraceMs: genuinely stalled (e.g. speed is exactly
+            // 0, or something threw without completing the future). Recover.
+            // Signal cancellation without needing the lock first — tryLock below is
+            // bounded and can fail (e.g. a bound preview's apply()/read() genuinely
+            // blocking), and if it does, this volatile write is the only thing that
+            // stops the loop task forever, since the loop's own lock acquisition is
+            // unbounded and will eventually succeed once the holder releases it.
+            if (this.loop != null) {
+              this.loop.cancelled = true;
+            }
+            // Bounded, not synchronized: if whatever is stalling the animation is
+            // itself holding the lock (e.g. a bound preview's apply()/read()
+            // blocking), an unbounded wait here would defeat the very recovery this
+            // timeout exists to provide. If the lock isn't acquired in time, state
+            // cleanup is skipped for now (loop() will finish it once it next
+            // acquires the lock normally), but await() still returns rather than
+            // hanging.
+            boolean acquired;
+            try {
+              acquired = this.cameras.lock.tryLock(2, TimeUnit.SECONDS);
+            } catch (InterruptedException interrupted) {
+              Thread.currentThread().interrupt();
+              acquired = false;
+            }
+            if (acquired) {
+              try {
+                if (this.cameras.animation == this.loop) {
+                  this.cameras.animation = null;
+                }
+              } finally {
+                this.cameras.lock.unlock();
+              }
+            }
+            // Declare the stall by attempting to complete the future ourselves, rather
+            // than checking isDone() and then throwing: isDone()-then-throw is a
+            // check-then-act race (the loop can complete the future in the gap between
+            // the check and the throw), while completeExceptionally() is atomic — only
+            // the first completer between us and the loop wins, with no gap for the
+            // other to sneak in.
+            boolean weDeclaredTheStall =
+                this.completion.completeExceptionally(
+                    new TimeoutException(
+                        "Camera animation made no progress for "
+                            + stallGraceMs
+                            + "ms and was cancelled"));
+            if (!weDeclaredTheStall) {
+              // The loop already completed it — successfully, or with its own failure —
+              // in the narrow window around our recovery attempt. Report what actually
+              // happened, not a manufactured cancellation.
+              return this.completion.get();
+            }
+            throw new IllegalStateException(
+                "Camera animation made no progress for " + stallGraceMs
+                    + "ms and was cancelled",
+                e);
+          }
+        }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new IllegalStateException("Interrupted while awaiting camera animation", e);
@@ -208,6 +306,16 @@ public final class Cameras implements LXSerializable {
     void apply(CameraAngle angle);
   }
 
+  /**
+   * Guards every mutation and read below, in place of {@code synchronized}: a plain
+   * intrinsic monitor has no timed acquisition, and {@link CameraAnimation#await()}'s
+   * timeout-recovery path needs a bounded {@link java.util.concurrent.locks.Lock#tryLock}
+   * so a stalled holder (e.g. a bound preview's {@code apply}/{@code read} blocking) can't
+   * turn that recovery path itself into an unbounded wait.
+   */
+  private final java.util.concurrent.locks.ReentrantLock lock =
+      new java.util.concurrent.locks.ReentrantLock();
+
   private final Map<String, CameraAngle> saved = new LinkedHashMap<>();
 
   /**
@@ -230,15 +338,20 @@ public final class Cameras implements LXSerializable {
   }
 
   /** The current viewpoint: the live preview's if one is bound, else the detached one. */
-  public synchronized CameraView current(LX lx) {
-    PreviewCamera bound = this.preview;
-    if (bound != null) {
-      return view(normalize(bound.read()), true);
+  public CameraView current(LX lx) {
+    this.lock.lock();
+    try {
+      PreviewCamera bound = this.preview;
+      if (bound != null) {
+        return view(normalize(bound.read()), true);
+      }
+      if (this.detached == null) {
+        this.detached = frameModel(lx.getModel());
+      }
+      return view(this.detached, false);
+    } finally {
+      this.lock.unlock();
     }
-    if (this.detached == null) {
-      this.detached = frameModel(lx.getModel());
-    }
-    return view(this.detached, false);
   }
 
   /**
@@ -246,13 +359,18 @@ public final class Cameras implements LXSerializable {
    * from the request: {@link #normalize} clamps out-of-range angles, and a bound preview
    * clamps again through its own parameters.
    */
-  public synchronized CameraView apply(LX lx, CameraAngle angle) {
-    if (this.animation != null) {
-      throw Resolve.invalidArgument(
-          "A camera animation is in flight; wait for animate_camera to finish before "
-              + "starting another camera move");
+  public CameraView apply(LX lx, CameraAngle angle) {
+    this.lock.lock();
+    try {
+      if (this.animation != null) {
+        throw Resolve.invalidArgument(
+            "A camera animation is in flight; wait for animate_camera to finish before "
+                + "starting another camera move");
+      }
+      return applyStep(angle);
+    } finally {
+      this.lock.unlock();
     }
-    return applyStep(angle);
   }
 
   /**
@@ -260,27 +378,38 @@ public final class Cameras implements LXSerializable {
    * handle off the engine thread; waiting on the engine thread would deadlock the loop that
    * advances it.
    */
-  public synchronized CameraAnimation animate(
+  public CameraAnimation animate(
       LX lx, CameraAngle to, int durationMs, AnimationEase ease) {
-    if (durationMs <= 0) {
-      throw Resolve.invalidArgument("durationMs must be greater than 0");
+    this.lock.lock();
+    try {
+      if (durationMs <= 0) {
+        throw Resolve.invalidArgument("durationMs must be greater than 0");
+      }
+      if (this.animation != null) {
+        throw Resolve.invalidArgument(
+            "A camera animation is already in flight; wait for it to finish before starting "
+                + "another");
+      }
+      CameraAnimation move = new CameraAnimation(
+          current(lx).angle(), normalize(to), durationMs, ease, this);
+      AnimationLoop loop = new AnimationLoop(lx, move);
+      move.setLoop(loop);
+      this.animation = loop;
+      lx.engine.addLoopTask(loop);
+      return move;
+    } finally {
+      this.lock.unlock();
     }
-    if (this.animation != null) {
-      throw Resolve.invalidArgument(
-          "A camera animation is already in flight; wait for it to finish before starting "
-              + "another");
-    }
-    CameraAnimation move = new CameraAnimation(
-        current(lx).angle(), normalize(to), durationMs, ease);
-    AnimationLoop loop = new AnimationLoop(lx, move);
-    this.animation = loop;
-    lx.engine.addLoopTask(loop);
-    return move;
   }
 
   /** Whether the current camera is between animation endpoints right now. */
-  public synchronized boolean isAnimating() {
-    return this.animation != null;
+  public boolean isAnimating() {
+    this.lock.lock();
+    try {
+      return this.animation != null;
+    } finally {
+      this.lock.unlock();
+    }
   }
 
   private CameraView applyStep(CameraAngle angle) {
@@ -302,7 +431,17 @@ public final class Cameras implements LXSerializable {
 
     private final LX lx;
     private final CameraAnimation move;
-    private double elapsedMs;
+    // Written only in loop() (holding Cameras.this.lock) but now also read from
+    // await() on the awaiting thread as a progress signal; volatile is the minimal
+    // fix for cross-thread visibility. elapsedMs is monotonically non-decreasing
+    // within one animation's lifetime, so a stale-but-recent read is fine here —
+    // await() only ever compares it against its own previous poll.
+    private volatile double elapsedMs = 0;
+    // Set by await()'s stall-recovery path without holding Cameras.this.lock (that path
+    // may not be able to acquire it promptly if something is genuinely stuck holding it).
+    // loop() observes this on its next tick, once it acquires the lock normally, and
+    // finishes the cleanup that await() couldn't complete on its own.
+    private volatile boolean cancelled = false;
 
     private AnimationLoop(LX lx, CameraAnimation move) {
       this.lx = lx;
@@ -311,14 +450,30 @@ public final class Cameras implements LXSerializable {
 
     @Override
     public void loop(double deltaMs) {
-      synchronized (Cameras.this) {
+      Cameras.this.lock.lock();
+      try {
+        if (this.cancelled) {
+          // await()'s stall-recovery path may not have been able to acquire the lock
+          // promptly (something else was genuinely stuck holding it), so it could only
+          // set this flag rather than clearing animation itself. Finish that cleanup
+          // now that the lock is actually held.
+          if (animation == this) {
+            animation = null;
+          }
+          this.lx.engine.removeLoopTask(this);
+          return;
+        }
         if (animation != this) {
           this.lx.engine.removeLoopTask(this);
           return;
         }
         try {
-          this.elapsedMs = Math.min(
-              this.move.durationMs(), this.elapsedMs + Math.max(0, deltaMs));
+          // Scaled-delta accumulation: deltaMs already reflects the engine's speed
+          // multiplier, so this is what makes engine speed the animation's actual
+          // playback rate. A stalled (speed 0) animation never advances past here on
+          // its own; CameraAnimation.await()'s bounded timeout is what recovers that
+          // case from the caller's side.
+          this.elapsedMs = Math.min(this.move.durationMs(), this.elapsedMs + Math.max(0, deltaMs));
           double basis = this.elapsedMs / this.move.durationMs();
           CameraView view = (basis >= 1)
               ? applyStep(this.move.to())
@@ -334,52 +489,78 @@ public final class Cameras implements LXSerializable {
           animation = null;
           this.lx.engine.removeLoopTask(this);
           this.move.completion.completeExceptionally(failure);
-          throw failure;
         }
+      } finally {
+        Cameras.this.lock.unlock();
       }
     }
   }
 
   /** Stores the angle under {@code name}, replacing any angle already saved under it. */
-  public synchronized SaveResult save(String name, CameraAngle angle) {
-    String key = requireName(name);
-    CameraAngle normalized = normalize(angle);
-    boolean replaced = this.saved.put(key, normalized) != null;
-    return new SaveResult(new SavedCamera(key, normalized), replaced);
+  public SaveResult save(String name, CameraAngle angle) {
+    this.lock.lock();
+    try {
+      String key = requireName(name);
+      CameraAngle normalized = normalize(angle);
+      boolean replaced = this.saved.put(key, normalized) != null;
+      return new SaveResult(new SavedCamera(key, normalized), replaced);
+    } finally {
+      this.lock.unlock();
+    }
   }
 
-  public synchronized List<SavedCamera> list() {
-    List<SavedCamera> cameras = new ArrayList<>(this.saved.size());
-    for (Map.Entry<String, CameraAngle> entry : this.saved.entrySet()) {
-      cameras.add(new SavedCamera(entry.getKey(), entry.getValue()));
+  public List<SavedCamera> list() {
+    this.lock.lock();
+    try {
+      List<SavedCamera> cameras = new ArrayList<>(this.saved.size());
+      for (Map.Entry<String, CameraAngle> entry : this.saved.entrySet()) {
+        cameras.add(new SavedCamera(entry.getKey(), entry.getValue()));
+      }
+      return cameras;
+    } finally {
+      this.lock.unlock();
     }
-    return cameras;
   }
 
   /** @throws Resolve.ResolveException NOT_FOUND if no angle is saved under {@code name} */
-  public synchronized CameraView recall(LX lx, String name) {
-    return apply(lx, lookup(name));
+  public CameraView recall(LX lx, String name) {
+    this.lock.lock();
+    try {
+      return apply(lx, lookup(name));
+    } finally {
+      this.lock.unlock();
+    }
   }
 
   /** @throws Resolve.ResolveException NOT_FOUND if no angle is saved under {@code name} */
-  public synchronized CameraAngle lookup(String name) {
-    CameraAngle angle = this.saved.get(requireName(name));
-    if (angle == null) {
-      throw new Resolve.ResolveException(Resolve.Failure.NOT_FOUND,
-          "No saved camera named '" + name + "' (list_cameras reports the saved names)");
+  public CameraAngle lookup(String name) {
+    this.lock.lock();
+    try {
+      CameraAngle angle = this.saved.get(requireName(name));
+      if (angle == null) {
+        throw new Resolve.ResolveException(Resolve.Failure.NOT_FOUND,
+            "No saved camera named '" + name + "' (list_cameras reports the saved names)");
+      }
+      return angle;
+    } finally {
+      this.lock.unlock();
     }
-    return angle;
   }
 
   /** @throws Resolve.ResolveException NOT_FOUND if no angle is saved under {@code name} */
-  public synchronized SavedCamera remove(String name) {
-    String key = requireName(name);
-    CameraAngle angle = this.saved.remove(key);
-    if (angle == null) {
-      throw new Resolve.ResolveException(Resolve.Failure.NOT_FOUND,
-          "No saved camera named '" + name + "' (list_cameras reports the saved names)");
+  public SavedCamera remove(String name) {
+    this.lock.lock();
+    try {
+      String key = requireName(name);
+      CameraAngle angle = this.saved.remove(key);
+      if (angle == null) {
+        throw new Resolve.ResolveException(Resolve.Failure.NOT_FOUND,
+            "No saved camera named '" + name + "' (list_cameras reports the saved names)");
+      }
+      return new SavedCamera(key, angle);
+    } finally {
+      this.lock.unlock();
     }
-    return new SavedCamera(key, angle);
   }
 
   private static String requireName(String name) {
@@ -529,23 +710,28 @@ public final class Cameras implements LXSerializable {
   private static final String KEY_FOV = "fovDegrees";
 
   @Override
-  public synchronized void save(LX lx, JsonObject obj) {
-    JsonArray cameras = new JsonArray();
-    for (Map.Entry<String, CameraAngle> entry : this.saved.entrySet()) {
-      CameraAngle angle = entry.getValue();
-      JsonObject camera = new JsonObject();
-      camera.addProperty(KEY_NAME, entry.getKey());
-      camera.addProperty(KEY_THETA, angle.theta());
-      camera.addProperty(KEY_PHI, angle.phi());
-      camera.addProperty(KEY_RADIUS, angle.radius());
-      camera.addProperty(KEY_TARGET_X, angle.target().x());
-      camera.addProperty(KEY_TARGET_Y, angle.target().y());
-      camera.addProperty(KEY_TARGET_Z, angle.target().z());
-      camera.addProperty(KEY_PROJECTION, angle.projection().wire());
-      camera.addProperty(KEY_FOV, angle.fovDegrees());
-      cameras.add(camera);
+  public void save(LX lx, JsonObject obj) {
+    this.lock.lock();
+    try {
+      JsonArray cameras = new JsonArray();
+      for (Map.Entry<String, CameraAngle> entry : this.saved.entrySet()) {
+        CameraAngle angle = entry.getValue();
+        JsonObject camera = new JsonObject();
+        camera.addProperty(KEY_NAME, entry.getKey());
+        camera.addProperty(KEY_THETA, angle.theta());
+        camera.addProperty(KEY_PHI, angle.phi());
+        camera.addProperty(KEY_RADIUS, angle.radius());
+        camera.addProperty(KEY_TARGET_X, angle.target().x());
+        camera.addProperty(KEY_TARGET_Y, angle.target().y());
+        camera.addProperty(KEY_TARGET_Z, angle.target().z());
+        camera.addProperty(KEY_PROJECTION, angle.projection().wire());
+        camera.addProperty(KEY_FOV, angle.fovDegrees());
+        cameras.add(camera);
+      }
+      obj.add(KEY_CAMERAS, cameras);
+    } finally {
+      this.lock.unlock();
     }
-    obj.add(KEY_CAMERAS, cameras);
   }
 
   /**
@@ -559,29 +745,34 @@ public final class Cameras implements LXSerializable {
    * not.
    */
   @Override
-  public synchronized void load(LX lx, JsonObject obj) {
-    this.saved.clear();
-    this.detached = null;
-    if (!obj.has(KEY_CAMERAS) || !obj.get(KEY_CAMERAS).isJsonArray()) {
-      return;
-    }
-    for (JsonElement element : obj.getAsJsonArray(KEY_CAMERAS)) {
-      try {
-        JsonObject camera = element.getAsJsonObject();
-        String name = requireName(camera.get(KEY_NAME).getAsString());
-        this.saved.put(name, normalize(new CameraAngle(
-            camera.get(KEY_THETA).getAsDouble(),
-            camera.get(KEY_PHI).getAsDouble(),
-            camera.get(KEY_RADIUS).getAsDouble(),
-            new Vec3(
-                camera.get(KEY_TARGET_X).getAsDouble(),
-                camera.get(KEY_TARGET_Y).getAsDouble(),
-                camera.get(KEY_TARGET_Z).getAsDouble()),
-            Projection.parse(camera.get(KEY_PROJECTION).getAsString()),
-            camera.get(KEY_FOV).getAsDouble())));
-      } catch (RuntimeException e) {
-        LX.error(e, "[Chromatik-MCP] Skipping malformed saved camera: " + element);
+  public void load(LX lx, JsonObject obj) {
+    this.lock.lock();
+    try {
+      this.saved.clear();
+      this.detached = null;
+      if (!obj.has(KEY_CAMERAS) || !obj.get(KEY_CAMERAS).isJsonArray()) {
+        return;
       }
+      for (JsonElement element : obj.getAsJsonArray(KEY_CAMERAS)) {
+        try {
+          JsonObject camera = element.getAsJsonObject();
+          String name = requireName(camera.get(KEY_NAME).getAsString());
+          this.saved.put(name, normalize(new CameraAngle(
+              camera.get(KEY_THETA).getAsDouble(),
+              camera.get(KEY_PHI).getAsDouble(),
+              camera.get(KEY_RADIUS).getAsDouble(),
+              new Vec3(
+                  camera.get(KEY_TARGET_X).getAsDouble(),
+                  camera.get(KEY_TARGET_Y).getAsDouble(),
+                  camera.get(KEY_TARGET_Z).getAsDouble()),
+              Projection.parse(camera.get(KEY_PROJECTION).getAsString()),
+              camera.get(KEY_FOV).getAsDouble())));
+        } catch (RuntimeException e) {
+          LX.error(e, "[Chromatik-MCP] Skipping malformed saved camera: " + element);
+        }
+      }
+    } finally {
+      this.lock.unlock();
     }
   }
 }

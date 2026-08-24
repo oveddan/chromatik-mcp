@@ -190,6 +190,94 @@ class CamerasTest extends HeadlessLxTest {
     assertFalse(cameras.isAnimating());
   }
 
+  /**
+   * Regression test for the bug fixed alongside this test: {@code AnimationLoop.loop()} used
+   * to {@code throw failure;} after already completing the future exceptionally, and LX's
+   * engine treats an uncaught {@link Throwable} escaping a loop task as permanent — it sets
+   * an internal {@code runFailed} flag that is never reset, so every later
+   * {@code lx.engine.run()} silently no-ops forever after. The strongest assertion here isn't
+   * that the first animation's exception looks right; it's that a second, unrelated animation
+   * still completes afterward, which proves the engine survived.
+   */
+  @Test
+  void failingAnimationCompletesExceptionallyWithoutKillingTheEngine() {
+    LX lx = newHeadlessLx();
+    lx.engine.setFixedDeltaMs(10);
+    Cameras cameras = new Cameras();
+    cameras.apply(lx, angle(350, 0, 10));
+
+    cameras.bindPreview(new ThrowingPreview());
+
+    Cameras.CameraAnimation move = cameras.animate(
+        lx, angle(10, 20, 30), 20, Cameras.AnimationEase.CUBIC);
+    assertTrue(cameras.isAnimating());
+
+    lx.engine.run();
+
+    IllegalStateException failure = assertThrows(IllegalStateException.class, move::await,
+        "the step's failure surfaces to the caller instead of hanging");
+    assertEquals("camera preview exploded during animation step", failure.getCause().getMessage(),
+        "the original throw is unwrapped as the cause");
+    assertFalse(cameras.isAnimating(), "the failed move's state is cleared, not stuck in flight");
+
+    // The key assertion: the engine itself is still alive. If the old code's errant
+    // rethrow had killed it, this second, unrelated animation would never advance —
+    // lx.engine.run() would silently no-op forever.
+    cameras.unbindPreview();
+    Cameras.CameraAnimation move2 = cameras.animate(
+        lx, angle(10, 20, 30), 20, Cameras.AnimationEase.CUBIC);
+    lx.engine.run();
+    lx.engine.run();
+    Cameras.CameraView arrived = move2.await();
+    assertEquals(10, arrived.angle().theta(), EPSILON, "a later animation still completes");
+    assertFalse(cameras.isAnimating());
+  }
+
+  /**
+   * Regression test for two things at once: the speed-0 hang (an animation can never make
+   * progress if {@code lx.engine.speed} is 0, since the loop's {@code deltaMs} is scaled by
+   * it), and permanent lockout of {@code Cameras.animation} after such a stall. Deliberately
+   * takes a couple of real seconds to run: {@link Cameras.CameraAnimation#await()}'s
+   * stall-grace window is measured in real wall-clock time (not the fixed-delta engine
+   * clock), so recovering from a genuine stall means genuinely waiting it out. This is not an
+   * accidentally slow test.
+   */
+  @Test
+  void stalledAnimationRecoversViaAwaitTimeoutAndDoesNotLockOutLaterMoves() {
+    LX lx = newHeadlessLx();
+    Cameras cameras = new Cameras();
+    lx.engine.speed.setValue(0);
+
+    Cameras.CameraAnimation move = cameras.animate(
+        lx, angle(10, 20, 30), 500, Cameras.AnimationEase.CUBIC);
+    assertTrue(cameras.isAnimating());
+
+    // Prove the loop task is actually running and genuinely making no progress, not just
+    // never scheduled.
+    for (int i = 0; i < 5; i++) {
+      lx.engine.run();
+    }
+    assertTrue(cameras.isAnimating(), "speed 0 never lets the move advance on its own");
+
+    IllegalStateException failure = assertThrows(IllegalStateException.class, move::await,
+        "await() gives up once elapsedMs has made no progress for the stall grace window");
+    assertTrue(failure.getMessage().contains("no progress"),
+        "unexpected stall message: " + failure.getMessage());
+    assertFalse(cameras.isAnimating(), "the stalled move's state is cleared, not stuck in flight");
+
+    // The key assertion: a stalled animation does not permanently lock out the tool. If
+    // Cameras.animation hadn't been cleared, animate() below would throw "already in flight".
+    lx.engine.speed.setValue(1);
+    lx.engine.setFixedDeltaMs(10);
+    Cameras.CameraAnimation move2 = cameras.animate(
+        lx, angle(10, 20, 30), 20, Cameras.AnimationEase.CUBIC);
+    lx.engine.run();
+    lx.engine.run();
+    Cameras.CameraView arrived = move2.await();
+    assertEquals(10, arrived.angle().theta(), EPSILON, "a fresh animation still completes");
+    assertFalse(cameras.isAnimating());
+  }
+
   @Test
   void savedAnglesRecallRemoveAndReportReplacement() {
     LX lx = newHeadlessLx();
@@ -338,6 +426,20 @@ class CamerasTest extends HeadlessLxTest {
     @Override
     public void apply(Cameras.CameraAngle angle) {
       this.applied = angle;
+    }
+  }
+
+  private static final class ThrowingPreview implements Cameras.PreviewCamera {
+
+    @Override
+    public Cameras.CameraAngle read() {
+      return new Cameras.CameraAngle(0, 0, 1, new Cameras.Vec3(0, 0, 0),
+          Cameras.Projection.PERSPECTIVE, 60);
+    }
+
+    @Override
+    public void apply(Cameras.CameraAngle angle) {
+      throw new RuntimeException("camera preview exploded during animation step");
     }
   }
 }
