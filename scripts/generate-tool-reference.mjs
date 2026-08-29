@@ -116,8 +116,8 @@ pattern. Structural paths are 1-based and reindex on remove/insert — re-list r
 reusing cached paths.`,
     tools: [
       'add_channel', 'remove_channel', 'move_channel', 'group_channels', 'ungroup_channel',
-      'ungroup_channels', 'add_pattern', 'remove_pattern', 'move_pattern',
-      'activate_pattern', 'add_effect', 'remove_effect', 'move_effect',
+      'ungroup_channels', 'copy_channel', 'add_pattern', 'remove_pattern', 'move_pattern',
+      'copy_pattern', 'activate_pattern', 'add_effect', 'remove_effect', 'move_effect', 'copy_effect',
     ],
   },
   {

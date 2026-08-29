@@ -1,7 +1,9 @@
 package chromatikmcp.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,9 +23,16 @@ import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.effect.LXEffect;
 import heronarts.lx.mixer.LXAbstractChannel;
+import heronarts.lx.midi.MidiControlChange;
 import heronarts.lx.mixer.LXChannel;
 import heronarts.lx.mixer.LXGroup;
+import heronarts.lx.modulation.LXCompoundModulation;
+import heronarts.lx.modulator.LXModulator;
+import heronarts.lx.modulator.VariableLFO;
+import heronarts.lx.parameter.LXListenableNormalizedParameter;
+import heronarts.lx.parameter.LXNormalizedParameter;
 import heronarts.lx.pattern.LXPattern;
+import heronarts.lx.pattern.PatternRack;
 import heronarts.lx.pattern.color.GradientPattern;
 import heronarts.lx.pattern.color.SolidPattern;
 
@@ -610,6 +619,670 @@ class ChannelMutationsTest extends HeadlessLxTest {
         "undo stack untouched when move rejected");
   }
 
+  // ── copy pattern ──────────────────────────────────────────────────────────────
+
+  /**
+   * Builds a rack on {@code channel} carrying every kind of state a copy must preserve:
+   * two nested patterns, an effect on the first of them, and a device-local modulator
+   * wired to that nested pattern's brightness.
+   */
+  private static PatternRack seedConfiguredRack(LX lx, LXChannel channel) {
+    PatternRack rack = (PatternRack) Channels.addPattern(
+        lx, channel.getCanonicalPath(), PatternRack.class, -1);
+    LXPattern nested = Channels.addPattern(
+        lx, rack.getCanonicalPath(), SolidPattern.class, -1);
+    Channels.addPattern(lx, rack.getCanonicalPath(), GradientPattern.class, -1);
+    Channels.addEffect(lx, nested.getCanonicalPath(), BlurEffect.class);
+    LXModulator lfo = Modulators.addModulator(lx, rack.getModulationEngine(), VariableLFO.class);
+    Modulators.wireModulation(lx, rack.getModulationEngine(),
+        (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) nested.getParameter("color/brightness"));
+    return rack;
+  }
+
+  @Test
+  void copyPatternCarriesNestedPatternsEffectsAndDeviceLocalWiring() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    PatternRack rack = seedConfiguredRack(lx, source);
+
+    Channels.PatternCopyResult result = Channels.copyPattern(
+        lx, rack.getCanonicalPath(), destination.getCanonicalPath(), -1);
+    PatternRack copy = (PatternRack) result.pattern();
+
+    assertNotSame(rack, copy);
+    assertEquals(1, source.patterns.size(), "source keeps its pattern");
+    assertEquals(destination, copy.getParent());
+    assertEquals(2, copy.getPatternEngine().patterns.size(), "nested patterns travel");
+    assertEquals(1, copy.getPatternEngine().patterns.get(0).getEffects().size(),
+        "a nested pattern's own effects travel");
+    assertEquals(1, copy.getModulationEngine().getModulators().size(),
+        "device-local modulators travel");
+    assertEquals(1, copy.getModulationEngine().modulations.size(),
+        "device-local modulations travel");
+
+    // The decisive check: the copied wiring drives the copy's own nested pattern, not
+    // the source's. Scope-relative paths are what make this work (LXParameterModulation
+    // serializes source/target as paths relative to the engine's parent).
+    LXCompoundModulation copied = copy.getModulationEngine().modulations.get(0);
+    assertTrue(copied.source.getCanonicalPath().startsWith(copy.getCanonicalPath() + "/"),
+        "copied modulation source " + copied.source.getCanonicalPath()
+            + " should live under " + copy.getCanonicalPath());
+    assertTrue(copied.target.getCanonicalPath().startsWith(copy.getCanonicalPath() + "/"),
+        "copied modulation target " + copied.target.getCanonicalPath()
+            + " should live under " + copy.getCanonicalPath());
+
+    lx.command.undo();
+    assertEquals(0, destination.patterns.size(), "undo should remove the copy");
+    assertEquals(1, source.patterns.size(), "undo should leave the source alone");
+  }
+
+  @Test
+  void copyPatternPreservesParameterValues() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    pattern.getParameter("color/saturation").setValue(42);
+    pattern.label.setValue("Configured");
+
+    LXPattern copy = Channels.copyPattern(
+        lx, pattern.getCanonicalPath(), destination.getCanonicalPath(), -1).pattern();
+
+    assertEquals(42, copy.getParameter("color/saturation").getValue(), 1e-9);
+    assertEquals("Configured", copy.getLabel());
+  }
+
+  @Test
+  void copyPatternReportsChannelLevelWiringItDoesNotReplicate() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    // Channel-level wiring: lives on the channel's engine, addresses the pattern.
+    LXModulator lfo = Modulators.addModulator(lx, source.getModulationEngine(), VariableLFO.class);
+    Modulators.wireModulation(lx, source.getModulationEngine(),
+        (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) pattern.getParameter("color/brightness"));
+
+    Channels.PatternCopyResult result = Channels.copyPattern(
+        lx, pattern.getCanonicalPath(), destination.getCanonicalPath(), -1);
+
+    assertEquals(0, result.pattern().getModulationEngine().modulations.size(),
+        "channel-level wiring must not silently follow the copy");
+    assertEquals(1, result.unreplicatedWiring().size());
+    Channels.ExternalReference stranded = result.unreplicatedWiring().get(0);
+    assertEquals("modulation", stranded.kind());
+    assertEquals(source.getModulationEngine().getCanonicalPath(), stranded.scope());
+    assertEquals(pattern.getParameter("color/brightness").getCanonicalPath(),
+        stranded.targetPath());
+    // The source keeps it — a copy strands nothing until the caller removes the source.
+    assertEquals(1, source.getModulationEngine().modulations.size());
+  }
+
+  @Test
+  void copyPatternReportsMidiMappingItDoesNotReplicate() throws Exception {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    lx.command.perform(new LXCommand.Midi.AddMapping(new MidiControlChange(2, 20, 64),
+        (LXNormalizedParameter) pattern.getParameter("color/brightness")));
+
+    Channels.PatternCopyResult result = Channels.copyPattern(
+        lx, pattern.getCanonicalPath(), destination.getCanonicalPath(), -1);
+
+    assertEquals(1, result.unreplicatedWiring().size());
+    Channels.ExternalReference stranded = result.unreplicatedWiring().get(0);
+    assertEquals("midiMapping", stranded.kind());
+    assertEquals(pattern.getParameter("color/brightness").getCanonicalPath(),
+        stranded.targetPath());
+    assertNotNull(stranded.scope());
+  }
+
+  @Test
+  void copyPatternWithNoExternalWiringReportsNone() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    PatternRack rack = seedConfiguredRack(lx, source);
+
+    Channels.PatternCopyResult result = Channels.copyPattern(
+        lx, rack.getCanonicalPath(), destination.getCanonicalPath(), -1);
+
+    assertTrue(result.unreplicatedWiring().isEmpty(),
+        "a rack's own modulation engine is internal, not external: "
+            + result.unreplicatedWiring());
+  }
+
+  @Test
+  void copyPatternIntoOwnContainerDuplicatesInPlaceAtIndex() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXPattern first = Channels.addPattern(
+        lx, channel.getCanonicalPath(), SolidPattern.class, -1);
+    Channels.addPattern(lx, channel.getCanonicalPath(), GradientPattern.class, -1);
+
+    LXPattern copy = Channels.copyPattern(
+        lx, first.getCanonicalPath(), channel.getCanonicalPath(), 1).pattern();
+
+    assertEquals(3, channel.patterns.size());
+    assertEquals(1, copy.getIndex());
+    assertTrue(copy instanceof SolidPattern);
+  }
+
+  @Test
+  void copyPatternIntoItselfIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    PatternRack rack = (PatternRack) Channels.addPattern(
+        lx, channel.getCanonicalPath(), PatternRack.class, -1);
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    var ex = assertThrows(Resolve.ResolveException.class, () -> Channels.copyPattern(
+        lx, rack.getCanonicalPath(), rack.getCanonicalPath(), -1));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand(),
+        "undo stack untouched when copy rejected");
+  }
+
+  @Test
+  void copyPatternOutOfRangeIndexIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    var ex = assertThrows(Resolve.ResolveException.class, () -> Channels.copyPattern(
+        lx, pattern.getCanonicalPath(), destination.getCanonicalPath(), 5));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand(),
+        "undo stack untouched when copy rejected");
+  }
+
+  @Test
+  void copyPatternToNonContainerIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+
+    var ex = assertThrows(Resolve.ResolveException.class, () -> Channels.copyPattern(
+        lx, pattern.getCanonicalPath(), effect.getCanonicalPath(), -1));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+  }
+
+  // ── copy channel ──────────────────────────────────────────────────────────────
+
+  @Test
+  void copyChannelCarriesPatternsEffectsClipsAndChannelLevelWiring() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    source.label.setValue("Hyperspace");
+    source.fader.setValue(0.42);
+    source.addClip(0);
+    LXModulator lfo = Modulators.addModulator(lx, source.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, source.modulation, (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) pattern.getParameter("color/brightness"));
+    int before = lx.engine.mixer.channels.size();
+
+    Channels.ChannelCopyResult result = Channels.copyChannel(lx, source.getCanonicalPath(), -1);
+    LXChannel copy = result.channel();
+
+    assertNotSame(source, copy);
+    assertEquals("Hyperspace", copy.getLabel());
+    assertEquals(0.42, copy.fader.getValue(), 1e-9);
+    assertEquals(1, copy.patterns.size());
+    assertEquals(1, copy.getEffects().size());
+    assertEquals(1, copy.clips.stream().filter(c -> c != null).count());
+    assertFalse(result.groupMembershipDropped());
+
+    // The point of copy_channel: channel-level wiring lives inside the channel, so unlike
+    // copyPattern it travels — and lands pointing at the copy's own pattern.
+    assertEquals(1, copy.modulation.modulations.size());
+    LXCompoundModulation copied = copy.modulation.modulations.get(0);
+    assertTrue(copied.target.getCanonicalPath().startsWith(copy.getCanonicalPath() + "/"),
+        "copied modulation target " + copied.target.getCanonicalPath()
+            + " should live under " + copy.getCanonicalPath());
+    assertTrue(result.unreplicatedWiring().isEmpty(),
+        "channel-level wiring is internal, not external: " + result.unreplicatedWiring());
+
+    lx.command.undo();
+    assertEquals(before, lx.engine.mixer.channels.size(), "undo should remove the copy");
+  }
+
+  @Test
+  void copyChannelReportsGlobalWiringItDoesNotReplicate() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXModulator global = Modulators.addModulator(lx, lx.engine.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, lx.engine.modulation, (LXNormalizedParameter) global,
+        (LXCompoundModulation.Target) source.fader);
+
+    Channels.ChannelCopyResult result = Channels.copyChannel(lx, source.getCanonicalPath(), -1);
+
+    assertEquals(1, result.unreplicatedWiring().size());
+    Channels.ExternalReference stranded = result.unreplicatedWiring().get(0);
+    assertEquals("modulation", stranded.kind());
+    assertEquals(source.fader.getCanonicalPath(), stranded.targetPath());
+    assertEquals(source.fader.getCanonicalPath(),
+        lx.engine.modulation.modulations.get(0).target.getCanonicalPath(),
+        "the global wiring still drives the source, not the copy");
+  }
+
+  @Test
+  void copyChannelDropsGroupMembershipToKeepGroupsContiguous() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(a, b));
+    LXChannel ungrouped = lx.engine.mixer.addChannel();
+    assertEquals(List.of(group, a, b, ungrouped), lx.engine.mixer.channels);
+
+    Channels.ChannelCopyResult result = Channels.copyChannel(lx, a.getCanonicalPath(), -1);
+
+    assertTrue(result.groupMembershipDropped());
+    assertEquals(null, result.channel().getGroup(), "copy lands at the top level");
+    assertEquals(2, group.channels.size(), "the source's group is untouched");
+    // Honoring the serialized membership would have appended a group member after the
+    // ungrouped channel, leaving the group's members non-contiguous.
+    assertEquals(List.of(group, a, b, ungrouped, result.channel()), lx.engine.mixer.channels);
+  }
+
+  @Test
+  void copyChannelRejectsGroups() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(a));
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    var ex = assertThrows(Resolve.ResolveException.class,
+        () -> Channels.copyChannel(lx, group.getCanonicalPath(), -1));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand(),
+        "undo stack untouched when copy rejected");
+  }
+
+  @Test
+  void copyChannelOutOfRangeIndexIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    var ex = assertThrows(Resolve.ResolveException.class,
+        () -> Channels.copyChannel(lx, source.getCanonicalPath(), 99));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand(),
+        "LX's addChannel would throw inside perform(), wiping history — reject up front");
+  }
+
+  @Test
+  void copyChannelAtIndexInsertsThere() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+
+    LXChannel copy = Channels.copyChannel(lx, b.getCanonicalPath(), 0).channel();
+
+    assertEquals(0, copy.getIndex());
+    assertEquals(List.of(copy, a, b), lx.engine.mixer.channels);
+  }
+
+  // ── copy reporting: clip automation, MIDI identity, group-splitting index ─────
+
+  @Test
+  void copyPatternReportsClipLaneAutomationItDoesNotReplicate() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    // A clip on the source channel automating a parameter inside the pattern. The clip
+    // belongs to the channel, not the pattern, so it cannot travel with a pattern copy.
+    LXClip clip = source.addClip(0);
+    automate(lx, clip, (LXNormalizedParameter) pattern.getParameter("color/brightness"));
+
+    Channels.PatternCopyResult result = Channels.copyPattern(
+        lx, pattern.getCanonicalPath(), destination.getCanonicalPath(), -1);
+
+    assertTrue(result.unreplicatedWiring().stream().anyMatch(r -> r.kind().equals("clipLane")),
+        "clip automation must be reported, not silently lost: " + result.unreplicatedWiring());
+  }
+
+  @Test
+  void copyChannelDoesNotReportItsOwnClipLanesAsExternal() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    LXClip clip = source.addClip(0);
+    automate(lx, clip, (LXNormalizedParameter) pattern.getParameter("color/brightness"));
+
+    Channels.ChannelCopyResult result = Channels.copyChannel(lx, source.getCanonicalPath(), -1);
+
+    // The clip belongs to the channel and is copied with it — internal, not stranded.
+    assertTrue(result.unreplicatedWiring().isEmpty(),
+        "a channel's own clip lanes travel with it: " + result.unreplicatedWiring());
+  }
+
+  @Test
+  void copyPatternReportsRebuildableMidiIdentity() throws Exception {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    lx.command.perform(new LXCommand.Midi.AddMapping(new MidiControlChange(2, 20, 64),
+        (LXNormalizedParameter) pattern.getParameter("color/brightness")));
+
+    Channels.PatternCopyResult result = Channels.copyPattern(
+        lx, pattern.getCanonicalPath(), destination.getCanonicalPath(), -1);
+
+    Channels.ExternalReference stranded = result.unreplicatedWiring().stream()
+        .filter(r -> r.kind().equals("midiMapping")).findFirst().orElseThrow();
+    // add_midi_mapping needs type/channel/number — a display label cannot rebuild it.
+    assertNotNull(stranded.midi(), "MIDI reference must carry its reconstruction identity");
+    assertEquals("cc", stranded.midi().type());
+    assertEquals(2, stranded.midi().channel());
+    assertEquals(20, stranded.midi().number());
+  }
+
+  @Test
+  void copyChannelRejectsAnIndexThatWouldSplitAGroup() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXChannel b = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(a, b));
+    LXChannel outsider = lx.engine.mixer.addChannel();
+    assertEquals(List.of(group, a, b, outsider), lx.engine.mixer.channels);
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    // Index 2 lands between group members a and b. Stripping the copy's own group id does
+    // not save it — an ungrouped channel there splits the group's contiguous block.
+    var ex = assertThrows(Resolve.ResolveException.class,
+        () -> Channels.copyChannel(lx, outsider.getCanonicalPath(), 2));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand(), "rejected before any mutation");
+    assertEquals(List.of(group, a, b, outsider), lx.engine.mixer.channels);
+  }
+
+  @Test
+  void copyChannelAllowsAnIndexOutsideAnyGroup() {
+    LX lx = newHeadlessLx();
+    LXChannel a = lx.engine.mixer.addChannel();
+    LXGroup group = lx.engine.mixer.addGroup(List.of(a));
+    LXChannel outsider = lx.engine.mixer.addChannel();
+
+    LXChannel copy = Channels.copyChannel(lx, outsider.getCanonicalPath(), 0).channel();
+
+    assertEquals(0, copy.getIndex());
+    assertEquals(List.of(copy, group, a, outsider), lx.engine.mixer.channels);
+  }
+
+  @Test
+  void relocateEffectReportsPathsOfEffectsNestedInsideRacks() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    // An effect on a pattern nested inside a rack: only a recursive walk sees it.
+    PatternRack rack = (PatternRack) Channels.addPattern(
+        lx, destination.getCanonicalPath(), PatternRack.class, -1);
+    LXPattern nested = Channels.addPattern(
+        lx, rack.getCanonicalPath(), SolidPattern.class, -1);
+    LXEffect nestedEffect = Channels.addEffect(lx, nested.getCanonicalPath(), BlurEffect.class);
+    String nestedEffectBefore = nestedEffect.getCanonicalPath();
+    LXEffect moving = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+
+    // Relocating into the nested pattern shifts the effect already sitting there.
+    Channels.EffectMoveResult result = Channels.moveEffect(
+        lx, moving.getCanonicalPath(), nested.getCanonicalPath(), 0);
+
+    assertEquals(2, nested.getEffects().size());
+    assertPathChange(result.oscChanges(), nestedEffect.getId(), nestedEffectBefore,
+        nestedEffect.getCanonicalPath());
+    assertTrue(result.effect().getCanonicalPath().startsWith(nested.getCanonicalPath() + "/"));
+  }
+
+  @Test
+  void copyPatternReportsCompositionAutomationItDoesNotReplicate() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXPattern pattern = Channels.addPattern(
+        lx, source.getCanonicalPath(), SolidPattern.class, -1);
+    // The arrange composition is add_clip_lane's default target, so automation commonly
+    // lives here rather than on a bus clip — and it is not on any channel's clip list.
+    automate(lx, lx.engine.timeline.getComposition(),
+        (LXNormalizedParameter) pattern.getParameter("color/brightness"));
+
+    Channels.PatternCopyResult result = Channels.copyPattern(
+        lx, pattern.getCanonicalPath(), destination.getCanonicalPath(), -1);
+
+    assertTrue(result.unreplicatedWiring().stream().anyMatch(r -> r.kind().equals("clipLane")),
+        "composition automation must be reported: " + result.unreplicatedWiring());
+  }
+
+  @Test
+  void relocateEffectRejectsLockedEffectsBeforeTouchingUndoHistory() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    effect.locked.setValue(true);
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    // RelocateEffect removes from the source first; LX refuses that for a locked effect
+    // inside perform(), which swallows the failure and wipes the undo stack.
+    var ex = assertThrows(Resolve.ResolveException.class, () -> Channels.moveEffect(
+        lx, effect.getCanonicalPath(), destination.getCanonicalPath(), 0));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand(), "undo history preserved");
+    assertEquals(1, source.getEffects().size(), "effect stayed put");
+  }
+
+  @Test
+  void relocateEffectReportsRemoteControlsItDrops() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    PatternRack rack = (PatternRack) Channels.addPattern(
+        lx, source.getCanonicalPath(), PatternRack.class, -1);
+    LXPattern nested = Channels.addPattern(
+        lx, rack.getCanonicalPath(), SolidPattern.class, -1);
+    LXEffect effect = Channels.addEffect(lx, nested.getCanonicalPath(), BlurEffect.class);
+    // The rack exposes one of the effect's parameters as a custom remote control.
+    rack.setCustomRemoteControls(new LXListenableNormalizedParameter[] {
+        (LXListenableNormalizedParameter) effect.getParameter("level") });
+
+    Channels.EffectMoveResult result = Channels.moveEffect(
+        lx, effect.getCanonicalPath(), destination.getCanonicalPath(), 0);
+
+    // LX restores every other reference kind on a relocate but deliberately skips these,
+    // so droppedWiring must name them or the loss is invisible.
+    assertTrue(result.droppedWiring().stream().anyMatch(r -> r.kind().equals("remoteControl")),
+        "remote control loss must be reported: " + result.droppedWiring());
+  }
+
+  // ── copy effect ───────────────────────────────────────────────────────────────
+
+  @Test
+  void copyEffectCarriesParametersAndDeviceLocalWiring() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    effect.getParameter("level").setValue(0.75);
+    LXModulator lfo = Modulators.addModulator(lx, effect.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, effect.modulation, (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) effect.getParameter("level"));
+
+    Channels.EffectCopyResult result = Channels.copyEffect(
+        lx, effect.getCanonicalPath(), destination.getCanonicalPath());
+    LXEffect copy = result.effect();
+
+    assertNotSame(effect, copy);
+    assertEquals(0.75, copy.getParameter("level").getValue(), 1e-9);
+    assertEquals(1, copy.modulation.modulations.size());
+    assertTrue(copy.modulation.modulations.get(0).target.getCanonicalPath()
+        .startsWith(copy.getCanonicalPath() + "/"), "wiring rewired to the copy");
+    assertEquals(1, source.getEffects().size(), "source keeps its effect");
+
+    lx.command.undo();
+    assertEquals(0, destination.getEffects().size(), "undo should remove the copy");
+  }
+
+  @Test
+  void copyEffectReportsChannelLevelWiringItDoesNotReplicate() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    LXModulator lfo = Modulators.addModulator(lx, source.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, source.modulation, (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) effect.getParameter("level"));
+
+    Channels.EffectCopyResult result = Channels.copyEffect(
+        lx, effect.getCanonicalPath(), destination.getCanonicalPath());
+
+    assertEquals(1, result.unreplicatedWiring().size());
+    assertEquals("modulation", result.unreplicatedWiring().get(0).kind());
+    assertEquals(effect.getParameter("level").getCanonicalPath(),
+        result.unreplicatedWiring().get(0).targetPath());
+  }
+
+  @Test
+  void copyEffectToNonContainerIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    LXModulator lfo = Modulators.addModulator(lx, source.modulation, VariableLFO.class);
+
+    var ex = assertThrows(Resolve.ResolveException.class, () -> Channels.copyEffect(
+        lx, effect.getCanonicalPath(), lfo.getCanonicalPath()));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+  }
+
+  // ── relocate effect ───────────────────────────────────────────────────────────
+
+  @Test
+  void relocateEffectWithinChannelKeepsChannelLevelWiring() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXPattern host = Channels.addPattern(
+        lx, channel.getCanonicalPath(), SolidPattern.class, -1);
+    LXEffect effect = Channels.addEffect(lx, channel.getCanonicalPath(), BlurEffect.class);
+    LXModulator lfo = Modulators.addModulator(lx, channel.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, channel.modulation, (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) effect.getParameter("level"));
+
+    // The destination is still inside the channel, so the wiring can still reach the effect.
+    Channels.EffectMoveResult result = Channels.moveEffect(
+        lx, effect.getCanonicalPath(), host.getCanonicalPath(), 0);
+
+    assertEquals(0, channel.getEffects().size());
+    assertEquals(1, host.getEffects().size());
+    assertTrue(result.droppedWiring().isEmpty(),
+        "in-scope relocation drops nothing: " + result.droppedWiring());
+    assertEquals(1, channel.modulation.modulations.size());
+    assertEquals(host.getEffects().get(0).getParameter("level").getCanonicalPath(),
+        channel.modulation.modulations.get(0).target.getCanonicalPath(),
+        "wiring retargeted to the effect's new path");
+  }
+
+  @Test
+  void relocateEffectAcrossChannelsReportsTheWiringItDestroys() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    LXModulator lfo = Modulators.addModulator(lx, source.modulation, VariableLFO.class);
+    Modulators.wireModulation(lx, source.modulation, (LXNormalizedParameter) lfo,
+        (LXCompoundModulation.Target) effect.getParameter("level"));
+    String targetBefore = effect.getParameter("level").getCanonicalPath();
+
+    Channels.EffectMoveResult result = Channels.moveEffect(
+        lx, effect.getCanonicalPath(), destination.getCanonicalPath(), 0);
+
+    assertEquals(0, source.getEffects().size());
+    assertEquals(1, destination.getEffects().size());
+    // A move preserves the effect's id (and so its OSC identity), but LX reconstructs the
+    // instance, so the pre-move reference is detached afterwards.
+    assertEquals(effect.getId(), result.effect().getId());
+    assertNotSame(effect, result.effect());
+    assertSame(destination.getEffects().get(0), result.effect());
+
+    // LX drops this wiring outright — not to the destination engine, not to the global one.
+    assertEquals(0, source.modulation.modulations.size());
+    assertEquals(0, destination.modulation.modulations.size());
+    assertEquals(0, lx.engine.modulation.modulations.size());
+    assertEquals(1, result.droppedWiring().size(), "the casualty is reported, not silent");
+    assertEquals("modulation", result.droppedWiring().get(0).kind());
+    assertEquals(targetBefore, result.droppedWiring().get(0).targetPath());
+
+    lx.command.undo();
+    assertEquals(1, source.getEffects().size());
+    assertEquals(1, source.modulation.modulations.size(), "undo restores the wiring");
+  }
+
+  @Test
+  void relocateEffectToItsOwnContainerIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel channel = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, channel.getCanonicalPath(), BlurEffect.class);
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    var ex = assertThrows(Resolve.ResolveException.class, () -> Channels.moveEffect(
+        lx, effect.getCanonicalPath(), channel.getCanonicalPath(), 0));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand());
+  }
+
+  @Test
+  void relocateEffectOutOfRangeIndexIsRejected() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect effect = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    LXCommand undoBefore = lx.command.getUndoCommand();
+
+    var ex = assertThrows(Resolve.ResolveException.class, () -> Channels.moveEffect(
+        lx, effect.getCanonicalPath(), destination.getCanonicalPath(), 5));
+    assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
+    assertSame(undoBefore, lx.command.getUndoCommand());
+  }
+
+  @Test
+  void relocateEffectReportsShiftedPaths() {
+    LX lx = newHeadlessLx();
+    LXChannel source = lx.engine.mixer.addChannel();
+    LXChannel destination = lx.engine.mixer.addChannel();
+    LXEffect first = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    LXEffect second = Channels.addEffect(lx, source.getCanonicalPath(), BlurEffect.class);
+    String firstBefore = first.getCanonicalPath();
+    String secondBefore = second.getCanonicalPath();
+    int firstId = first.getId();
+
+    Channels.EffectMoveResult result = Channels.moveEffect(
+        lx, first.getCanonicalPath(), destination.getCanonicalPath(), 0);
+
+    // The moved effect changed channels; its former sibling shifted down to index 0. The
+    // moved entry is tracked by the reclaimed id, not by the detached original reference.
+    assertPathChange(result.oscChanges(), firstId, firstBefore,
+        result.effect().getCanonicalPath());
+    assertPathChange(result.oscChanges(), second.getId(), secondBefore,
+        second.getCanonicalPath());
+  }
+
   // ── add/remove effect ─────────────────────────────────────────────────────────
 
   @Test
@@ -729,7 +1402,7 @@ class ChannelMutationsTest extends HeadlessLxTest {
     String e1Before = e1.getCanonicalPath();
     String e2Before = e2.getCanonicalPath();
 
-    Channels.EffectMoveResult result = Channels.moveEffect(lx, e0.getCanonicalPath(), 2);
+    Channels.EffectMoveResult result = Channels.moveEffect(lx, e0.getCanonicalPath(), null, 2);
     assertEquals(2, result.effect().getIndex(), "e0 moved to index 2");
 
     assertEquals(3, result.oscChanges().size());
@@ -751,13 +1424,13 @@ class ChannelMutationsTest extends HeadlessLxTest {
     channel.addEffect(e1);
 
     // Same-index move: no shift, so oscChanges must be empty.
-    Channels.EffectMoveResult same = Channels.moveEffect(lx, e0.getCanonicalPath(), 0);
+    Channels.EffectMoveResult same = Channels.moveEffect(lx, e0.getCanonicalPath(), null, 0);
     assertEquals(0, same.effect().getIndex());
     assertTrue(same.oscChanges().isEmpty(), "moving to the same index changes nothing");
 
     // A real move on the same channel must report changes, so an always-empty
     // implementation of oscChanges would fail this test.
-    Channels.EffectMoveResult moved = Channels.moveEffect(lx, e0.getCanonicalPath(), 1);
+    Channels.EffectMoveResult moved = Channels.moveEffect(lx, e0.getCanonicalPath(), null, 1);
     assertTrue(!moved.oscChanges().isEmpty(), "a real move must report path changes");
   }
 
@@ -772,7 +1445,7 @@ class ChannelMutationsTest extends HeadlessLxTest {
     pattern.addEffect(e0);
     pattern.addEffect(e1);
 
-    Channels.moveEffect(lx, e0.getCanonicalPath(), 1);
+    Channels.moveEffect(lx, e0.getCanonicalPath(), null, 1);
     assertEquals(1, e0.getIndex(), "e0 moved to index 1 on pattern");
 
     lx.command.undo();
@@ -793,7 +1466,7 @@ class ChannelMutationsTest extends HeadlessLxTest {
 
     // Move e0 past e1, shifting e1's index and therefore the path of its device-local
     // modulator too. LXEffect is an LXDeviceComponent like LXPattern.
-    Channels.EffectMoveResult result = Channels.moveEffect(lx, e0.getCanonicalPath(), 1);
+    Channels.EffectMoveResult result = Channels.moveEffect(lx, e0.getCanonicalPath(), null, 1);
 
     assertPathChange(result.oscChanges(), lfo.getId(), lfoBefore, lfo.getCanonicalPath());
   }
@@ -807,10 +1480,17 @@ class ChannelMutationsTest extends HeadlessLxTest {
 
     LXCommand undoBefore = lx.command.getUndoCommand();
     var ex = assertThrows(Resolve.ResolveException.class,
-        () -> Channels.moveEffect(lx, e.getCanonicalPath(), 99));
+        () -> Channels.moveEffect(lx, e.getCanonicalPath(), null, 99));
     assertEquals(Resolve.Failure.TYPE_MISMATCH, ex.failure);
     assertSame(undoBefore, lx.command.getUndoCommand(),
         "undo stack untouched on out-of-range move");
+  }
+
+  /** Records one automation point for {@code parameter} on {@code clip}. */
+  private static void automate(LX lx, LXClip clip, LXNormalizedParameter parameter) {
+    ClipLanes.addParameterLane(lx, clip, parameter);
+    ClipEvents.insertParameterEvent(lx, clip.getParameterLane(parameter),
+        heronarts.lx.clip.Cursor.ZERO, 0.5);
   }
 
   /** Asserts a PathChange for componentId with the given before/after is present. */

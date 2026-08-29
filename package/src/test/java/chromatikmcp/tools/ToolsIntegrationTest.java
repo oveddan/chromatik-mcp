@@ -45,6 +45,7 @@ import heronarts.lx.modulator.VariableLFO;
 import heronarts.lx.pattern.LXPattern;
 import heronarts.lx.pattern.PatternRack;
 import heronarts.lx.pattern.color.GradientPattern;
+import heronarts.lx.pattern.color.SolidPattern;
 import heronarts.lx.parameter.BoundedParameter;
 import heronarts.lx.parameter.EnumParameter;
 import heronarts.lx.parameter.LXParameter;
@@ -201,8 +202,9 @@ class ToolsIntegrationTest {
             "remove_fixture", "move_fixture", "duplicate_fixture",
             "set_fixture_params", "set_fixture_tags", "reload_fixtures",
             "add_channel", "remove_channel", "move_channel", "group_channels", "ungroup_channel",
-            "ungroup_channels", "add_pattern", "remove_pattern",
-            "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
+            "ungroup_channels", "copy_channel", "add_pattern", "remove_pattern",
+            "activate_pattern", "move_pattern", "copy_pattern", "add_effect", "remove_effect",
+            "move_effect", "copy_effect",
             "get_tempo",
             "list_midi_devices", "list_midi_mappings", "list_midi_surfaces", "list_midi_templates",
             "add_midi_template",
@@ -228,8 +230,9 @@ class ToolsIntegrationTest {
         "add_view", "remove_view", "add_fixture", "remove_fixture", "move_fixture",
         "duplicate_fixture", "set_fixture_params", "set_fixture_tags", "reload_fixtures",
         "add_channel", "remove_channel", "move_channel", "group_channels", "ungroup_channel",
-        "ungroup_channels", "add_pattern", "remove_pattern",
-        "activate_pattern", "move_pattern", "add_effect", "remove_effect", "move_effect",
+        "ungroup_channels", "copy_channel", "add_pattern", "remove_pattern",
+        "activate_pattern", "move_pattern", "copy_pattern", "add_effect", "remove_effect",
+        "move_effect", "copy_effect",
         "save_swatch", "set_swatch", "remove_swatch", "move_swatch", "add_color",
         "remove_color",
         "add_snapshot", "recall_snapshot", "update_snapshot", "remove_snapshot",
@@ -1314,6 +1317,231 @@ class ToolsIntegrationTest {
 
       List<Map<String, Object>> oscChanges = (List<Map<String, Object>>) assertOscChanges(moved.get("oscChanges"));
       assertEquals(3, oscChanges.size(), "moved pattern plus the two shifted siblings");
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void copyPatternMovesConfiguredRackAcrossChannelsAndReportsStrandedWiring() {
+    Map<String, Object> src = structured(call("add_channel", Map.of()));
+    String sourcePath = (String) src.get("path");
+    Map<String, Object> dst = structured(call("add_channel", Map.of()));
+    String destinationPath = (String) dst.get("path");
+    try {
+      Map<String, Object> rack = structured(call("add_pattern", Map.of(
+          "containerPath", sourcePath, "class", PatternRack.class.getName())));
+      String rackPath = (String) rack.get("path");
+      Map<String, Object> nested = structured(call("add_pattern", Map.of(
+          "containerPath", rackPath, "class", SolidPattern.class.getName())));
+      String nestedPath = (String) nested.get("path");
+      // Channel-level wiring into the rack — the kind the copy cannot carry.
+      String channelScope = sourcePath + "/modulation";
+      Map<String, Object> lfo = structured(call("add_modulator", Map.of(
+          "class", VariableLFO.class.getName(), "scope", channelScope)));
+      structured(call("wire_modulator", Map.of(
+          "sourcePath", lfo.get("path"),
+          "targetPath", nestedPath + "/color/brightness",
+          "scope", channelScope)));
+
+      Map<String, Object> copied = structured(call("copy_pattern", Map.of(
+          "path", rackPath, "containerPath", destinationPath)));
+
+      assertEquals(PatternRack.class.getName(), copied.get("class"));
+      assertEquals(0, ((Number) copied.get("index")).intValue());
+      LXPattern copy = (LXPattern) LXPath.get(lx, (String) copied.get("path"));
+      assertTrue(copy.getCanonicalPath().startsWith(destinationPath + "/"));
+      assertEquals(1, ((PatternRack) copy).getPatternEngine().patterns.size(),
+          "nested pattern travels with the copy");
+
+      List<Map<String, Object>> wiring =
+          (List<Map<String, Object>>) copied.get("unreplicatedWiring");
+      assertEquals(1, wiring.size(), "channel-level modulation is reported, not replicated");
+      assertEquals("modulation", wiring.get(0).get("kind"));
+      assertEquals(nestedPath + "/color/brightness", wiring.get(0).get("targetPath"));
+
+      // The move the issue asked for: copy, then drop the source.
+      structured(call("remove_pattern", Map.of("path", rackPath)));
+      assertNotNull(LXPath.get(lx, copy.getCanonicalPath()), "copy survives source removal");
+    } finally {
+      structured(call("remove_channel", Map.of("path", destinationPath)));
+      structured(call("remove_channel", Map.of("path", sourcePath)));
+    }
+  }
+
+  @Test
+  void copyPatternIntoItselfIsInvalidArgument() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> rack = structured(call("add_pattern", Map.of(
+          "containerPath", channelPath, "class", PatternRack.class.getName())));
+      String rackPath = (String) rack.get("path");
+
+      McpSchema.CallToolResult result = call("copy_pattern",
+          Map.of("path", rackPath, "containerPath", rackPath));
+
+      assertEquals(Boolean.TRUE, result.isError());
+      McpSchema.TextContent text =
+          assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+      assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    } finally {
+      structured(call("remove_channel", Map.of("path", channelPath)));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void copyChannelCarriesChannelLevelWiringAndReportsGlobalWiring() {
+    Map<String, Object> src = structured(call("add_channel", Map.of()));
+    String sourcePath = (String) src.get("path");
+    String copyPath = null;
+    try {
+      Map<String, Object> pattern = structured(call("add_pattern", Map.of(
+          "containerPath", sourcePath, "class", SolidPattern.class.getName())));
+      String patternPath = (String) pattern.get("path");
+      // channel-level wiring — inside the channel, so it should travel
+      String channelScope = sourcePath + "/modulation";
+      Map<String, Object> lfo = structured(call("add_modulator", Map.of(
+          "class", VariableLFO.class.getName(), "scope", channelScope)));
+      structured(call("wire_modulator", Map.of(
+          "sourcePath", lfo.get("path"),
+          "targetPath", patternPath + "/color/brightness",
+          "scope", channelScope)));
+      // global wiring — outside it, so it should not
+      Map<String, Object> globalLfo = structured(call("add_modulator", Map.of(
+          "class", VariableLFO.class.getName())));
+      structured(call("wire_modulator", Map.of(
+          "sourcePath", globalLfo.get("path"), "targetPath", sourcePath + "/fader")));
+
+      Map<String, Object> copied = structured(call("copy_channel", Map.of("path", sourcePath)));
+      copyPath = (String) copied.get("path");
+
+      assertEquals(Boolean.FALSE, copied.get("groupMembershipDropped"));
+      LXChannel copy = (LXChannel) LXPath.get(lx, copyPath);
+      assertEquals(1, copy.patterns.size());
+      assertEquals(1, copy.modulation.modulations.size(),
+          "channel-level wiring travels with a channel copy");
+      assertTrue(copy.modulation.modulations.get(0).target.getCanonicalPath()
+          .startsWith(copyPath + "/"), "and is rewired to the copy");
+
+      List<Map<String, Object>> wiring =
+          (List<Map<String, Object>>) copied.get("unreplicatedWiring");
+      assertEquals(1, wiring.size(), "only the global wiring stays behind");
+      assertEquals(sourcePath + "/fader", wiring.get(0).get("targetPath"));
+    } finally {
+      if (copyPath != null) {
+        structured(call("remove_channel", Map.of("path", copyPath)));
+      }
+      structured(call("remove_channel", Map.of("path", sourcePath)));
+    }
+  }
+
+  @Test
+  void copyChannelRejectsGroups() {
+    Map<String, Object> a = structured(call("add_channel", Map.of()));
+    String aPath = (String) a.get("path");
+    Map<String, Object> b = structured(call("add_channel", Map.of()));
+    String bPath = (String) b.get("path");
+    Map<String, Object> group = structured(call("group_channels",
+        Map.of("paths", List.of(aPath, bPath))));
+    String groupPath = (String) group.get("path");
+    try {
+      McpSchema.CallToolResult result = call("copy_channel", Map.of("path", groupPath));
+
+      assertEquals(Boolean.TRUE, result.isError());
+      McpSchema.TextContent text =
+          assertInstanceOf(McpSchema.TextContent.class, result.content().get(0));
+      assertTrue(text.text().startsWith(Result.INVALID_ARGUMENT));
+    } finally {
+      structured(call("ungroup_channels", Map.of("path", groupPath)));
+      structured(call("remove_channel", Map.of("path", bPath)));
+      structured(call("remove_channel", Map.of("path", aPath)));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void copyEffectDuplicatesConfiguredEffectToAnotherChannel() {
+    Map<String, Object> src = structured(call("add_channel", Map.of()));
+    String sourcePath = (String) src.get("path");
+    Map<String, Object> dst = structured(call("add_channel", Map.of()));
+    String destinationPath = (String) dst.get("path");
+    try {
+      Map<String, Object> fx = structured(call("add_effect", Map.of(
+          "containerPath", sourcePath, "class", BlurEffect.class.getName())));
+      String effectPath = (String) fx.get("path");
+      structured(call("set_parameter", Map.of("path", effectPath + "/level", "value", 0.75)));
+
+      Map<String, Object> copied = structured(call("copy_effect", Map.of(
+          "path", effectPath, "containerPath", destinationPath)));
+
+      LXEffect copy = (LXEffect) LXPath.get(lx, (String) copied.get("path"));
+      assertEquals(0.75, copy.getParameter("level").getValue(), 1e-9);
+      assertNotEquals(fx.get("id"), copied.get("id"), "a copy is a new component");
+      assertNotNull(LXPath.get(lx, effectPath), "source survives");
+      assertTrue(((List<Map<String, Object>>) copied.get("unreplicatedWiring")).isEmpty());
+    } finally {
+      structured(call("remove_channel", Map.of("path", destinationPath)));
+      structured(call("remove_channel", Map.of("path", sourcePath)));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void moveEffectAcrossChannelsRelocatesAndReportsDroppedWiring() {
+    Map<String, Object> src = structured(call("add_channel", Map.of()));
+    String sourcePath = (String) src.get("path");
+    Map<String, Object> dst = structured(call("add_channel", Map.of()));
+    String destinationPath = (String) dst.get("path");
+    try {
+      Map<String, Object> fx = structured(call("add_effect", Map.of(
+          "containerPath", sourcePath, "class", BlurEffect.class.getName())));
+      String effectPath = (String) fx.get("path");
+      int effectId = ((Number) fx.get("id")).intValue();
+      String channelScope = sourcePath + "/modulation";
+      Map<String, Object> lfo = structured(call("add_modulator", Map.of(
+          "class", VariableLFO.class.getName(), "scope", channelScope)));
+      structured(call("wire_modulator", Map.of(
+          "sourcePath", lfo.get("path"),
+          "targetPath", effectPath + "/level",
+          "scope", channelScope)));
+
+      Map<String, Object> moved = structured(call("move_effect", Map.of(
+          "path", effectPath, "containerPath", destinationPath, "index", 0)));
+
+      String movedPath = (String) moved.get("path");
+      assertTrue(movedPath.startsWith(destinationPath + "/"), "effect is on the new channel");
+      assertEquals(effectId, ((Number) moved.get("id")).intValue(), "a move keeps the id");
+      assertNotNull(LXPath.get(lx, movedPath));
+
+      List<Map<String, Object>> dropped =
+          (List<Map<String, Object>>) moved.get("droppedWiring");
+      assertEquals(1, dropped.size(), "cross-channel move destroys the channel-level wiring");
+      assertEquals(effectPath + "/level", dropped.get(0).get("targetPath"));
+    } finally {
+      structured(call("remove_channel", Map.of("path", destinationPath)));
+      structured(call("remove_channel", Map.of("path", sourcePath)));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void moveEffectWithinContainerReportsNoDroppedWiring() {
+    Map<String, Object> ch = structured(call("add_channel", Map.of()));
+    String channelPath = (String) ch.get("path");
+    try {
+      Map<String, Object> first = structured(call("add_effect", Map.of(
+          "containerPath", channelPath, "class", BlurEffect.class.getName())));
+      structured(call("add_effect", Map.of(
+          "containerPath", channelPath, "class", BlurEffect.class.getName())));
+
+      Map<String, Object> moved = structured(call("move_effect", Map.of(
+          "path", first.get("path"), "index", 1)));
+
+      assertEquals(1, ((Number) moved.get("index")).intValue());
+      assertTrue(((List<Map<String, Object>>) moved.get("droppedWiring")).isEmpty());
     } finally {
       structured(call("remove_channel", Map.of("path", channelPath)));
     }

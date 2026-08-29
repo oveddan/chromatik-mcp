@@ -72,6 +72,30 @@ public final class Midi {
       String label, String targetPath, String targetLabel) {}
 
   /**
+   * A mapping's reconstruction identity — exactly what {@code add_midi_mapping} needs to
+   * recreate it, plus LX's human {@code label}. Reported wherever a mapping is about to be
+   * left behind (see {@code Channels.ExternalReference}), because the label alone cannot be
+   * fed back into a tool call.
+   */
+  public record Binding(String type, int channel, int number, String note, String label) {}
+
+  /**
+   * Derive a live mapping's reconstruction identity. The only place that knows how
+   * LXMidiMapping's subtypes map onto the {@code note}/{@code cc} wire vocabulary.
+   */
+  public static Binding binding(LXMidiMapping mapping) {
+    if (mapping instanceof LXMidiMapping.Note noteMapping) {
+      return new Binding("note", mapping.channel, noteMapping.pitch,
+          MidiNote.getPitchString(noteMapping.pitch), mapping.getDescription());
+    }
+    if (mapping instanceof LXMidiMapping.ControlChange ccMapping) {
+      return new Binding("cc", mapping.channel, ccMapping.cc, null, mapping.getDescription());
+    }
+    throw new IllegalStateException(
+        "Unknown LXMidiMapping subtype: " + mapping.getClass().getName());
+  }
+
+  /**
    * An instantiated control surface (e.g. an APC40, a MidiFighterTwister). {@code name} is
    * the human surface name, {@code deviceName} the MIDI device it binds to. {@code enabled}
    * means the surface is actively driving/reading LEDs; {@code connected} means its device
@@ -318,27 +342,14 @@ public final class Midi {
   }
 
   private static MappingInfo mappingInfo(int index, LXMidiMapping mapping) {
-    String type;
-    int number;
-    String note;
-    if (mapping instanceof LXMidiMapping.Note noteMapping) {
-      type = "note";
-      number = noteMapping.pitch;
-      note = MidiNote.getPitchString(noteMapping.pitch);
-    } else if (mapping instanceof LXMidiMapping.ControlChange ccMapping) {
-      type = "cc";
-      number = ccMapping.cc;
-      note = null;
-    } else {
-      throw new IllegalStateException("Unknown LXMidiMapping subtype: " + mapping.getClass().getName());
-    }
+    Binding binding = binding(mapping);
     return new MappingInfo(
         index,
-        type,
-        mapping.channel,
-        number,
-        note,
-        mapping.getDescription(),
+        binding.type(),
+        binding.channel(),
+        binding.number(),
+        binding.note(),
+        binding.label(),
         Resolve.canonicalPath(mapping.parameter),
         mapping.parameter.getLabel());
   }
