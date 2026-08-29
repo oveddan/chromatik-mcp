@@ -7,14 +7,20 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
+
+import com.google.gson.JsonObject;
 
 import heronarts.lx.LX;
 import heronarts.lx.LXComponent;
 import heronarts.lx.LXDeviceComponent;
+import heronarts.lx.LXPath;
+import heronarts.lx.LXSerializable;
 import heronarts.lx.blend.LXBlend;
 import heronarts.lx.clip.LXClip;
 import heronarts.lx.clip.LXClipLane;
 import heronarts.lx.clip.LXComposition;
+import heronarts.lx.clip.PatternClipLane;
 import heronarts.lx.command.LXCommand;
 import heronarts.lx.effect.LXEffect;
 import heronarts.lx.mixer.LXAbstractChannel;
@@ -28,6 +34,7 @@ import heronarts.lx.modulation.LXModulationContainer;
 import heronarts.lx.modulation.LXModulationEngine;
 import heronarts.lx.modulation.LXTriggerModulation;
 import heronarts.lx.modulator.LXModulator;
+import heronarts.lx.parameter.LXListenableNormalizedParameter;
 import heronarts.lx.parameter.ObjectParameter;
 import heronarts.lx.pattern.LXPattern;
 
@@ -336,6 +343,17 @@ public final class Channels {
    */
   public static LXPattern addPattern(LX lx, String containerPath,
       Class<? extends LXPattern> patternClass, int index) {
+    return insertPattern(lx, containerPath, patternClass, null, index);
+  }
+
+  /**
+   * The one insertion path. {@code patternObj} null builds a blank instance
+   * ({@link #addPattern}); non-null loads serialized state into it ({@link #copyPattern}) —
+   * the same distinction LX draws with its two {@code AddPattern} constructors, so the
+   * index and validation semantics cannot drift between adding and copying.
+   */
+  private static LXPattern insertPattern(LX lx, String containerPath,
+      Class<? extends LXPattern> patternClass, JsonObject patternObj, int index) {
     LXComponent component = Resolve.component(lx, containerPath);
     if (!(component instanceof LXPatternEngine.Container container)) {
       throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
@@ -350,13 +368,308 @@ public final class Channels {
       throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
           "Pattern index " + index + " out of range [0," + before + "] on " + containerPath);
     }
-    Commands.perform(lx, new LXCommand.Channel.AddPattern(engine, patternClass, index));
+    Commands.perform(lx,
+        new LXCommand.Channel.AddPattern(engine, patternClass, patternObj, index));
     if (engine.patterns.size() != before + 1) {
       throw new IllegalStateException("AddPattern did not add a pattern to " + containerPath);
     }
     // Inserted patterns land at their target index; new appended patterns are last.
     int resultIndex = (index >= 0 && index <= before) ? index : before;
     return engine.patterns.get(resultIndex);
+  }
+
+  /**
+   * A reference from outside a pattern's own subtree that points into it. On a copy these
+   * are the wirings the new instance does <em>not</em> carry: they address the source by
+   * canonical path or component id, and only the source keeps them.
+   *
+   * <p>{@code kind} is one of {@code modulation}, {@code trigger}, {@code midiMapping},
+   * {@code snapshotView}, {@code clipLane}, {@code clipPatternEvent}. {@code scope} is the
+   * canonical path of the owning modulation engine, or of the MIDI/snapshot/clip holder.
+   * {@code sourcePath} is null for kinds that have no driving parameter. {@code midi} is
+   * populated only for {@code midiMapping}: LX's label alone cannot be fed back into
+   * add_midi_mapping, so the type/channel/number identity travels with the report.
+   */
+  public record ExternalReference(String kind, String scope, String sourcePath,
+      String targetPath, Midi.Binding midi) {
+
+    ExternalReference(String kind, String scope, String sourcePath, String targetPath) {
+      this(kind, scope, sourcePath, targetPath, null);
+    }
+  }
+
+  /**
+   * The pattern created by {@link #copyPattern}, plus every external reference into the
+   * source that the copy does not reproduce.
+   */
+  public record PatternCopyResult(LXPattern pattern, List<ExternalReference> unreplicatedWiring) {}
+
+  /**
+   * Copy a configured pattern into {@code containerPath}, which may be any channel or
+   * pattern-engine container including the source's own.
+   *
+   * <p>The copy is made by serializing the source with ids stripped and loading that JSON
+   * into a fresh instance ({@link LXCommand.Channel.AddPattern} with a pattern object —
+   * the round-trip LX itself documents for copy/paste). Everything inside the pattern's
+   * own subtree travels: parameter values, nested rack patterns and their effects, and the
+   * pattern's device-local modulation engine, whose wirings serialize as paths relative to
+   * their scope and so re-resolve against the copy rather than the source.
+   *
+   * <p>Nothing outside that subtree travels — channel-level and global modulations,
+   * triggers, MIDI mappings and snapshot views address the source specifically. They are
+   * returned in {@link PatternCopyResult#unreplicatedWiring()} rather than silently
+   * dropped, so a caller performing a move (copy, then {@link #removePattern}) knows
+   * exactly what it must rewire.
+   *
+   * @param index 0-based insertion index, or -1 to append
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the destination is not a container,
+   *     is the source pattern or a descendant of it, or the index is out of range
+   */
+  public static PatternCopyResult copyPattern(LX lx, String sourcePath, String containerPath,
+      int index) {
+    LXPattern source = Resolve.component(lx, sourcePath, LXPattern.class);
+    LXComponent component = Resolve.component(lx, containerPath);
+    // Copying into itself would nest a stale snapshot of the source inside the source.
+    if (component == source || component.isDescendant(source)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Destination " + containerPath + " is inside the pattern being copied ("
+              + sourcePath + ")");
+    }
+    LXPattern copy = insertPattern(lx, containerPath, source.getClass(),
+        LXSerializable.Utils.toObject(source, true), index);
+    return new PatternCopyResult(copy, externalReferences(lx, source));
+  }
+
+
+  /**
+   * Every reference into {@code component} held outside its own subtree. Ancestor modulation
+   * engines are walked upward from the parent, so the component's own modulation engine —
+   * which travels with a copy — is deliberately excluded. Shared by the pattern, effect and
+   * channel copy primitives; what counts as "outside" differs entirely between them (a
+   * channel owns its channel-level engine, a pattern does not), and this walk gets that
+   * right for each without special-casing.
+   */
+  private static List<ExternalReference> externalReferences(LX lx, LXComponent component) {
+    List<ExternalReference> references = new ArrayList<>();
+    modulationReferences(component, engine -> true, references);
+    var mappings = lx.engine.midi.findMappings(component);
+    if (mappings != null) {
+      for (var mapping : mappings) {
+        references.add(new ExternalReference("midiMapping",
+            lx.engine.midi.getCanonicalPath(), null,
+            mapping.parameter.getCanonicalPath(), Midi.binding(mapping)));
+      }
+    }
+    var views = lx.engine.snapshots.findSnapshotViews(component);
+    if (views != null) {
+      for (var view : views) {
+        references.add(new ExternalReference("snapshotView",
+            view.getSnapshot().getCanonicalPath(), null, view.getViewPath()));
+      }
+    }
+    collectClipReferences(lx, component, references);
+    remoteControlReferences(component, references);
+    return references;
+  }
+
+  /**
+   * Wirings held by an ancestor modulation engine that address {@code component}. The walk
+   * starts at the parent, so the component's own engine — which travels with a copy and
+   * survives a move — is never reported.
+   *
+   * <p>{@code include} selects which engines count, and receives the live engine rather
+   * than its path: the move case needs to ask whether an engine can still reach the
+   * component after it lands somewhere else, and re-resolving a scope string to answer that
+   * would be both slower and silently wrong if the path failed to resolve.
+   */
+  private static void modulationReferences(LXComponent component,
+      Predicate<LXModulationEngine> include, List<ExternalReference> references) {
+    for (LXComponent parent = component.getParent(); parent != null; parent = parent.getParent()) {
+      if (!(parent instanceof LXModulationContainer modulationContainer)) {
+        continue;
+      }
+      LXModulationEngine engine = modulationContainer.getModulationEngine();
+      if (!include.test(engine)) {
+        continue;
+      }
+      String scope = Resolve.canonicalPath(engine);
+      List<LXCompoundModulation> modulations =
+          engine.findModulations(component, engine.modulations);
+      if (modulations != null) {
+        for (LXCompoundModulation modulation : modulations) {
+          references.add(new ExternalReference("modulation", scope,
+              Resolve.canonicalPath(modulation.source), Resolve.canonicalPath(modulation.target)));
+        }
+      }
+      List<LXTriggerModulation> triggers = engine.findModulations(component, engine.triggers);
+      if (triggers != null) {
+        for (LXTriggerModulation trigger : triggers) {
+          references.add(new ExternalReference("trigger", scope,
+              Resolve.canonicalPath(trigger.source), Resolve.canonicalPath(trigger.target)));
+        }
+      }
+    }
+  }
+
+  /**
+   * Timeline automation that addresses {@code component} from a clip outside it. A clip
+   * belongs to a bus; when that bus is the component being copied (a channel copy) its
+   * lanes travel with the copy and are not external, so those are skipped — the same
+   * inside/outside test the modulation walk applies.
+   *
+   * <p>Two kinds are reported: {@code clipLane}, a lane automating a parameter in the
+   * subtree, and {@code clipPatternEvent}, a pattern-launch lane whose events name a copied
+   * pattern. LX's own {@code RemoveComponent} tracks both, which is why a copy that ignored
+   * them would report an empty {@code unreplicatedWiring} while silently losing automation.
+   */
+  private static void collectClipReferences(LX lx, LXComponent component,
+      List<ExternalReference> references) {
+    List<LXClip> clips = new ArrayList<>();
+    List<LXBus> buses = new ArrayList<>(lx.engine.mixer.channels);
+    buses.add(lx.engine.mixer.masterBus);
+    for (LXBus bus : buses) {
+      if (bus == component || bus.isDescendant(component)) {
+        continue;
+      }
+      for (LXClip clip : bus.clips) {
+        // Sparse by design — an empty grid clip slot is a null entry.
+        if (clip != null) {
+          clips.add(clip);
+        }
+      }
+    }
+    // The arrange composition is an LXClip in its own right (LXComposition extends LXClip)
+    // and is add_clip_lane's default target, so lanes automating the copied subtree
+    // commonly live here rather than on any bus.
+    LXComposition composition = lx.engine.timeline.getComposition();
+    if (composition != null) {
+      clips.add(composition);
+    }
+    // findClipLanes matches parameter automation anywhere in the subtree; pattern-launch
+    // events name a pattern directly, so every pattern under the component counts — a
+    // copied channel strands the launch events for its patterns just as a copied pattern
+    // strands its own.
+    List<LXPattern> patterns = subtreePatterns(component);
+    for (LXClip clip : clips) {
+      String clipPath = Resolve.canonicalPath(clip);
+      List<LXClipLane<?>> lanes = clip.findClipLanes(component);
+      if (lanes != null) {
+        for (LXClipLane<?> lane : lanes) {
+          // Empty lanes carry nothing to strand. This matters because LX auto-creates a
+          // full set of structural lanes per channel on the arrange composition (bus,
+          // pattern, midi, palette, global-modulation), all empty — reporting those would
+          // put entries in unreplicatedWiring for every copy in every project.
+          if (!lane.events.isEmpty()) {
+            references.add(new ExternalReference("clipLane", clipPath, null,
+                Resolve.canonicalPath(lane)));
+          }
+        }
+      }
+      for (LXClipLane<?> lane : clip.lanes) {
+        if (!(lane instanceof PatternClipLane patternLane)) {
+          continue;
+        }
+        for (LXPattern pattern : patterns) {
+          if (patternLane.engine == pattern.getEngine()
+              && patternLane.findEventIndices(pattern) != null) {
+            references.add(new ExternalReference("clipPatternEvent", clipPath, null,
+                Resolve.canonicalPath(lane)));
+          }
+        }
+      }
+    }
+  }
+
+  /** {@code component} itself if it is a pattern, plus every pattern nested beneath it. */
+  private static List<LXPattern> subtreePatterns(LXComponent component) {
+    List<LXPattern> patterns = new ArrayList<>();
+    if (component instanceof LXPattern pattern) {
+      patterns.add(pattern);
+    }
+    if (component instanceof LXPatternEngine.Container container) {
+      for (LXPattern child : container.getPatternEngine().patterns) {
+        patterns.addAll(subtreePatterns(child));
+      }
+    }
+    return patterns;
+  }
+
+  /**
+   * The channel created by {@link #copyChannel}, the external references the copy does not
+   * reproduce, and whether the source's group membership was dropped.
+   */
+  public record ChannelCopyResult(LXChannel channel, List<ExternalReference> unreplicatedWiring,
+      boolean groupMembershipDropped) {}
+
+  /** LXChannel serializes its group by component id under this key (LXChannel.java:497). */
+  private static final String KEY_CHANNEL_GROUP = "group";
+
+  /**
+   * Copy a whole channel — patterns, effects, clips, and its own channel-level modulation
+   * engine — into the mixer at {@code index}.
+   *
+   * <p>A channel carries far more than a pattern does, because channel-level wiring lives
+   * <em>inside</em> a channel's subtree: the modulators and modulations that
+   * {@link #copyPattern} has to strand are exactly what a channel copy takes with it,
+   * rewired to the copy. Only global modulations, MIDI mappings and snapshot views stay
+   * behind, and those are reported in
+   * {@link ChannelCopyResult#unreplicatedWiring()}.
+   *
+   * <p>Two hazards in LX's own behaviour are handled here rather than passed through:
+   *
+   * <ul>
+   * <li><b>Groups cannot be copied.</b> {@code Mixer.AddChannel} always constructs an
+   * {@code LXChannel} (LXMixerEngine.java:524), so handing it a serialized {@code LXGroup}
+   * yields a plain channel wearing the group's label and none of its members. Rejected.
+   * <li><b>Group membership is stripped from the copy.</b> The serialized channel keeps a
+   * {@code group} id, and honouring it while inserting anywhere in the mixer breaks LX's
+   * invariant that a group's members are contiguous behind it — verified to produce a group
+   * reporting 3 members with an outsider wedged between them. The copy therefore lands as a
+   * top-level channel; {@code groupMembershipDropped} says so, and callers who want it
+   * grouped call {@link #groupChannels} afterward.
+   * </ul>
+   *
+   * @param index 0-based mixer index, or -1 to append
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the source is a group or the index is
+   *     out of range
+   */
+  public static ChannelCopyResult copyChannel(LX lx, String sourcePath, int index) {
+    LXAbstractChannel source = Resolve.component(lx, sourcePath, LXAbstractChannel.class);
+    if (!(source instanceof LXChannel channel)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Cannot copy a group at " + sourcePath
+              + " — LX's AddChannel only builds channels, so a group copy would lose every "
+              + "member; copy the member channels individually and regroup them");
+    }
+    List<LXAbstractChannel> channels = lx.engine.mixer.channels;
+    int before = channels.size();
+    // addChannel throws on index > size inside perform(), which swallows it and wipes the
+    // undo stack — reject up front like the other index-taking primitives.
+    if (index > before) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Channel index " + index + " out of range [0," + before + "]");
+    }
+    // Stripping the copy's own group id keeps it out of the source's group, but says
+    // nothing about where it lands: an ungrouped channel dropped between a group header
+    // and its members breaks the same contiguity invariant from the other side. Nothing is
+    // being removed here, so the split test runs against the full channel list.
+    if (index >= 0 && insertionSplitsGroup(channels, null, index)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Channel index " + index + " would land inside a group and split it; copy to an "
+              + "index outside the group, then use group_channels");
+    }
+    JsonObject channelObj = LXSerializable.Utils.toObject(channel, true);
+    boolean groupMembershipDropped = channelObj.has(KEY_CHANNEL_GROUP);
+    channelObj.remove(KEY_CHANNEL_GROUP);
+    Commands.perform(lx, new LXCommand.Mixer.AddChannel(channelObj, index));
+    if (channels.size() != before + 1) {
+      throw new IllegalStateException("AddChannel did not add a channel");
+    }
+    int resultIndex = (index >= 0 && index <= before) ? index : before;
+    if (!(channels.get(resultIndex) instanceof LXChannel copy)) {
+      throw new IllegalStateException("AddChannel did not add an LXChannel");
+    }
+    return new ChannelCopyResult(copy, externalReferences(lx, channel), groupMembershipDropped);
   }
 
   /**
@@ -403,8 +716,13 @@ public final class Channels {
   /** The moved channel/group plus every mixer component whose canonical path changed. */
   public record ChannelMoveResult(LXAbstractChannel channel, List<PathChange> oscChanges) {}
 
-  /** The moved effect plus every sibling whose canonical path changed as a result. */
-  public record EffectMoveResult(LXEffect effect, List<PathChange> oscChanges) {}
+  /**
+   * The moved effect, every canonical path that changed, and the wiring the move destroyed
+   * — always empty for an in-container reorder, which cannot take an effect out of any
+   * engine's reach (see {@link #moveEffect}).
+   */
+  public record EffectMoveResult(LXEffect effect, List<PathChange> oscChanges,
+      List<ExternalReference> droppedWiring) {}
 
   /**
    * Move a channel or group to an absolute 0-based index in the mixer list. The destination
@@ -505,6 +823,172 @@ public final class Channels {
   }
 
   /**
+   * Resolve an effect host: an LXBus (channel or master) or an LXPattern.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH for any other path
+   */
+  private static LXEffect.Container effectContainer(LX lx, String containerPath) {
+    LXComponent component = Resolve.component(lx, containerPath);
+    if (!(component instanceof LXEffect.Container container)) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Not a channel, bus, or pattern at path: " + containerPath
+              + " (found " + component.getClass().getSimpleName() + ")");
+    }
+    return container;
+  }
+
+  /**
+   * The effect created by {@link #copyEffect}, plus every external reference into the
+   * source that the copy does not reproduce.
+   */
+  public record EffectCopyResult(LXEffect effect, List<ExternalReference> unreplicatedWiring) {}
+
+  /**
+   * Copy a configured effect into {@code containerPath} (a channel, the master bus, or a
+   * pattern), which may be the source's own container.
+   *
+   * <p>Same round-trip as {@link #copyPattern}: the effect's parameter values and its own
+   * device-local modulation engine travel with the copy; wiring held outside the effect
+   * does not, and is returned in {@link EffectCopyResult#unreplicatedWiring()}.
+   *
+   * <p>Unlike {@link #copyPattern} there is no insertion index — {@code AddEffect.perform}
+   * calls {@code addEffect(instance)} with no index and always appends (LXCommand.java:1387).
+   * Callers wanting a position follow with {@link #moveEffect}.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the destination is not an effect
+   *     container
+   */
+  public static EffectCopyResult copyEffect(LX lx, String sourcePath, String containerPath) {
+    LXEffect source = Resolve.component(lx, sourcePath, LXEffect.class);
+    LXEffect.Container container = effectContainer(lx, containerPath);
+    List<LXEffect> effects = container.getEffects();
+    int before = effects.size();
+    JsonObject effectObj = LXSerializable.Utils.toObject(source, true);
+    Commands.perform(lx,
+        new LXCommand.Channel.AddEffect((LXComponent) container, source.getClass(), effectObj));
+    if (effects.size() != before + 1) {
+      throw new IllegalStateException("AddEffect did not add an effect to " + containerPath);
+    }
+    return new EffectCopyResult(effects.get(before), externalReferences(lx, source));
+  }
+
+  /**
+   * Move an effect to a different container, at {@code index} within it.
+   *
+   * <p>This is LX's own {@code Channel.RelocateEffect} (LXCommand.java:1530-1615) — a real
+   * move, not a copy: the effect keeps its identity, and its MIDI mappings, snapshot views
+   * and clip lanes are retargeted to the new path.
+   *
+   * <p>Modulations and triggers are retargeted only while they stay in scope.
+   * {@code LXParameterModulation.move} returns null — dropping the wiring — when the moved
+   * component is no longer a descendant of the engine's parent
+   * (LXParameterModulation.java:265-269). So moving an effect between two containers on the
+   * same channel preserves that channel's wiring, while moving it to another channel
+   * destroys it. Because the test is a pure scope check, the casualties are known before
+   * the command runs, and they are returned in
+   * {@link EffectRelocateResult#droppedWiring()} instead of vanishing silently. Undo
+   * restores them.
+   *
+   * <p>Custom remote controls referencing the effect are also dropped and restored only by
+   * undo; LX flags that as an open TODO (LXCommand.java:1607-1611) and does not report it.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the destination is not an effect
+   *     container, is the effect's own current container, or the index is out of range
+   */
+  private static EffectMoveResult relocateEffect(LX lx, String path, String containerPath,
+      int index) {
+    LXEffect effect = Resolve.component(lx, path, LXEffect.class);
+    // A relocation removes the effect from its source first, and LX refuses to remove a
+    // locked effect inside perform() — which swallows the failure and wipes the undo
+    // stack. Same precheck removeEffect makes, for the same reason.
+    if (effect.locked.isOn()) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Effect " + path + " is locked and cannot be moved to another container");
+    }
+    LXEffect.Container target = effectContainer(lx, containerPath);
+    if (target == effect.getContainer()) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Effect " + path + " is already in " + containerPath
+              + " — use move_effect without containerPath to reorder within a container");
+    }
+    // The effect is removed from its source before being loaded into the target, so the
+    // target's list grows by one; an out-of-range index would throw inside perform(), which
+    // swallows it and wipes the undo stack.
+    int size = target.getEffects().size();
+    if (index < 0 || index > size) {
+      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
+          "Effect index " + index + " out of range [0," + size + "] on " + containerPath);
+    }
+    List<ExternalReference> dropped = outOfScopeWiring(effect, (LXComponent) target);
+    // RelocateEffect reindexes exactly two effect lists: the one it leaves and the one it
+    // joins. snapshotPaths descends each effect's own subtree (its device-local modulators
+    // and wirings shift with it), so this is both narrower and deeper than walking the
+    // whole mixer.
+    List<LXEffect> affected = new ArrayList<>(effect.getContainer().getEffects());
+    affected.addAll(target.getEffects());
+    var before = snapshotPaths(affected);
+    Commands.perform(lx, new LXCommand.Channel.RelocateEffect(effect, target, index));
+    if (target.getEffects().size() != size + 1) {
+      throw new IllegalStateException("RelocateEffect did not move an effect to " + containerPath);
+    }
+    // RelocateEffect removes the effect and loads a fresh instance into the target
+    // (LXCommand.java:1596), so the resolved reference is now detached. The new instance
+    // reclaims the original's id — freed by the removal — which is why oscChanges can track
+    // it across the move, but the object is not the same one.
+    return new EffectMoveResult(
+        target.getEffects().get(index), pathChanges(lx, before), dropped);
+  }
+
+  /**
+   * The modulations and triggers referencing {@code component} that a move to
+   * {@code destination} would destroy: those in an engine whose parent will no longer
+   * contain the component. Mirrors the scope test in {@code LXParameterModulation.move}.
+   */
+  private static List<ExternalReference> outOfScopeWiring(LXComponent component,
+      LXComponent destination) {
+    List<ExternalReference> dropped = new ArrayList<>();
+    // MIDI mappings, snapshot views and clip lanes are retargeted unconditionally, so among
+    // wirings only modulations and triggers can be casualties — exactly the ones whose
+    // engine will no longer contain the component. Same test LXParameterModulation.move
+    // applies.
+    modulationReferences(component, engine -> !destination.isDescendant(engine.getParent()),
+        dropped);
+    // Remote controls are different: RelocateEffect restores every other reference kind but
+    // deliberately skips these (LXCommand.java:1607-1611 marks it an open TODO), so an
+    // ancestor device pointing at the component loses that control regardless of scope.
+    remoteControlReferences(component, dropped);
+    return dropped;
+  }
+
+  /**
+   * Ancestor devices whose custom remote controls address {@code component}. Mirrors LX's
+   * own {@code RemoveComponent} walk, which stops at the enclosing bus because remote
+   * controls only exist on devices.
+   */
+  private static void remoteControlReferences(LXComponent component,
+      List<ExternalReference> references) {
+    for (LXComponent parent = component.getParent();
+        parent != null && !(parent instanceof LXBus);
+        parent = parent.getParent()) {
+      if (!(parent instanceof LXDeviceComponent device)) {
+        continue;
+      }
+      LXListenableNormalizedParameter[] controls = device.getCustomRemoteControls();
+      if (controls == null) {
+        continue;
+      }
+      for (LXListenableNormalizedParameter control : controls) {
+        if (control != null && control.isDescendant(component)) {
+          references.add(new ExternalReference("remoteControl",
+              Resolve.canonicalPath(device), null, Resolve.canonicalPath(control)));
+        }
+      }
+    }
+  }
+
+
+
+  /**
    * Add an effect of {@code effectClass} to a container. The container may be an
    * LXBus (channel or master) or an LXPattern; any other path is a TYPE_MISMATCH.
    *
@@ -512,15 +996,10 @@ public final class Channels {
    */
   public static LXEffect addEffect(LX lx, String containerPath,
       Class<? extends LXEffect> effectClass) {
-    LXComponent component = Resolve.component(lx, containerPath);
-    if (!(component instanceof LXEffect.Container container)) {
-      throw new Resolve.ResolveException(Resolve.Failure.TYPE_MISMATCH,
-          "Not a channel, bus, or pattern at path: " + containerPath
-              + " (found " + component.getClass().getSimpleName() + ")");
-    }
+    LXEffect.Container container = effectContainer(lx, containerPath);
     List<LXEffect> effects = container.getEffects();
     int before = effects.size();
-    Commands.perform(lx, new LXCommand.Channel.AddEffect(component, effectClass));
+    Commands.perform(lx, new LXCommand.Channel.AddEffect((LXComponent) container, effectClass));
     if (effects.size() != before + 1) {
       throw new IllegalStateException("AddEffect did not add an effect to " + containerPath);
     }
@@ -548,7 +1027,27 @@ public final class Channels {
    *
    * @throws Resolve.ResolveException if index is out of range
    */
-  public static EffectMoveResult moveEffect(LX lx, String path, int toIndex) {
+  /**
+   * Move an effect: to {@code index} within its current container when
+   * {@code containerPath} is null, or into a different container when it is given.
+   *
+   * <p>One entry point because the two cases differ in what they can destroy, and that
+   * difference is LX's, not the caller's: a reorder keeps the effect inside every engine
+   * that reaches it, while a cross-container move can take it out of scope and drop the
+   * wiring outright. Both report through {@link EffectMoveResult#droppedWiring()}, so a
+   * caller never has to know which path it took.
+   *
+   * @throws Resolve.ResolveException TYPE_MISMATCH if the destination is not an effect
+   *     container, is the effect's own current container, or the index is out of range
+   */
+  public static EffectMoveResult moveEffect(LX lx, String path, String containerPath,
+      int index) {
+    return (containerPath == null)
+        ? reorderEffect(lx, path, index)
+        : relocateEffect(lx, path, containerPath, index);
+  }
+
+  private static EffectMoveResult reorderEffect(LX lx, String path, int toIndex) {
     LXEffect effect = Resolve.component(lx, path, LXEffect.class);
     LXEffect.Container container = effect.getContainer();
     List<LXEffect> effects = container.getEffects();
@@ -561,7 +1060,10 @@ public final class Channels {
     LXComponent parent = (LXComponent) container;
     var before = snapshotPaths(effects);
     Commands.perform(lx, new LXCommand.Channel.MoveEffect(parent, effect, toIndex));
-    return new EffectMoveResult(effect, pathChanges(lx, before));
+    // An in-container reorder never moves the effect out of an engine's reach, so no
+    // wiring can be dropped — the empty list is a fact about LX, stated here rather than
+    // fabricated by each caller.
+    return new EffectMoveResult(effect, pathChanges(lx, before), List.of());
   }
 
   // ── Snapshot builders ────────────────────────────────────────────────────────

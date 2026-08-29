@@ -84,13 +84,16 @@ handling, verifying your own work — are in
 | [`group_channels`](#group_channels) | write | Create a mixer group from a non-empty list of top-level channel paths. The leftmost selected channel determines where the group bus is inserted… |
 | [`ungroup_channel`](#ungroup_channel) | write | Pull one member channel out of its mixer group and place it immediately after the remaining group span. Removing the last member leaves an empty… |
 | [`ungroup_channels`](#ungroup_channels) | write | Dissolve a mixer group by its canonical path, leaving all members as top-level channels. Returns the removed group's id and former path plus each… |
+| [`copy_channel`](#copy_channel) | write | Copy a whole channel into the mixer — patterns, their effects and nested racks, the channel's own effects, its clips, its mixer settings (fader… |
 | [`add_pattern`](#add_pattern) | write | Add a pattern ('class', from list_available_patterns — either the full class name or the short name it lists) to a channel or PatternRack… |
 | [`remove_pattern`](#remove_pattern) | write | Remove a pattern by its canonical path. Remaining sibling patterns reindex (their 1-based paths shift), so cached paths go stale — re-list after… |
-| [`move_pattern`](#move_pattern) | write | Move a pattern to a new 0-based index within its channel. Moving shifts the 1-based paths of the moved pattern, any sibling it crosses, and… |
+| [`move_pattern`](#move_pattern) | write | Reorder a pattern to a new 0-based index within its own channel or PatternRack. This cannot move a pattern to a different container — for that… |
+| [`copy_pattern`](#copy_pattern) | write | Copy a configured pattern into any channel or PatternRack ('containerPath'), including a different channel from the source's — unlike add_pattern… |
 | [`activate_pattern`](#activate_pattern) | write | Activate (go to) a pattern on its channel. Only valid when the channel is in PLAYLIST composite mode — callers on BLEND channels receive… |
 | [`add_effect`](#add_effect) | write | Add an effect ('class', from list_available_effects — either the full class name or the short name it lists) to a channel, master bus, or pattern.… |
 | [`remove_effect`](#remove_effect) | write | Remove an effect from its container by canonical path. Returns invalid_argument if the effect is locked. Undoable in Chromatik with Cmd-Z. |
-| [`move_effect`](#move_effect) | write | Move an effect to a new 0-based index within its container (channel, bus, or pattern). Moving shifts the 1-based paths of the moved effect, any… |
+| [`move_effect`](#move_effect) | write | Move an effect: to a new 0-based index within its container (channel, bus, or pattern), or — by passing 'containerPath' — into a different container… |
+| [`copy_effect`](#copy_effect) | write | Copy a configured effect into any channel, the master bus, or a pattern ('containerPath') — unlike add_effect, which instantiates a blank one. The… |
 
 **Map macro knobs (and any modulation)**
 
@@ -645,6 +648,17 @@ Dissolve a mixer group by its canonical path, leaving all members as top-level c
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the group to dissolve, e.g. /lx/mixer/channel/1 |
 
+### `copy_channel`
+
+_mutating_
+
+Copy a whole channel into the mixer — patterns, their effects and nested racks, the channel's own effects, its clips, its mixer settings (fader, blend mode, crossfade group), and its channel-level modulators/modulations/triggers, all rewired to the copy. This carries far more than copy_pattern does: channel-level wiring lives inside the channel, so the modulations that copy_pattern has to leave behind travel with a channel copy. Only global modulations (scope /lx/modulation), MIDI mappings, snapshot views and clip automation held by other channels stay on the source; they are listed in the response's unreplicatedWiring array (kind, scope, sourcePath, targetPath, plus type/channel/number for MIDI mappings). The channel's own clips travel with it and are not listed. Groups cannot be copied — LX's add-channel only builds channels, so copying a group would produce an empty channel wearing its label; copy the member channels and regroup with group_channels, which is also how you re-group a copy: a copy of a grouped channel lands at the top level, never inside the source's group (honoring the serialized membership would break LX's rule that a group's members sit contiguously behind it), and the response sets groupMembershipDropped: true so you know to regroup. Pass an optional 0-based index to insert at a mixer position; omit to append. An index that would land inside an existing group and split it is rejected with invalid_argument — copy outside the group, then group_channels. Inserting shifts the 1-based paths of later channels — re-list rather than reusing cached paths. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the channel to copy, e.g. /lx/mixer/channel/1 |
+| `index` | integer | no | -2147483648–2147483647 | 0-based mixer index to insert at; omit to append at the end |
+
 ### `add_pattern`
 
 _mutating_
@@ -671,12 +685,24 @@ Remove a pattern by its canonical path. Remaining sibling patterns reindex (thei
 
 _mutating_
 
-Move a pattern to a new 0-based index within its channel. Moving shifts the 1-based paths of the moved pattern, any sibling it crosses, and everything those siblings own (their effects, any nested rack patterns and effects, and any device-local modulators/modulations/triggers) — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.
+Reorder a pattern to a new 0-based index within its own channel or PatternRack. This cannot move a pattern to a different container — for that, copy_pattern to the destination and remove_pattern on the source, which reports the channel-level wiring the copy leaves behind. Moving shifts the 1-based paths of the moved pattern, any sibling it crosses, and everything those siblings own (their effects, any nested rack patterns and effects, and any device-local modulators/modulations/triggers) — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the pattern to move, e.g. /lx/mixer/channel/1/pattern/1 |
 | `index` | integer | yes | -2147483648–2147483647 | 0-based destination index within the channel's pattern list |
+
+### `copy_pattern`
+
+_mutating_
+
+Copy a configured pattern into any channel or PatternRack ('containerPath'), including a different channel from the source's — unlike add_pattern, which instantiates a blank one. The copy carries everything inside the source pattern: parameter values, its own effects, a PatternRack's nested patterns and their effects, and the pattern's device-local modulators/modulations/triggers, rewired to the copy. It does NOT carry wiring held outside the pattern — channel-level and global modulations and triggers, MIDI mappings, snapshot views — which address the source specifically and stay on it; every such reference is listed in the response's unreplicatedWiring array (kind, scope, sourcePath, targetPath), including clip automation lanes and pattern-launch events that address the source, and for MIDI mappings the type/channel/number add_midi_mapping needs to rebuild them, so you can restore what matters with wire_modulator/wire_trigger/add_midi_mapping. There is no cross-channel move: copy here, then remove_pattern on the source, and expect to rewire everything unreplicatedWiring reported. Pass an optional 0-based index to insert at a specific position; omit to append. Inserting shifts the 1-based paths of later sibling patterns — re-list rather than reusing cached paths. Returns invalid_argument if the destination is inside the pattern being copied or the index is out of range. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the pattern to copy, e.g. /lx/mixer/channel/1/pattern/1 |
+| `containerPath` | string | yes | — | Canonical path of the destination channel or PatternRack, e.g. /lx/mixer/channel/2 or /lx/mixer/channel/2/pattern/1 when that pattern is a PatternRack; may be the source's own container to duplicate in place |
+| `index` | integer | no | -2147483648–2147483647 | 0-based insertion index; omit to append at the end |
 
 ### `activate_pattern`
 
@@ -713,12 +739,24 @@ Remove an effect from its container by canonical path. Returns invalid_argument 
 
 _mutating_
 
-Move an effect to a new 0-based index within its container (channel, bus, or pattern). Moving shifts the 1-based paths of the moved effect, any sibling it crosses, and any device-local modulators/modulations/triggers those siblings own — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range. Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.
+Move an effect: to a new 0-based index within its container (channel, bus, or pattern), or — by passing 'containerPath' — into a different container entirely. A cross-container move is a true move, not a duplicate: the effect keeps its id, and its MIDI mappings, snapshot views and clip lanes follow it. Modulations and triggers follow it only while they stay in scope: moving between two containers on the same channel (e.g. the channel's own chain to one of its patterns) keeps that channel's wiring, but moving to another channel DESTROYS it, because the wiring can no longer reach the effect. The response's droppedWiring array lists exactly what the move destroyed (kind, scope, sourcePath, targetPath) — empty on an in-container reorder. Undo restores it. To duplicate rather than relocate, use copy_effect. Moving shifts the 1-based paths of the moved effect, any sibling it crosses, and any device-local modulators/modulations/triggers those siblings own — re-list rather than reusing cached paths; the response's oscChanges array reports exactly which canonical paths changed (componentId, before, after). It reports changes only, not components removed during the move. Returns invalid_argument if the index is out of range, or if containerPath is the effect's current container (omit it to reorder in place). Undoable in Chromatik with Cmd-Z, which a human can trigger outside this session's control; an undo inverts every path in oscChanges with no separate signal, so re-list after any move if undo is possible.
 
 | param | type | required | constraints | description |
 |---|---|---|---|---|
 | `path` | string | yes | — | Canonical path of the effect to move, e.g. /lx/mixer/channel/1/effect/1 |
 | `index` | integer | yes | -2147483648–2147483647 | 0-based destination index within the effect list |
+| `containerPath` | string | no | — | Optional canonical path of a different destination container (channel, master bus, or pattern); omit to reorder within the effect's current container |
+
+### `copy_effect`
+
+_mutating_
+
+Copy a configured effect into any channel, the master bus, or a pattern ('containerPath') — unlike add_effect, which instantiates a blank one. The copy carries the source's parameter values and its own device-local modulators/modulations/triggers, rewired to the copy. It does NOT carry wiring held outside the effect — channel-level and global modulations and triggers, MIDI mappings, snapshot views — which address the source specifically and stay on it; every such reference is listed in the response's unreplicatedWiring array (kind, scope, sourcePath, targetPath), including clip automation lanes, and for MIDI mappings the type/channel/number needed to rebuild them. To relocate rather than duplicate, prefer move_effect with containerPath: that is a true move and keeps MIDI mappings and snapshot views attached. The copy always lands at the end of the destination's effect chain — LX's add-effect command takes no index; follow with move_effect to position it. Undoable in Chromatik with Cmd-Z.
+
+| param | type | required | constraints | description |
+|---|---|---|---|---|
+| `path` | string | yes | — | Canonical path of the effect to copy, e.g. /lx/mixer/channel/1/effect/1 |
+| `containerPath` | string | yes | — | Canonical path of the destination channel, master bus, or pattern, e.g. /lx/mixer/channel/2, /lx/mixer/master, or /lx/mixer/channel/2/pattern/1; may be the source's own container to duplicate in place |
 
 ## Map macro knobs (and any modulation)
 

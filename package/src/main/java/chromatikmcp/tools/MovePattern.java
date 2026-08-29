@@ -18,7 +18,10 @@ public final class MovePattern implements LxTool {
 
   @Override
   public String description() {
-    return "Move a pattern to a new 0-based index within its channel. Moving shifts the "
+    return "Reorder a pattern to a new 0-based index within its own channel or PatternRack. "
+        + "This cannot move a pattern to a different container — for that, copy_pattern to "
+        + "the destination and remove_pattern on the source, which reports the channel-level "
+        + "wiring the copy leaves behind. Moving shifts the "
         + "1-based paths of the moved pattern, any sibling it crosses, and everything those "
         + "siblings own (their effects, any nested rack patterns and effects, and any "
         + "device-local modulators/modulations/triggers) — re-list rather than reusing cached "
