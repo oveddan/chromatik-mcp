@@ -141,14 +141,14 @@ Each spike PR runs the same pipeline. Sequential. Each agent writes one file und
 **3. Writing Agent**
 - *Reads*: analysis + research notes (for citations).
 - *Job, part 1*: synthesize the canonical PR artifact (`sdk-feasibility.md` / `lxcommand-mapping.md` / `qa-strategy.md`). Scannable structure: TL;DR, the central table or test pattern, one section per remaining open question.
-- *Job, part 2 — docs sync*: audit the canonical doc set for any statement now contradicted or made stale by these findings, and produce updates. **Files to audit**: `README.md`, `CLAUDE.md`, `docs/build-plan.md`. Touch only what's stale — do not rewrite sections that are still correct. If nothing is stale, say so explicitly in the output (don't silently skip).
+- *Job, part 2 — docs sync*: audit the canonical doc set for any statement now contradicted or made stale by these findings, and produce updates. **Files to audit**: `README.md`, `AGENTS.md`, `docs/build-plan.md`. Touch only what's stale — do not rewrite sections that are still correct. If nothing is stale, say so explicitly in the output (don't silently skip).
 - *Output*: the PR's deliverable file + any updates to the audited docs.
 
 A dedicated docs-sync agent would be over-engineering at this scale (~3 canonical docs). If the docs surface grows substantially post-MVP, the audit step can be split out into its own agent then.
 
 **4. Review Agent**
 - *Reads*: the deliverable + the PR's question list + the research notes + the diff of any audited-doc updates.
-- *Job*: independently verify every question has a defended answer; spot-check claims against research notes; flag unsourced assertions and hidden assumptions. Also verify the docs-sync audit: are the audited-doc updates accurate, and is there anything the Writing Agent missed (a stale statement in `README.md`/`CLAUDE.md`/`docs/build-plan.md` that should have been updated but wasn't)?
+- *Job*: independently verify every question has a defended answer; spot-check claims against research notes; flag unsourced assertions and hidden assumptions. Also verify the docs-sync audit: are the audited-doc updates accurate, and is there anything the Writing Agent missed (a stale statement in `README.md`/`AGENTS.md`/`docs/build-plan.md` that should have been updated but wasn't)?
 - *Output*: `04-review.md` with PASS / FAIL+gaps. On FAIL, route gaps back to the appropriate upstream agent and re-run downstream.
 
 **Handoff rule**: each agent reads only its declared inputs, writes only its declared output. If a downstream agent needs information not in an upstream artifact, that's a defect in the upstream agent's scope.
@@ -175,7 +175,7 @@ PR-0 lands first — it's the minimum buildable Java project. PR-1a depends on P
 
 ## Downstream PRs (post-spike roadmap)
 
-Planned in detail now that the spike findings are in. Each PR stays independently demoable; anything bigger than these slices is too big (see the scope guard in `CLAUDE.md`).
+Planned in detail now that the spike findings are in. Each PR stays independently demoable; anything bigger than these slices is too big (see the scope guard in `AGENTS.md`).
 
 - **PR-2** — Embed HTTP MCP server in the plugin; write status file; `tools/list` works. (In progress — see tracker.)
 

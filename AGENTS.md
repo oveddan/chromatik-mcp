@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Project context for AI assistants working in this repo. See [README.md](README.md) for the architecture and [docs/build-plan.md](docs/build-plan.md) for the PR breakdown.
 

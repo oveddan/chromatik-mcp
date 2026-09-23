@@ -20,7 +20,7 @@ import heronarts.lx.LX;
  * "build the command" from "perform it", which is out of scope here. Each operation still
  * performs (and undoes) independently, exactly as if called one at a time.
  *
- * <p>Composes existing tool handlers rather than reimplementing any mutation (CLAUDE.md
+ * <p>Composes existing tool handlers rather than reimplementing any mutation (AGENTS.md
  * layering) — constructed with the same {@link LxTool} instances {@link Tools#allTools}
  * already built, filtered to batchable mutations only, so this tool structurally cannot see
  * itself, any read-only tool, or global history operations.

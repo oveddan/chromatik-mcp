@@ -238,7 +238,7 @@ public final class Midi {
    * Set one or more of an input's routing flags (see {@link InputInfo}) by 0-based index
    * into {@link #devices}' input list. A {@code null} argument leaves that flag unchanged.
    * No {@code LXCommand} covers these {@code BooleanParameter}s, so they're set directly
-   * (CLAUDE.md layering); {@code enabled} is derived — LX recomputes it from the three flags
+   * (AGENTS.md layering); {@code enabled} is derived — LX recomputes it from the three flags
    * on every change — and can't be set directly.
    *
    * @throws Resolve.ResolveException TYPE_MISMATCH if index is out of range
@@ -266,7 +266,7 @@ public final class Midi {
   /**
    * Enable or disable a control surface by 0-based index into {@link #surfaces}. No
    * {@code LXCommand} covers surface enablement, so it's set directly on the surface's
-   * {@code BooleanParameter} (CLAUDE.md layering).
+   * {@code BooleanParameter} (AGENTS.md layering).
    *
    * @throws Resolve.ResolveException TYPE_MISMATCH if index is out of range
    */

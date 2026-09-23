@@ -353,7 +353,7 @@ public final class Parameters {
   }
 
   // Package-private (not private): reused by Fixtures.setParams so set_fixture_params
-  // shares the exact same coercion as set_parameter, per CLAUDE.md ("do not write new
+  // shares the exact same coercion as set_parameter, per AGENTS.md ("do not write new
   // coercion") — the fixture-editing primitive only differs in command *routing*
   // (batched vs. immediate), not value validation.
 

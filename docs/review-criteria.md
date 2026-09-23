@@ -13,7 +13,7 @@ length — read the source doc for the full rationale.
 
 - **Layering.** Tool handlers must not construct `LXCommand` or mutate `lx.engine.*`
   directly — that belongs in a `domain/` primitive. *Why:* the composability prime
-  directive (`CLAUDE.md`) — one primitive per intent means one place to change if the
+  directive (`AGENTS.md`) — one primitive per intent means one place to change if the
   implementation strategy (undo-backed vs. direct edit) ever swaps.
 - **Typed domain result / wire-map boundary.** A stable domain result is a typed record or
   object; one shared serializer owns its MCP field names and converts it to a map at the
@@ -32,7 +32,7 @@ length — read the source doc for the full rationale.
   does not mean "cannot fail."
 - **Result-shaped errors at the MCP boundary.** Exceptions are mapped to `Result.error(...)`
   at the seam (`chromatikmcp.tools.Tools`); they never cross a handler as a raw
-  exception/stack trace. *Why:* `CLAUDE.md` code style + `tool-conventions.md` wire shape
+  exception/stack trace. *Why:* `AGENTS.md` code style + `tool-conventions.md` wire shape
   — clients dispatch on stable error codes, not exception messages.
 - **LX idioms.** Per [`docs/lx-coding-guidelines.md`](lx-coding-guidelines.md): model
   variants with `enum`s, not maps/magic constants/parallel classes; share an `interface`
@@ -41,7 +41,7 @@ length — read the source doc for the full rationale.
   minimal and history clean.
 - **Symmetric listener lifecycle.** Every `addListener`/container-attach has a matching
   `removeListener`/detach in `dispose()`, in the right order (detach vs. resource
-  release are distinct calls — both are usually needed). *Why:* `CLAUDE.md` code style
+  release are distinct calls — both are usually needed). *Why:* `AGENTS.md` code style
   ("register/unregister listeners symmetrically"); orphaned listeners leak on
   disable/re-enable.
 - **Synchronous-state verification.** Since LX 1.2.2 defers fixture model regeneration,
@@ -59,7 +59,7 @@ length — read the source doc for the full rationale.
   Mutations additionally get do → undo → assert (the undo assertion is the proof a real
   `LXCommand` was used).
 - **Scope guard.** The diff is no larger than its build-plan slice
-  (`docs/build-plan.md`). *Why:* `CLAUDE.md` — a PR that isn't independently demoable is
+  (`docs/build-plan.md`). *Why:* `AGENTS.md` — a PR that isn't independently demoable is
   too big; split it instead of flagging-and-shipping.
 
 ## Part B — calibration examples

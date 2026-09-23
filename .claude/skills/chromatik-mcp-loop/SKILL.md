@@ -13,7 +13,7 @@ this skill is the operational checklist so the loop is repeatable, not re-derive
 
 Load the project's persistent knowledge before touching code:
 
-- [`CLAUDE.md`](../../../CLAUDE.md) — the composability prime directive and layering rule.
+- [`AGENTS.md`](../../../AGENTS.md) — the composability prime directive and layering rule.
 - [`docs/tool-conventions.md`](../../../docs/tool-conventions.md) — naming, canonical-path
   addressing, `Result` wire shape, the mutations contract (`lx.command.perform()` swallows
   failures — verify by state-read and throw), threading.
@@ -73,7 +73,7 @@ Load the project's persistent knowledge before touching code:
 ## Never do
 
 - Construct an `LXCommand` or mutate `lx.engine.*` inside a tool handler — that lives in a
-  domain primitive (`CLAUDE.md` layering).
+  domain primitive (`AGENTS.md` layering).
 - Touch `lx.*` off the `EngineExecutor` thread — every handler marshals through
   `EngineExecutor.call(...)`.
 - Disable, skip, or weaken a test to make the gate pass.

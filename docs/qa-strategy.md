@@ -52,7 +52,7 @@ only synchronous parameter/component state.
 
 ## Per-tool test shape (the template PR-2+ fills in)
 
-Each tool ships two tests. The split mirrors the [layering rule in `CLAUDE.md`](../CLAUDE.md) — primitives are tested directly, handlers are tested through the MCP seam.
+Each tool ships two tests. The split mirrors the [layering rule in `AGENTS.md`](../AGENTS.md) — primitives are tested directly, handlers are tested through the MCP seam.
 
 **1. Domain-primitive unit test** — the mutation logic, no MCP.
 

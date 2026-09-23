@@ -9,7 +9,7 @@ import heronarts.lx.parameter.MutableParameter;
  * engine loop task from {@link ConnectionSnapshot} reads; host/port/startedAt are set
  * once, right after the embedded server binds.
  *
- * <p>Lives in the root package (not {@code chromatikmcp.mcp}) per CLAUDE.md's layering: the
+ * <p>Lives in the root package (not {@code chromatikmcp.mcp}) per AGENTS.md's layering: the
  * plugin passes in the endpoint path string at {@link #initialize} time rather than this
  * class reaching into {@code chromatikmcp.mcp.EmbeddedMcpServer} for it.
  */

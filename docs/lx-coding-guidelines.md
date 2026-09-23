@@ -272,7 +272,7 @@ Register listeners and resources in the constructor / `onActive()`; tear them
 down in the matching `onInactive()` / `dispose()`. `dispose()` unregisters
 everything it added and **must call `super.dispose()`** — LX asserts this with
 `LXComponent.assertDisposed` (`LXComponent.java:1082-1132`, `LX.java:728-731`).
-Disposing twice throws. This is the framework-level statement of the CLAUDE.md
+Disposing twice throws. This is the framework-level statement of the AGENTS.md
 rule "register/unregister listeners symmetrically."
 
 ### 15. Validate at boundaries with `Objects.requireNonNull`
@@ -309,4 +309,4 @@ helpers instead of reinventing (§5), prefer upstream when it fits (§6), and ke
 diffs and history clean (§7, §8). The plugin lifecycle rule (§9) applies most
 directly of all — `ChromatikMcpPlugin` *is* an `LXPlugin`, so its `initialize()` must
 propagate and its `dispose()` must stop the embedded server. See
-[CLAUDE.md](../CLAUDE.md) for the composability rules specific to this project.
+[AGENTS.md](../AGENTS.md) for the composability rules specific to this project.
