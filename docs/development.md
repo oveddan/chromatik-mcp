@@ -146,8 +146,9 @@ records bytecode hashes so the runtime can report `stale: true` honestly. Format
 
 ## Making a change
 
-Read [CLAUDE.md](../CLAUDE.md) first — it carries the rules that aren't obvious from the
-code. The load-bearing ones:
+Read [AGENTS.md](../AGENTS.md) first — it carries the rules that aren't obvious from the
+code. `AGENTS.md` is the agent-instructions file read natively by Claude Code (v2.1.277+), Codex, and
+Cursor (there's no `CLAUDE.md` — that's on purpose). The load-bearing ones:
 
 - **Work in a git worktree**, never the primary checkout. Multiple sessions run against
   this repo concurrently, so the root checkout is shared state. `git fetch origin main`

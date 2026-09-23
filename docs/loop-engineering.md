@@ -24,11 +24,11 @@ One PR per iteration, run by `/loop` or by hand. The pipeline:
 2. **Branch.** Off `main`, or off the previous PR's branch when stacking. Each branch is
    exactly **one squashed commit** on its base, so rebases after an upstream merge are
    clean cherry-picks.
-3. **Implement.** Per the layering in [`../CLAUDE.md`](../CLAUDE.md) (tool handler →
+3. **Implement.** Per the layering in [`../AGENTS.md`](../AGENTS.md) (tool handler →
    domain primitive → `LXCommand`/engine) and the conventions in
    [`tool-conventions.md`](tool-conventions.md) and
    [`lx-coding-guidelines.md`](lx-coding-guidelines.md). Stay inside the PR's build-plan
-   slice — anything bigger is too big (the scope guard in `CLAUDE.md`).
+   slice — anything bigger is too big (the scope guard in `AGENTS.md`).
 4. **Gate (objective).** `cd package && mvn package` — compiles and runs the full JUnit
    suite, including the headless harness and any do→undo→assert tests. Green is the bar.
 5. **Catalog freshness.** Run the `chromatik-mcp-catalog` skill's incremental pass every
@@ -39,7 +39,7 @@ One PR per iteration, run by `/loop` or by hand. The pipeline:
    loop is the cache-refresh trigger, so staleness is fixed at the PR that caused it
    rather than discovered later by a confused agent.
 6. **Review (recommended).** Spawn a **fresh-context** review agent on the diff vs. the
-   branch base, briefed with the PR's spec, the `CLAUDE.md` layering rules, and
+   branch base, briefed with the PR's spec, the `AGENTS.md` layering rules, and
    [`qa-strategy.md`](qa-strategy.md). Fix real findings; re-run the gate.
    This is deliberately **ad hoc** for now — judgment call per PR, not a mandated spec
    (formalizing it is a [future exploration](#future-explorations)).
@@ -83,7 +83,7 @@ Named so we recognize them in the act:
 - **Self-preferential bias** — the implementer grades its own work too kindly.
   Mitigation: the review agent runs in a *fresh context*, not the implementing session.
 - **Goal drift** — long sessions lose earlier constraints. Mitigation: re-read
-  `CLAUDE.md` + the conventions docs each iteration (the `/chromatik-mcp-loop` skill loads them).
+  `AGENTS.md` + the conventions docs each iteration (the `/chromatik-mcp-loop` skill loads them).
 - **Comprehension debt** — code ships faster than anyone reads it. Mitigation: the user
   reads every diff before merge; PRs stay small (the scope guard).
 
@@ -156,13 +156,13 @@ Decisions:
   the same review cost. See that skill's Orchestrator knobs section.
 - **Skeptical criteria + calibration examples live in
   [`docs/review-criteria.md`](review-criteria.md)** — a checklist distilled from
-  `CLAUDE.md`/`tool-conventions.md`/`lx-coding-guidelines.md`, plus real findings mined
+  `AGENTS.md`/`tool-conventions.md`/`lx-coding-guidelines.md`, plus real findings mined
   from merged "review fixes" PRs, so "is this a real finding" has a concrete bar instead
   of being re-derived per review.
 - **The review step in the dev loop (step 6) is now mandated**, not "recommended" — skip
   only for docs-only or purely mechanical-rename PRs, and say so in the PR description.
 - **A `simplify` quality pass runs per merge *wave*, not per PR.** Cross-PR reuse (the
-  "third caller" rule in `CLAUDE.md`) is only visible once several PRs have landed;
+  "third caller" rule in `AGENTS.md`) is only visible once several PRs have landed;
   per-PR diffs are already convention-guarded by the review step, so a per-PR simplify
   pass would be redundant overhead. The `chromatik-mcp-fix` dispatcher runs it at the
   batch boundary, before rebuilding the jar for live re-verification.

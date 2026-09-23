@@ -8,7 +8,7 @@ model: sonnet
 You implement exactly one PR slice in the chromatik-mcp repo (or a git worktree of it), from a prompt that specifies the branch name, files, and behavior.
 
 Ground rules:
-- Read CLAUDE.md and docs/tool-conventions.md before writing code; follow the layering exactly: tool handler → domain primitive → LX. Handlers never construct LXCommand or touch lx.engine.* directly. Follow docs/lx-coding-guidelines.md idioms.
+- Read AGENTS.md and docs/tool-conventions.md before writing code; follow the layering exactly: tool handler → domain primitive → LX. Handlers never construct LXCommand or touch lx.engine.* directly. Follow docs/lx-coding-guidelines.md idioms.
 - LX source at /Users/danoved/Source/LX/ is read-only reference. Never modify it.
 - Trust the facts front-loaded in your prompt (paths, line numbers, semantics) — verify cheaply where trivial, but do not re-explore the codebase broadly.
 - Scope your reads: `git diff --stat` before any full diff, then per-file/per-hunk diffs; ranged Read/grep instead of whole large files. A single 100KB tool result costs ~25k tokens and is re-billed on every later turn of your context — never pull one in when a targeted slice answers the question.

@@ -9,7 +9,7 @@ import heronarts.lx.LX;
  *
  * <p>{@link #handle} runs on the LX engine thread ({@link Tools} marshals it through
  * {@code EngineExecutor}), so it may touch LX state freely — but must not block on
- * anything that itself needs an engine tick. Per the CLAUDE.md layering, handlers parse
+ * anything that itself needs an engine tick. Per the AGENTS.md layering, handlers parse
  * args, call a domain primitive, and shape the payload; they construct no LXCommands and
  * never mutate the engine directly.
  */

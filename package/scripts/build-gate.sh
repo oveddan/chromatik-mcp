@@ -96,7 +96,7 @@ attempt_build() {
     run_mvn_watched "$@"
     rc=$?
     if [[ "$rc" -eq 124 ]]; then
-      echo "FAIL: build stalled twice — this matches the known macOS javax.sound/coremidi4j class-lock deadlock (see CLAUDE.md / ProviderWarmupListener). Full log: $LOG" >&2
+      echo "FAIL: build stalled twice — this matches the known macOS javax.sound/coremidi4j class-lock deadlock (see AGENTS.md / ProviderWarmupListener). Full log: $LOG" >&2
       exit 4
     fi
   fi

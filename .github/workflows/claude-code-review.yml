@@ -87,7 +87,7 @@ jobs:
           #                 agents in parallel"); without it nothing runs at all.
           #                 Both names are listed because the tool is Task in
           #                 older CLI builds and Agent in newer ones.
-          #   Read/Grep/Glob - reading the changed files, the CLAUDE.md files it
+          #   Read/Grep/Glob - reading the changed files, the AGENTS.md files it
           #                 checks compliance against, and docs/lx-coding-guidelines.md
           #                 as instructed by --append-system-prompt below.
           #   gh pr/issue/search - fetching the PR and its diff, and posting the
@@ -126,14 +126,17 @@ jobs:
           # becomes `pull_request_target`, or if Read/Grep gain filesystem confinement
           # that Bash verbs do not share.
           #
-          # CLAUDE.md points at the coding guidelines, so the reviewer starts with
-          # that pointer in context — but following a pointer is a choice.
-          # --append-system-prompt makes it an instruction, and goes in claude_args
-          # rather than prompt so the slash command above still parses as a command.
+          # AGENTS.md points at the coding guidelines, but only Claude Code
+          # v2.1.277+ auto-loads it, and this workflow does not pin a version, so the
+          # prompt names it explicitly rather than relying on that pointer being in
+          # context. --append-system-prompt makes it an instruction, and goes in
+          # claude_args rather than prompt so the slash command above still parses as
+          # a command.
           claude_args: >-
             --allowedTools "Task,Agent,TodoWrite,Read,Grep,Glob,Bash(ls:*),Bash(cat:*),Bash(find:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git blame:*),Bash(git rev-parse:*),Bash(git merge-base:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),mcp__github_inline_comment__create_inline_comment"
-            --append-system-prompt "Before reviewing, read docs/lx-coding-guidelines.md
-            and apply it alongside the standard review criteria. It records LX idioms
+            --append-system-prompt "Before reviewing, read AGENTS.md and
+            docs/lx-coding-guidelines.md and apply them alongside the standard review
+            criteria. lx-coding-guidelines.md records LX idioms
             distilled from mcslee's reviews that a general review will miss: no
             allocation in the render loop, enums carrying behavior instead of magic
             constants or parallel static classes, an interface relating multiple

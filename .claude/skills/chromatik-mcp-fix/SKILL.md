@@ -21,7 +21,7 @@ blocks on fixes, and fixes never wait on testing.
 2. **Classify the fix:**
    - **Server gap** (payload field, tool description, new tool, INSTRUCTIONS
      text, catalog entry) → code PR, go to step 3.
-   - **Client etiquette** (how the AI client should behave) → edit `CLAUDE.md`
+   - **Client etiquette** (how the AI client should behave) → edit `AGENTS.md`
      "Driving a live instance" + memory directly; no agent.
    - **Too small for its own PR** (a sentence in a description, one field) →
      queue it (step 5); batch later.

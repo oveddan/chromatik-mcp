@@ -2,7 +2,7 @@
 
 The drop-in LX/Chromatik jar.
 
-See [../docs/build-plan.md](../docs/build-plan.md) for the roadmap and [../CLAUDE.md](../CLAUDE.md) for contributor conventions.
+See [../docs/build-plan.md](../docs/build-plan.md) for the roadmap and [../AGENTS.md](../AGENTS.md) for contributor conventions.
 
 **Status**: `ChromatikMcpPlugin` starts an embedded streamable-HTTP MCP server (official
 Java MCP SDK on embedded Tomcat) from `initialize()` and exposes the generated domain-tool

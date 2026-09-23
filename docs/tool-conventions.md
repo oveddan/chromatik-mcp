@@ -105,7 +105,7 @@ Decided once (#108) so it isn't re-litigated per tool:
 - Raw `Map<String, Object>` remains correct for incoming MCP arguments, JSON Schema objects,
   and final `structuredContent`. Simple handler arguments may continue to use `Args`; decode
   a complex grammar reused by three or more tools into a typed value before calling the
-  domain layer, following `CLAUDE.md`'s extraction threshold.
+  domain layer, following `AGENTS.md`'s extraction threshold.
 - Map-shaped domain results are limited to genuinely dynamic/open-ended structures.
   Current justified cases are arbitrary fixture parameter name/value sets, catalog
   frontmatter, and upstream `LXModel` metadata. Private maps used only while computing a
@@ -316,7 +316,7 @@ large (`list_parameters` on a big project is the known next candidate):
 
 ## Mutations
 
-- Mutations route through `LXCommand` via a domain primitive (CLAUDE.md layering).
+- Mutations route through `LXCommand` via a domain primitive (AGENTS.md layering).
   **`lx.command.perform()` swallows command failures** — it pushes a UI error and
   returns normally (`LXCommandEngine.java:77-85`) — so a mutation primitive must verify
   its effect by observing engine state and throw if it didn't apply. "Command-backed"
