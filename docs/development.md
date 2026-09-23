@@ -37,7 +37,7 @@ under the isolated-`user.home` boot that `verify-load.sh` performs).
 | `package/scripts/` | build/verify gates (see below) |
 | `landing/` | the single-page site published to GitHub Pages (setup section generated from the README) |
 | `scripts/` | repo-level helpers: doc generators, drift gates, the LX version bump |
-| `agent-plugin/` | the Claude Code plugin (driving skill, reviewer agent, project surveyor) |
+| `agent-plugin/` | the Claude Code plugin (driving skill, reviewer agent, project surveyor); `skills/` is also packaged into the jar and served as `skill://` MCP resources |
 | `docs/` | this directory — contributor and reference docs |
 
 ## Build and install

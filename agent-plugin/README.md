@@ -110,6 +110,9 @@ either dotted manifest directory.
 
 `skills/driving-chromatik/SKILL.md` is hand-written and is the single source of truth for
 the driving house rules — there is no generated copy of it anywhere, so edit it directly.
+Both skills also ship inside the chromatik-mcp jar, served as `skill://` MCP resources
+(`package/pom.xml` packages `skills/` at build time) — editing one here means rebuilding
+the jar for the served copy to pick it up.
 
 Every tool-shaped name referenced anywhere under `agent-plugin/` is checked against the
 live tool catalog in CI, so a tool rename can't silently orphan a reference in the skill.

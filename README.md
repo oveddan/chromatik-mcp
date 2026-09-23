@@ -174,7 +174,12 @@ Verify the connection by asking your agent to call `get_project_info` — it sho
 
 ## 6. Install the agent plugin (recommended)
 
-The steps above get you the raw tools, which is enough. The [agent plugin](agent-plugin/) adds everything around them — the house rules for driving a live show, a project-surveyor agent, a code reviewer, and the `/chromatik-learn` and `/chromatik-review` commands — so you don't have to paste context in yourself. For Claude Code it's one symlink:
+Connecting the server alone already exposes the house rules as an MCP resource
+(`skill://driving-chromatik/SKILL.md`) — a client that reads MCP resources gets them with
+no plugin install. The [agent plugin](agent-plugin/) adds everything else — a
+project-surveyor agent, a code reviewer, the `/chromatik-learn` and `/chromatik-review`
+commands, and auto-loaded skills for hosts that don't consume MCP skills yet — so you don't
+have to paste context in yourself. For Claude Code it's one symlink:
 
 ```sh
 git clone https://github.com/oveddan/chromatik-mcp.git

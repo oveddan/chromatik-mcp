@@ -40,6 +40,7 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
   private StreamableHttpTestHarness(
       LX lx,
       List<McpServerFeatures.SyncToolSpecification> tools,
+      List<McpServerFeatures.SyncResourceSpecification> resources,
       String instructions,
       ConnectionTracker connectionTracker,
       Map<String, HttpServlet> extraServlets,
@@ -66,7 +67,7 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
     McpSyncClient startedClient = null;
     try {
       startedServer = EmbeddedMcpServer.start(
-          "Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1", tools, instructions,
+          "Chromatik-MCP", "0.0.1-test", 0, "127.0.0.1", tools, resources, instructions,
           connectionTracker, extraServlets);
       if (initializeClient) {
         startedClient = createClient(startedServer.port());
@@ -98,14 +99,25 @@ public final class StreamableHttpTestHarness implements AutoCloseable {
       String instructions,
       ConnectionTracker connectionTracker) {
     return new StreamableHttpTestHarness(
-        lx, tools, instructions, connectionTracker, Map.of(), true);
+        lx, tools, List.of(), instructions, connectionTracker, Map.of(), true);
+  }
+
+  /** Same as the four-arg overload, but additionally registers {@code resources}. */
+  public static StreamableHttpTestHarness startMcp(
+      LX lx,
+      List<McpServerFeatures.SyncToolSpecification> tools,
+      List<McpServerFeatures.SyncResourceSpecification> resources,
+      String instructions,
+      ConnectionTracker connectionTracker) {
+    return new StreamableHttpTestHarness(
+        lx, tools, resources, instructions, connectionTracker, Map.of(), true);
   }
 
   public static StreamableHttpTestHarness startHttp(
       LX lx,
       Map<String, HttpServlet> extraServlets) {
     return new StreamableHttpTestHarness(
-        lx, List.of(), null, new ConnectionTracker(), extraServlets, false);
+        lx, List.of(), List.of(), null, new ConnectionTracker(), extraServlets, false);
   }
 
   public int port() {

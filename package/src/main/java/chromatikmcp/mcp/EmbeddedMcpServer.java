@@ -117,7 +117,8 @@ public final class EmbeddedMcpServer {
    * endpoint on the same Tomcat listener and port. Each extra servlet is registered with
    * an exact-path mapping, which Tomcat's servlet-mapping precedence rules resolve ahead
    * of the MCP wrapper's {@code /*} wildcard mapping — so {@code /mcp} traffic is
-   * unaffected by anything mounted here.
+   * unaffected by anything mounted here. Registers no resources, so the resources
+   * capability is not declared — see the nine-arg {@code resources} overload for that.
    */
   public static EmbeddedMcpServer start(
       String serverName,
@@ -125,6 +126,32 @@ public final class EmbeddedMcpServer {
       int requestedPort,
       String host,
       List<McpServerFeatures.SyncToolSpecification> tools,
+      String instructions,
+      ConnectionTracker connectionTracker,
+      Map<String, HttpServlet> extraServlets) {
+    return start(
+        serverName, version, requestedPort, host, tools, List.of(), instructions,
+        connectionTracker, extraServlets);
+  }
+
+  /**
+   * Same as the eight-arg {@code extraServlets} overload, but additionally registers
+   * {@code resources} — one {@code SyncResourceSpecification} per served file (today,
+   * {@code skill://} skill files; see {@code chromatikmcp.domain.SkillLoader} and {@link
+   * SkillResources}). The resources capability is declared only when {@code resources} is
+   * non-empty — unlike the tools capability above (always declared, even empty), so that a
+   * tools-only caller (every pre-existing overload, the test harness) initializes
+   * byte-identically to before this capability existed. {@code subscribe}/{@code
+   * listChanged} are both {@code false} when declared: this content is static, loaded once
+   * at startup, and never changes for the life of the server.
+   */
+  public static EmbeddedMcpServer start(
+      String serverName,
+      String version,
+      int requestedPort,
+      String host,
+      List<McpServerFeatures.SyncToolSpecification> tools,
+      List<McpServerFeatures.SyncResourceSpecification> resources,
       String instructions,
       ConnectionTracker connectionTracker,
       Map<String, HttpServlet> extraServlets) {
@@ -139,8 +166,8 @@ public final class EmbeddedMcpServer {
     thread.setContextClassLoader(EmbeddedMcpServer.class.getClassLoader());
     try {
       return startWithContextClassLoader(
-          serverName, version, requestedPort, host, tools, instructions, connectionTracker,
-          extraServlets);
+          serverName, version, requestedPort, host, tools, resources, instructions,
+          connectionTracker, extraServlets);
     } finally {
       thread.setContextClassLoader(prior);
     }
@@ -177,6 +204,7 @@ public final class EmbeddedMcpServer {
       int requestedPort,
       String host,
       List<McpServerFeatures.SyncToolSpecification> tools,
+      List<McpServerFeatures.SyncResourceSpecification> resources,
       String instructions,
       ConnectionTracker connectionTracker,
       Map<String, HttpServlet> extraServlets) {
@@ -187,10 +215,17 @@ public final class EmbeddedMcpServer {
             .mcpEndpoint(ENDPOINT)
             .build();
 
+    McpSchema.ServerCapabilities.Builder capabilities =
+        McpSchema.ServerCapabilities.builder().tools(false);
+    if (!resources.isEmpty()) {
+      capabilities.resources(false, false);
+    }
+
     McpServer.SyncSpecification<?> serverSpec = McpServer.sync(transport)
         .serverInfo(serverName, version)
-        .capabilities(McpSchema.ServerCapabilities.builder().tools(false).build())
+        .capabilities(capabilities.build())
         .tools(tools)
+        .resources(resources)
         // Upstream RC-only wording bug (issue #115): DefaultJsonSchemaValidator.validate()
         // (mcp-json-jackson3 2.0.0-RC1) hardcodes an "outputSchema"/"structuredContent"
         // message for every validation failure, including ToolInputValidator's checks of a

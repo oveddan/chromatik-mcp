@@ -12,12 +12,15 @@ import heronarts.lx.LXRegistry;
 
 import chromatikmcp.domain.Cameras;
 import chromatikmcp.domain.PointStyle;
+import chromatikmcp.domain.Skill;
+import chromatikmcp.domain.SkillLoader;
 import chromatikmcp.engine.EngineExecutor;
 import chromatikmcp.mcp.BuildInfo;
 import chromatikmcp.mcp.ConfigFile;
 import chromatikmcp.mcp.ConnectionTracker;
 import chromatikmcp.mcp.EmbeddedMcpServer;
 import chromatikmcp.mcp.OscParamsServlet;
+import chromatikmcp.mcp.SkillResources;
 import chromatikmcp.mcp.StatusFile;
 import chromatikmcp.tools.GetStatus;
 import chromatikmcp.tools.Tools;
@@ -53,6 +56,16 @@ public class ChromatikMcpPlugin implements LXPlugin {
   @Override
   public void initialize(LX lx) {
     Log.log("plugin loaded");
+
+    // Loaded before any registry/engine mutation below: LXRegistry never calls dispose()
+    // after a failed initialize() (LXRegistry.java), so a loader failure occurring after
+    // autoEnableUiPlugin/registerExternal would leave those mutations in place with no MCP
+    // server behind them. Not re-read per request either — see SkillLoader's class doc — so
+    // a jar swapped on disk under a running Chromatik can't serve half-old, half-new skill
+    // content mid-session. Failure here (missing/malformed SKILL.md) is deliberately as
+    // fatal as any other startup failure below, not swallowed.
+    List<Skill> skills = SkillLoader.loadAll();
+
     ConfigFile.Config config = ConfigFile.load(ConfigFile.path());
     if (!config.isLoopback()) {
       Log.error("SECURITY WARNING: binding MCP server to non-loopback host '" + config.host()
@@ -100,6 +113,7 @@ public class ChromatikMcpPlugin implements LXPlugin {
     this.server = EmbeddedMcpServer.start(
         SERVER_NAME, BuildInfo.version(), config.port(), config.host(),
         Tools.specifications(lx, engineExecutor, getStatus, cameras, pointStyle),
+        SkillResources.specifications(skills),
         Tools.INSTRUCTIONS,
         connectionTracker, Map.of("/osc-params", new OscParamsServlet(lx, engineExecutor)));
     long startedAtMs = System.currentTimeMillis();
