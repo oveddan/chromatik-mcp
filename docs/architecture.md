@@ -157,3 +157,17 @@ the server says unprompted, and it exists to prevent the standard first-session 
 Source: `Tools.INSTRUCTIONS` in the server. The house rules an agent should follow on top
 of this live in the driving skill:
 [agent-plugin/skills/driving-chromatik/SKILL.md](../agent-plugin/skills/driving-chromatik/SKILL.md).
+
+## Skills as MCP resources
+
+Both agent-plugin skills are also served directly by the running server, under
+`skill://<name>/<path>` (e.g. `skill://driving-chromatik/SKILL.md`,
+`skill://driving-chromatik/references/addressing.md`) — a client that connects to the
+server gets the house rules without installing the plugin. `agent-plugin/skills/` stays the
+single source of truth; `package/pom.xml` packages it into the jar at build time, so the
+served text always matches the jar's tool surface. This is the resources half of SEP-2640
+(the MCP Skills extension); the `skills/list`/`skills/get` methods it also defines wait on
+[modelcontextprotocol/java-sdk#1141](https://github.com/modelcontextprotocol/java-sdk/pull/1141)
+— the SDK's `ServerCapabilities` and request-handler surface have no seam for them yet. The
+plugin still carries the slash commands, the read-only subagents, and auto-loaded skills for
+hosts that don't consume MCP skills yet.

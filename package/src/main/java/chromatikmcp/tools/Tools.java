@@ -34,7 +34,12 @@ public final class Tools {
 
   /** Server-level MCP {@code instructions}, returned in the initialize result. */
   public static final String INSTRUCTIONS =
-      "LX mixer semantics: a channel's patternMode is 'playlist' (one active pattern shows) "
+      "This server's house rules — connecting and recovering from a restart, canonical-path "
+          + "addressing, error-code and undo-history semantics, and the mutate/look/adjust "
+          + "verification loop — are the driving-chromatik skill, served as the resource "
+          + "skill://driving-chromatik/SKILL.md. Read it before your first mutation if your "
+          + "client hasn't already loaded that skill. "
+          + "LX mixer semantics: a channel's patternMode is 'playlist' (one active pattern shows) "
           + "or 'blend' (all enabled patterns composite simultaneously, each scaled by its "
           + "compositeLevel parameter, 0-1). For pixels to reach fixtures, the whole chain must "
           + "be on: pattern contributing → channel enabled and fader > 0 → master "

@@ -84,6 +84,28 @@
     </dependencies>
 
     <build>
+        <resources>
+            <!-- Explicit declaration replaces Maven's implicit default (src/main/resources),
+                 so it must be re-declared here with the same (unfiltered) behavior; the
+                 second resource below is the only reason this block exists at all. -->
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- The agent-plugin's skills, packaged into the jar so a client that connects
+                 to the server gets the house rules as skill:// MCP resources without
+                 installing the plugin (see chromatikmcp.domain.SkillLoader). Namespaced
+                 under chromatikmcp/ rather than a bare skills/ so another LX package's own
+                 skills/ resources on a parent classloader can't shadow ours. agents/ is
+                 Codex plugin metadata (declaring a dependency on this very server); none of
+                 it has any business inside the jar. -->
+            <resource>
+                <directory>../agent-plugin/skills</directory>
+                <targetPath>chromatikmcp/skills</targetPath>
+                <excludes>
+                    <exclude>**/agents/**</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
