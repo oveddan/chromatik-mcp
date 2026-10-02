@@ -8,7 +8,7 @@ the [README](../README.md) — this page is for contributors.
 - **Java 25** and **Maven**. Java 25 is not optional: the published
   `com.heronarts:{lx,glx,glxstudio}:1.2.2` jars this project compiles against are built
   for it, and `<maven.compiler.release>` is pinned to 25 in `package/pom.xml`.
-- **Node 20** — only if you touch the generated docs artifacts or the landing page
+- **Node 20** — only if you touch the generated docs artifacts
   (`agent-plugin/`), whose drift gates are Node scripts.
 - **Chromatik** with LX 1.2.2, for live testing against a real show. Not needed to build
   or to run the test suite — everything is headless.
@@ -35,10 +35,10 @@ under the isolated-`user.home` boot that `verify-load.sh` performs).
 | `package/src/main/resources/catalog/` | the generated semantic component catalog served by `get_component_doc` |
 | `package/src/test/java/` | 65 test classes — domain unit tests + tool-handler integration tests, all headless |
 | `package/scripts/` | build/verify gates (see below) |
-| `landing/` | the single-page site published to GitHub Pages (setup section generated from the README) |
 | `scripts/` | repo-level helpers: doc generators, drift gates, the LX version bump |
 | `agent-plugin/` | the Claude Code plugin (driving skill, reviewer agent, project surveyor); `skills/` is also packaged into the jar and served as `skill://` MCP resources |
 | `docs/` | this directory — contributor and reference docs |
+| `landing/` | the static page published to GitHub Pages; links to the README |
 
 ## Build and install
 
@@ -121,20 +121,11 @@ reproduce locally.
 
 ## The landing page
 
-`landing/` is a single HTML page published to GitHub Pages. The setup instructions on it
-are **not** authored there — `scripts/build-landing.mjs` renders them from the section of
-the repo README between the `landing:start` / `landing:end` markers, so the page and the
-README cannot drift.
-
-```sh
-node scripts/build-landing.mjs          # writes landing/dist/ (gitignored)
-open landing/dist/index.html            # local preview
-```
-
-Edit setup instructions in `README.md`; edit the hero, the links-out section, and the
-styling in `landing/template.html` and `landing/public/style.css`. `deploy-docs.yml`
-rebuilds and publishes on every push to main that touches the README, `landing/`, or the
-builder. `landing/public/og.png` is the committed social-share card.
+`landing/` is a static HTML page published to GitHub Pages at
+[oveddan.github.io/chromatik-mcp](https://oveddan.github.io/chromatik-mcp/). It carries
+the hero, the social-share card (`landing/og.png`) and links into the repository; setup
+instructions live only in the README, which the page links to. `deploy-docs.yml` publishes
+the folder as-is on every push to main that touches it — there is no build step.
 
 ## Regenerating the component catalog
 

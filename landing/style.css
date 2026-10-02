@@ -183,7 +183,7 @@ summary::marker { color: var(--accent); }
 
 /* ---------- further reading ---------- */
 
-.further { border-top: 1px solid var(--hairline); margin-top: 4rem; }
+.further { margin-top: 0; }
 .links { list-style: none; padding: 0; }
 .links li { margin-bottom: 0.7rem; color: var(--fg-dim); }
 .links a { font-weight: 600; }

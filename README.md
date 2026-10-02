@@ -1,10 +1,98 @@
 # chromatik-mcp
 
-A drop-in LX/Chromatik package that lets an agent read, explain, compose into, and debug a running Chromatik show over MCP.
+A drop-in package for [Chromatik](https://chromatik.co/), the digital lighting workstation, that lets an agent read, explain, compose into, and debug a running show over MCP.
 
-The jar embeds an MCP server inside the LX runtime, so any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, your own orchestrator — connects straight into the running engine. Every call reads or mutates the same live object graph your console renders, and the human and the agent share one undo stack. No separate server process, no `.lxp` file editing, no reload cycle.
+The jar embeds an MCP server inside the LX runtime, so any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, your own orchestrator — connects straight into the running engine. Every call reads or mutates the same live object graph your console renders. No separate server process, no `.lxp` file editing, no reload cycle.
 
-<!-- landing:start -->
+I used it to compose the show and set up the system for two live nights of light on the Apotheneum at Burning Man 2026, with Robot Heart and with FOSS: [danoved.xyz/portfolio/apotheneum-live](https://danoved.xyz/portfolio/apotheneum-live).
+
+## Why
+
+A deep tool stores its knowledge in people's heads. This puts that knowledge somewhere you can ask.
+
+Chromatik is a very powerful program, and with that depth and power comes challenge, for newcomers and experts alike. You don't know how to do something, or whether it's even possible. You forget how you did it. And doing the same thing five times takes a bunch of clicks. Repeatability is hard.
+
+This lets you express in words what you want to do, and an agent executes it. It can browse everything that's possible, including the huge library of patterns and effects, and it understands your project. It can explain things to you, show you multiple ways to do something, and make it happen. It can repeat things for you. It can try a bunch of different options, then go back and restore the ones it tried.
+
+Another problem, and it's very common in modular music and live sets: you made a project a long time ago and forgot what it did. You can go back to an old set, and it can read it and explain what you were doing there.
+
+The same goes for someone else's project. Mark Slee, who created Chromatik, made an incredible live set where all the effects react to the beat, the tempo, and the kick and snare. There's a lot of complex mapping in it. I had Chromatik MCP dig into his project and explain how the mapping works: how things are connected, and how the external instruments trigger the visuals. It also parsed the controllers he had mapped and explained how they fit into the whole system. With this knowledge, the MCP server helped me modify and add to his existing show in my style.
+
+## Examples
+
+Each one is a prompt from building the show, lightly cleaned up, and the tools the agent called in response.
+
+### Tracing how a show is wired
+
+> Look at how the external kick and snare drive the program. Can you trace that input?
+
+`list_modulations`, `list_channels`, `get_tempo`.
+
+> It seems that there are some knobs that affect the intensity of the beat modulations. Where do they come from? How are they wired up? Hint: take a look at the MIDI controller, the Akai MPD218.
+
+`list_modulations`.
+
+### Moving the camera
+
+[![Moving the camera to face a corner](https://media.danoved.xyz/apotheneum/4579a50/a8799ac5/camera-corner.gif)](https://media.danoved.xyz/treetop-live/10-camera-corner-v1.mp4)
+
+> Move the camera to face a corner.
+
+`get_camera`, `describe_model`, `set_camera`, `get_frame`.
+
+> Move the camera to face a side.
+
+`set_camera`, `get_frame`.
+
+![Moving the camera to face a side](https://media.danoved.xyz/apotheneum/4579a50/5ebee750/camera-side.gif)
+
+> Move the camera to the middle of the stage, looking up.
+
+`set_camera`, `get_frame`.
+
+> This is a really cool view. We should save it. This is sick.
+
+`save_camera`.
+
+### Palettes from a set of rules
+
+[![Generating a palette with chromatik-mcp](https://media.danoved.xyz/apotheneum/4579a50/645decfb/palette.gif)](https://media.danoved.xyz/treetop-live/05-palette-v1.mp4)
+
+> Now apply the palette rules to the current swatches, and then create a new palette that's for a waterfall. …
+
+`get_palette`, `get_component_doc`, `get_parameter` ×24, `set_parameter` ×19, `remove_color` ×8.
+
+> This looks good. Can you add some more palettes?
+
+`set_parameter` ×80, `save_swatch` ×8.
+
+### Mapping a controller
+
+> Okay, now let's map the MIDI. How do we map the MIDI controller? We have four services and the heart. Maybe just do the heart on page 2 or something, or maybe the heart can just be the same setting as Cylinder Interior for now, so we're not adding stuff. I don't want to add a second thing just for the heart. The heart's just chill.
+
+`list_midi_devices`, `list_midi_mappings`, `list_midi_templates`. There were no raw MIDI mappings to find: the Twister comes in through a MIDI template, and every knob is a modulation wiring from that template.
+
+The controller itself, its knob colors and behavior, is configured by chat too, with [mft-api](https://github.com/oveddan/mft-api):
+
+[![Setting the MIDI Fighter Twister's knob colors by chat, with mft-api](https://media.danoved.xyz/apotheneum/4579a50/4ee3e398/twister-colors.gif)](https://media.danoved.xyz/treetop-live/04-mft-mapping-v1.mp4)
+
+### Sample and hold on a switch
+
+[![Sample and hold](https://media.danoved.xyz/apotheneum/4579a50/6fccfc3b/sample-hold.gif)](https://media.danoved.xyz/treetop-live/13-sample-hold-v1.mp4)
+
+> The switch 13 is not working with sample and hold. It's just applying the change immediately.
+
+`add_modulator` ×3, `wire_modulator` ×6, `wire_trigger` ×3, `remove_modulation` ×3, `save_project`.
+
+### Overruling it
+
+> Saturation clamp is fine, but now, when it's all the way to the right, it's really dim. We don't want that. Do we even need a change of brightness? Why don't we just keep the brightness at zero? We should never touch the brightness and just mess with saturation on one end, and we mess with hue on the other end.
+
+`remove_modulation` ×2, `set_parameter`, `get_frame`.
+
+## Where it struggles
+
+My original goal was to build a system and then have it be generative: compose new patterns for me. Because of the complexity and the slowness of the whole mapping, it wasn't really able to do that. The best it could do was this. I'd say: "These are the common mappings I want in each pattern. Just place them for me, and I'll do the mapping manually."
 
 ## Requirements
 
@@ -166,11 +254,7 @@ url = "http://127.0.0.1:3232/mcp"
 
 </details>
 
-Verify the connection by asking your agent to call `get_project_info` — it should report the LX version, channel count, and OSC ports of the running instance. Then try:
-
-- *"List the channels and describe the current show structure."*
-- *"Add a channel with a gradient pattern and make it slowly breathe using an LFO on its fader."*
-- *"Grab a frame render and describe what the output looks like right now."*
+Verify the connection by asking your agent to call `get_project_info` — it should report the LX version, channel count, and OSC ports of the running instance. Then try one of the [examples](#examples).
 
 ## 6. Install the agent plugin (recommended)
 
@@ -206,7 +290,6 @@ scripts/mcp-client.sh call get_status '{}'    # call a tool, print structuredCon
 
 It resolves the port from `$CHROMATIK_MCP_PORT`, then `~/.chromatik-mcp/status.json`, and transparently re-initializes its session if Chromatik has restarted since the last call.
 
-<!-- landing:end -->
 
 ## What it can do
 
@@ -246,7 +329,7 @@ Full contract — connection lifecycle, `Result` wire shape, addressing rules, t
 
 ## Develop from source
 
-Java 25 and Maven (the published LX jars require 25); Node 20 only if you touch the generated docs artifacts or the landing page.
+Java 25 and Maven (the published LX jars require 25); Node 20 only if you touch the generated docs artifacts.
 
 ```sh
 git clone https://github.com/oveddan/chromatik-mcp.git

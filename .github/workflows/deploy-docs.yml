@@ -4,9 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "README.md"
       - "landing/**"
-      - "scripts/build-landing.mjs"
       - ".github/workflows/deploy-docs.yml"
   workflow_dispatch:
 
@@ -25,19 +23,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      # Renders the setup section from README.md into landing/template.html. No
-      # dependencies to install — the builder uses only node builtins.
-      - run: node scripts/build-landing.mjs
-
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: landing/dist
+          path: landing
 
   deploy:
     needs: build
