@@ -2,6 +2,8 @@
 
 A drop-in package for [Chromatik](https://chromatik.co/), the digital lighting workstation, that lets an agent read, explain, compose into, and debug a running show over MCP.
 
+[![A chat builds color palettes in Chromatik: the conversation on the left, the swatches and the cube on the right](https://media.danoved.xyz/apotheneum/4579a50/645decfb/palette.gif)](https://media.danoved.xyz/treetop-live/05-palette-v1.mp4)
+
 The jar embeds an MCP server inside the LX runtime, so any MCP-speaking client — Claude Code, Claude Desktop, Cursor, Codex, your own orchestrator — connects straight into the running engine. Every call reads or mutates the same live object graph your console renders. No separate server process, no `.lxp` file editing, no reload cycle.
 
 I used it to compose the show and set up the system for two live nights of light on the Apotheneum at Burning Man 2026, with Robot Heart and with FOSS: [danoved.xyz/portfolio/apotheneum-live](https://danoved.xyz/portfolio/apotheneum-live).
@@ -40,12 +42,6 @@ Each one is a prompt from building the show, lightly cleaned up, and the tools t
 
 `get_camera`, `describe_model`, `set_camera`, `get_frame`.
 
-> Move the camera to face a side.
-
-`set_camera`, `get_frame`.
-
-![Moving the camera to face a side](https://media.danoved.xyz/apotheneum/4579a50/5ebee750/camera-side.gif)
-
 > Move the camera to the middle of the stage, looking up.
 
 `set_camera`, `get_frame`.
@@ -55,8 +51,6 @@ Each one is a prompt from building the show, lightly cleaned up, and the tools t
 `save_camera`.
 
 ### Palettes from a set of rules
-
-[![Generating a palette with chromatik-mcp](https://media.danoved.xyz/apotheneum/4579a50/645decfb/palette.gif)](https://media.danoved.xyz/treetop-live/05-palette-v1.mp4)
 
 > Now apply the palette rules to the current swatches, and then create a new palette that's for a waterfall. …
 
