@@ -1,6 +1,6 @@
 ---
 name: chromatik-mcp-loop
-description: Run one iteration of the chromatik-mcp dev loop — implement the next build-plan PR per the project's layering and conventions, gate on mvn package, review, and open a single-squashed-commit PR. Use when picking up chromatik-mcp build work (the PR-5 fan-out, PR-6, follow-ups).
+description: Run one iteration of the chromatik-mcp dev loop — implement the next build-plan PR per the project's layering and conventions, gate on build-gate.sh, review, and open a single-squashed-commit PR. Use when picking up chromatik-mcp build work (the next open item or follow-up in docs/build-plan.md).
 ---
 
 # chromatik-mcp dev loop
@@ -42,7 +42,7 @@ Load the project's persistent knowledge before touching code:
    incremental pass. It is hash-keyed, so on an unchanged codebase it no-ops in seconds —
    run it **every iteration**, not just when you think something changed. Regenerated
    entries ride in this PR; if any were regenerated, re-run the gate (CatalogFormatTest
-   validates them once PR-7b lands). This is what keeps agent-facing semantic docs from drifting:
+   validates them). This is what keeps agent-facing semantic docs from drifting:
    staleness is caught at the PR that caused it, when the diff is small, not discovered
    later by a confused agent.
 6. **Regenerate what's generated.** Two artifacts drift silently and are gated in CI,
