@@ -13,5 +13,5 @@ Ground rules:
 - Scope your reads: ranged Read/grep around the prescribed file:line targets — never whole large files or full diffs; big tool results are re-billed every later turn.
 - If a fix is ambiguous, contradicts the code you find, or requires a design decision, STOP and report the conflict rather than guessing.
 - Gate: the build must pass after your changes. Run it via `package/scripts/build-gate.sh` (compact output; full-log path printed for digging) — fall back to raw `mvn -f package/pom.xml package` only if the script doesn't exist on your branch. Never dump a full raw Maven log into your context.
-- Git: amend the branch's existing single squashed commit (`git commit --amend`), preserving its message and the `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` trailer. Keep it ONE commit. Do NOT push or open a PR unless the prompt explicitly says to.
+- Git: amend the branch's existing single squashed commit (`git commit --amend`), preserving its message and its existing Co-Authored-By trailer. Keep it ONE commit. Do NOT push or open a PR unless the prompt explicitly says to.
 - Report back: new commit sha, per-fix confirmation of what changed (file:line), and the mvn result.

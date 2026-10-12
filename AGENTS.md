@@ -71,7 +71,6 @@ Scoped to *mutation primitives*: no speculative abstraction layers until two rea
 
 - Keep modulator/plugin lifecycle clean — register/unregister listeners symmetrically.
 - Tool handlers return `Result<T>` and don't catch — domain primitives throw, and `Tools` maps exceptions to `Result.error(...)` at the seam.
-- Comments: only when the *why* is non-obvious. Don't narrate the *what*.
 - Tests: every domain primitive gets a unit test against a headless `LX`; every tool handler gets an integration test. Template and do→undo→assert pattern in [docs/qa-strategy.md](docs/qa-strategy.md).
 - Build gate: run `package/scripts/build-gate.sh` instead of raw `mvn -f package/pom.xml package` — it keeps the full log on disk and prints a one-line pass/fail summary, so agents don't flood their context with surefire output.
 - Conventions decided once, not re-decided per PR: [docs/tool-conventions.md](docs/tool-conventions.md) (tool surface, canonical-path addressing, `Result` wire shape, engine-thread rule), [docs/lx-coding-guidelines.md](docs/lx-coding-guidelines.md) (LX idioms, distilled from upstream review).
@@ -79,11 +78,9 @@ Scoped to *mutation primitives*: no speculative abstraction layers until two rea
 
 ## Driving a live instance
 
-Port comes from `~/.chromatik-mcp/status.json` — one of two by-design filesystem touchpoints (the other being the optional `~/.chromatik-mcp/config.json`).
+Client rules — port discovery via `~/.chromatik-mcp/status.json`, restart recovery, consulting `get_component_doc` before reasoning about a component — live in [agent-plugin/skills/driving-chromatik/SKILL.md](agent-plugin/skills/driving-chromatik/SKILL.md); read it before driving. Two rules specific to developing this server:
 
 - **Never answer live-state questions from cached responses.** Re-query; a saved response file is for parsing one large payload, not a source of truth minutes later.
-- **Connection failure ⇒ Chromatik restarted**: re-read `status.json`, re-initialize the session, re-list before reusing any held canonical path (indices shift and project state resets — e.g. `output/enabled` comes back off).
-- **Consult `get_component_doc` before reasoning about a pattern/effect's behavior** — entries exist for most stock LX components and cover the semantics that otherwise get guessed wrong.
 - **Reading LX source to answer a live question is a server-gap signal.** An end consumer can't do it: work around it once, then queue the gap (payload, description, or catalog entry) in `docs/live-findings.md` rather than leaving the knowledge in the session.
 
 ## References
@@ -91,7 +88,6 @@ Port comes from `~/.chromatik-mcp/status.json` — one of two by-design filesyst
 - LX source: `/Users/danoved/Source/LX/` (LXCommand categories, LXPlugin interface, modulator base classes, project serialization, OSC engine).
 - Apotheneum (reference plugin layout): `/Users/danoved/Source/Apotheneum/` (pom.xml, lx.package descriptor, install profile).
 - Sample project for fixtures: `/Users/danoved/Source/Apotheneum/target/classes/projects/Apotheneum-Test.lxp`.
-- Java MCP SDK: `modelcontextprotocol/java-sdk` (HTTP transport, tool registration).
 
 ## Scope guard
 

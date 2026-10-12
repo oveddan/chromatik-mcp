@@ -78,10 +78,9 @@ it is cheap and safe.
    are the whole story get skipped (count as `triaged-out` in the run report) or get
    a minimal entry. If the existing entry declares `curated:` sections, carry those
    sections through verbatim and regenerate only the rest (count as `curated-preserved`).
-6. **Validate.** `cd package && mvn package` — `CatalogFormatTest` walks every entry
+6. **Validate.** `package/scripts/build-gate.sh` — `CatalogFormatTest` walks every entry
    (frontmatter keys, FQCN=filename, hash shapes, section headings). Fix mechanically
-   before review. (Until PR-7b lands the test, validate with a shell pass over the
-   required keys.)
+   before review.
 7. **Review.** Standard dev-loop review-agent pass over the diff — doc *quality* is
    judged there, not by the format test.
 8. **Report.** PR body carries counts: generated / skipped-fresh / triaged-out /
